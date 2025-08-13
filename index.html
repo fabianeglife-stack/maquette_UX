@@ -1237,6 +1237,29 @@ window.onerror = function(message, source, lineno, colno, error){
   <button id="btnToolSeed" class="icon-btn" title="Injecter des données démo">Démo</button>
   <button id="btnToolReset" class="icon-btn" title="Réinitialiser + Démo">Reset+Démo</button>
 </div>
+<script>
+/* Expose functions used by inline onclick attributes to the global window */
+(function () {
+  try {
+    if (typeof window.openAccountModal === 'undefined' && typeof openAccountModal === 'function') window.openAccountModal = openAccountModal;
+    if (typeof window.openObjectModal === 'undefined' && typeof openObjectModal === 'function') window.openObjectModal = openObjectModal;
+    if (typeof window.openVisitModal === 'undefined' && typeof openVisitModal === 'function') window.openVisitModal = openVisitModal;
+    if (typeof window.openInterventionModal === 'undefined' && typeof openInterventionModal === 'function') window.openInterventionModal = openInterventionModal;
+    if (typeof window.openContactModal === 'undefined' && typeof openContactModal === 'function') window.openContactModal = openContactModal;
+
+    if (typeof window.deleteAccount === 'undefined' && typeof deleteAccount === 'function') window.deleteAccount = deleteAccount;
+    if (typeof window.deleteObject === 'undefined' && typeof deleteObject === 'function') window.deleteObject = deleteObject;
+    if (typeof window.deleteVisit === 'undefined' && typeof deleteVisit === 'function') window.deleteVisit = deleteVisit;
+    if (typeof window.deleteContact === 'undefined' && typeof deleteContact === 'function') window.deleteContact = deleteContact;
+    if (typeof window.deleteIntervention === 'undefined' && typeof deleteIntervention === 'function') window.deleteIntervention = deleteIntervention;
+
+    if (typeof window.selectItem === 'undefined' && typeof selectItem === 'function') window.selectItem = selectItem;
+    if (typeof window.setView === 'undefined' && typeof setView === 'function') window.setView = setView;
+  } catch (e) {
+    console.error('Expose shim error', e);
+  }
+})();
+</script>
 
 </body>
 
