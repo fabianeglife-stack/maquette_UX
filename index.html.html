@@ -1,0 +1,1243 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maquette UX — Comptes, Objets, Visites</title>
+<style>
+:root{
+  --bg:#0f172a;           /* slate-900 */
+  --panel:#f5f5f5;        /* gray-900 */
+  --card:#ffffff;         /* custom deep */
+  --muted:#94a3b8;        /* slate-400 */
+  --text:#111111;         /* gray-200 */
+  --brand:#7c3aed;        /* violet-600 */
+  --brand-2:#22d3ee;      /* cyan-400 */
+  --border:#cccccc;       /* gray-800 */
+  --good:#10b981;
+  --warn:#f59e0b;
+  --bad:#ef4444;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; background: white; color: #111;
+  color:var(--text); font:14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial;
+}
+.app{display:flex; height:100%}
+aside{
+  width:280px; background:rgba(17,24,39,.7); backdrop-filter:saturate(140%) blur(10px);
+  border-right:1px solid var(--border); padding:18px; display:flex; flex-direction:column; gap:16px;
+}
+.brand{display:flex; align-items:center; gap:10px; font-weight:700; letter-spacing:.3px}
+.badge{font-size:11px; padding:2px 8px; border-radius:999px; background:linear-gradient(135deg,var(--brand),var(--brand-2)); color:#0b1020; font-weight:700}
+.nav{display:flex; flex-direction:column; gap:6px}
+.nav button{
+  all:unset; display:flex; gap:10px; align-items:center; padding:10px 12px; border-radius:10px; cursor:pointer;
+  color:var(--text); border:1px solid transparent;
+}
+.nav button:hover,.nav button.active{background:linear-gradient(180deg, rgba(124,58,237,.12), rgba(34,211,238,.06)); border-color:#1c2340}
+.nav .count{margin-left:auto; font-size:12px; color:var(--muted); background:#0b1020; padding:2px 8px; border-radius:999px; border:1px solid var(--border)}
+aside .hint{font-size:12px; color:var(--muted)}
+main{flex:1; display:flex; flex-direction:column; min-width:0}
+header{
+  display:flex; gap:12px; align-items:center; padding:12px 16px; border-bottom:1px solid var(--border);
+  background:rgba(15,23,42,.6); backdrop-filter:saturate(140%) blur(8px);
+}
+.search{flex:1; position:relative}
+.search input{
+  width:100%; padding:12px 40px 12px 12px; border-radius:12px; border:1px solid var(--border); background:#0b1225; color:var(--text);
+}
+.search .icon{position:absolute; right:10px; top:50%; transform:translateY(-50%); font-size:12px; color:var(--muted)}
+header .btn{
+  background:linear-gradient(135deg, var(--brand), var(--brand-2));
+  border:none; color:#0b1020; padding:10px 14px; border-radius:12px; font-weight:700; cursor:pointer;
+}
+.content{display:flex; flex:1; min-height:0}
+.list{
+  width:380px; border-right:1px solid var(--border); padding:14px; display:flex; flex-direction:column; gap:10px; overflow:auto;
+}
+.card{
+  background:linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.02));
+  border:1px solid var(--border); border-radius:14px; padding:12px; display:flex; flex-direction:column; gap:6px; cursor:pointer;
+}
+.card:hover{outline:1px solid #223158}
+.card .title{font-weight:700}
+.card .meta{color:var(--muted); font-size:12px; display:flex; gap:8px; flex-wrap:wrap}
+.detail{flex:1; padding:16px; overflow:auto; display:flex; flex-direction:column; gap:12px}
+.panel{
+  background:linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.02));
+  border:1px solid var(--border); border-radius:14px; padding:14px;
+}
+.header-row{display:flex; align-items:center; gap:10px}
+.header-row h2{margin:0; font-size:18px}
+.header-row .spacer{flex:1}
+.tabs{display:flex; gap:6px; flex-wrap:wrap}
+.tab{all:unset; padding:8px 12px; border-radius:10px; cursor:pointer; border:1px solid var(--border); color:var(--text); font-weight:600}
+.tab.active,.tab:hover{background:#101a35; border-color:#223158}
+.grid{display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:10px}
+.row{display:flex; align-items:center; gap:6px; padding:6px 0}
+.kv{display:grid; grid-template-columns:140px 1fr; gap:8px; align-items:center}
+.kv input,.kv select,.kv textarea{
+  width:100%; padding:10px 12px; background:#0b1225; border:1px solid var(--border); border-radius:10px; color:var(--text)
+}
+.table{width:100%; border-collapse:collapse; font-size:13px; overflow:auto}
+.table th,.table td{border-bottom:1px solid var(--border); padding:10px; text-align:left}
+.table th{color:var(--muted); font-weight:600}
+.actions{display:flex; gap:6px; flex-wrap:wrap}
+.icon-btn{all:unset; border:1px solid var(--border); padding:6px 10px; border-radius:8px; cursor:pointer}
+.icon-btn:hover{background:#0f1732}
+.empty{color:var(--muted); font-style:italic; padding:8px}
+.badge-type{font-size:11px; padding:2px 8px; border-radius:999px; border:1px solid var(--border)}
+.modal-backdrop{position:fixed; inset:0; background:rgba(0,0,0,.5); display:none; align-items:center; justify-content:center; z-index:30}
+.modal{width:min(760px, 92vw); max-height:86vh; overflow:auto; background:#0b1225; border:1px solid var(--border); border-radius:16px; padding:16px}
+.modal h3{margin:0 0 8px 0}
+.modal .footer{display:flex; gap:8px; justify-content:flex-end; padding-top:8px}
+.alert{padding:10px 12px; background:rgba(239,68,68,.12); border:1px solid rgba(239,68,68,.25); border-radius:10px}
+.small{font-size:12px; color:var(--muted)}
+@media (max-width:1100px){ .list{width:320px} }
+@media (max-width:900px){ .grid{grid-template-columns:1fr} .list{display:none} }
+</style>
+
+<style id="light-override">
+:root{
+  --bg:#ffffff;
+  --panel:#ffffff;
+  --card:#ffffff;
+  --muted:#555555;
+  --text:#111111;
+  --brand:#111111;
+  --brand-2:#111111;
+  --border:#e5e7eb;
+}
+body{ background:#ffffff !important; color:#111111 !important; }
+aside{ background:#fafafa !important; border-right:1px solid var(--border) !important; backdrop-filter:none !important; }
+header{ background:#ffffff !important; border-bottom:1px solid var(--border) !important; }
+.nav button{ color:#111 !important; border-color:transparent !important; }
+.nav button:hover,.nav button.active{ background:#f5f5f5 !important; border-color:#e5e7eb !important; }
+.list{ border-right:1px solid var(--border) !important; }
+.card{ background:#ffffff !important; border:1px solid var(--border) !important; }
+.card:hover{ outline:1px solid #d1d5db !important; }
+.panel{ background:#ffffff !important; border:1px solid var(--border) !important; }
+.badge{ background:#111111 !important; color:#ffffff !important; }
+.badge-type{ border:1px solid var(--border) !important; color:#111 !important; background:#fff !important; }
+.search input,
+.kv input,.kv select,.kv textarea{
+  background:#ffffff !important; border:1px solid var(--border) !important; color:#111111 !important;
+}
+.icon-btn{ border:1px solid var(--border) !important; color:#111 !important; background:#fff !important; }
+.icon-btn:hover{ background:#f5f5f5 !important; }
+.btn{
+  background:#ffffff !important; color:#111111 !important; border:1px solid #111 !important;
+}
+.modal-backdrop{ background:rgba(0,0,0,.25) !important; }
+.modal{ background:#ffffff !important; border:1px solid var(--border) !important; }
+.alert{ background:#fdecec !important; border:1px solid #f7b4b4 !important; color:#111 !important; }
+.small{ color:#444 !important; }
+.table th{ color:#444 !important; }
+
+/* --- Light theme visibility fix for nav buttons and counters --- */
+.nav button:hover,
+.nav button.active {
+  background: #e0e0e0 !important;
+  border-color: #bdbdbd !important;
+  color: #000 !important;
+}
+.nav .count {
+  background: #f5f5f5 !important;
+  color: #000 !important;
+  border: 1px solid #ccc !important;
+}
+/* Improve primary "Nouveau" button visibility */
+.btn {
+  box-shadow: 0 1px 0 rgba(0,0,0,.04);
+}
+</style>
+
+</head>
+<body>
+<div class="app">
+  <aside>
+    <div class="brand">
+      <div class="badge">UX</div>
+      <div>CRM Interventions</div>
+    </div>
+    <div class="nav">
+      <button class="active" data-view="accounts">Comptes <span class="count" id="count-accounts">0</span></button>
+      <button data-view="objects">Objets <span class="count" id="count-objects">0</span></button>
+      <button data-view="visits">Visites <span class="count" id="count-visits">0</span></button>
+      <button data-view="interventions">Interventions <span class="count" id="count-interventions">0</span></button>
+    </div>
+    <div class="hint">• Types de compte : <b>Entreprise</b> ou <b>Personne</b><br>• Champs obligatoires : adresse + téléphone<br>• Un compte peut avoir plusieurs objets (bâtiments) et plusieurs contacts.<br>• Les visites génèrent un ID automatiquement.<br>• <b>Interventions</b> : nécessitent un <u>compte</u> et un <u>objet</u> existants (bâtiment).<br>• Statuts intervention : à planifier → planifiée → en cours → terminée → facturée.<br>• Raccourci : <kbd>⌘K</kbd>/<kbd>Ctrl+K</kbd> pour rechercher.</div>
+  </aside>
+  <main>
+    <header>
+      <div class="search">
+        <input id="search" placeholder="Rechercher un compte, un objet ou une visite…" />
+        <span class="icon">⌘K</span>
+      </div>
+      <button class="btn" id="btnAdd">+ Nouveau</button>
+      <button class="icon-btn" id="btnSeed" title="Injecter des données de démo">Injecter démo</button>
+      <button class="icon-btn" id="btnReset" title="Réinitialiser les données">Réinitialiser</button>
+    </header>
+
+<div id="compat-banner" style="display:none; background:#fff3cd; border:1px solid #ffeeba; color:#856404; padding:8px 12px; margin:12px 16px; border-radius:8px;">
+  Mode démo sans stockage : vos données ne sont pas conservées (localStorage bloqué). Ouvrez le fichier dans un navigateur moderne (Chrome/Firefox/Edge) ou autorisez le stockage local.
+</div>
+
+    <div class="content">
+      <div class="list" id="list"></div>
+      <div class="detail" id="detail">
+        <div class="panel">
+          <div class="header-row">
+            <h2>Bienvenue 👋</h2>
+          </div>
+          <p class="small">Sélectionnez un élément dans la liste ou cliquez sur « Nouveau » pour créer un compte, un objet ou une visite.</p>
+        </div>
+        <div class="panel">
+          <h3>Raccourcis</h3>
+          <div class="actions">
+            <button class="icon-btn" onclick="openAccountModal()">+ Compte</button>
+            <button class="icon-btn" onclick="openObjectModal()">+ Objet</button>
+            <button class="icon-btn" onclick="openVisitModal()">+ Visite</button>
+            <button class="icon-btn" onclick="openInterventionModal()">+ Intervention</button>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>Aide rapide</h3>
+          <div class="actions" style="margin-bottom:8px">
+            <button class="icon-btn" onclick="alert('Interaction OK — le JavaScript est bien exécuté.')">Tester l’interaction</button>
+          </div>
+          <ul class="small">
+            <li><b>Nouveau</b> crée selon la vue active (Compte/Objet/Visite/Intervention).</li>
+            <li><b>Suppression protégée</b> : un compte avec objets/visites/interventions ne peut pas être supprimé.</li>
+            <li><b>Objets</b> requis avant intervention.</li>
+            <li><b>Recherche</b> couvre noms, adresses, types, techniciens.</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h3>Conseils d’UX</h3>
+          <ul class="small">
+            <li>Validation en direct des champs requis (adresse + tél.)</li>
+            <li>États vides clairs et CTA visibles</li>
+            <li>Actions rapides par ligne (éditer, supprimer)</li>
+            <li>Filtres par type (visites : sur site, appel, visio)</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Modal placeholder -->
+<div class="modal-backdrop" id="modalBackdrop">
+  <div class="modal" id="modal"></div>
+</div>
+
+<script>
+// --- Minimal data store (localStorage) ---
+
+const Store = {
+  key: 'ux-crm-demo',
+  mem: null,
+  get _ls(){ try { return window.localStorage; } catch(e){ return null; } },
+  _ensure(){
+    // if localStorage not available, use memory store
+    if(!this._ls){
+      if(!this.mem){
+        this.mem = {
+          accounts: [],
+          objects: [],
+          visits: [],
+          interventions: []
+        };
+      }
+      return this.mem;
+    }
+    const raw = this._ls.getItem(this.key);
+    if(!raw){
+      const seed = {accounts:[], objects:[], visits:[], interventions:[]};
+      this._ls.setItem(this.key, JSON.stringify(seed));
+      return seed;
+    }
+    try { return JSON.parse(raw); } catch(e){
+      this._ls.removeItem(this.key);
+      const seed = {accounts:[], objects:[], visits:[], interventions:[]};
+      this._ls.setItem(this.key, JSON.stringify(seed));
+      return seed;
+    }
+  },
+  read(){ return this._ensure(); },
+  write(data){
+    if(this._ls){
+      try { this._ls.setItem(this.key, JSON.stringify(data)); }
+      catch(e){ this.mem = JSON.parse(JSON.stringify(data)); }
+    }else{
+      this.mem = JSON.parse(JSON.stringify(data));
+    }
+  },
+  id(prefix='ID'){ return prefix + '-' + Math.random().toString(36).slice(2,8); }
+};
+
+      localStorage.setItem(this.key, JSON.stringify(seed));
+      return seed;
+    }
+    try{ return JSON.parse(raw); } catch(e){ localStorage.removeItem(this.key); return this.init(); }
+  },
+  read(){ return this.init(); },
+  write(data){ localStorage.setItem(this.key, JSON.stringify(data)); },
+  id(prefix='ID'){ return prefix + '-' + Math.random().toString(36).slice(2,8); }
+};
+
+let state = { view: 'accounts', sel: null, query: '' };
+let db = Store.read();
+
+// --- Helpers ---
+function fmtPhone(s){ return s.replace(/[^\d+]/g,''); }
+function byQuery(items, fields){
+  if(!state.query) return items;
+  const q = state.query.toLowerCase();
+  return items.filter(it => fields.some(f => (it[f]||'').toLowerCase().includes(q)));
+}
+function closeModal(){ document.getElementById('modalBackdrop').style.display='none'; document.getElementById('modal').innerHTML=''; }
+function openModal(html){ const m=document.getElementById('modal'); m.innerHTML=html; document.getElementById('modalBackdrop').style.display='flex'; }
+document.getElementById('modalBackdrop').addEventListener('click', e=>{ if(e.target.id==='modalBackdrop') closeModal(); });
+
+// --- Rendering ---
+const listEl = document.getElementById('list');
+const detailEl = document.getElementById('detail');
+
+function renderCounts(){
+  document.getElementById('count-accounts').textContent = db.accounts.length;
+  document.getElementById('count-objects').textContent = db.objects.length;
+  document.getElementById('count-visits').textContent = db.visits.length;
+  document.getElementById('count-interventions').textContent = (db.interventions||[]).length;
+}
+
+
+function renderList(){
+  listEl.innerHTML='';
+  let items=[];
+  if(state.view==='accounts'){
+    const arr = byQuery(db.accounts, ['nom','adresse','tel']);
+    if(arr.length===0){ listEl.innerHTML='<div class="empty">Aucun compte</div>'; return; }
+    items = arr.map(a => {
+      const contacts = (a.contacts||[]).length;
+      const objs = db.objects.filter(o=>o.accountId===a.id).length;
+      const ints = (db.interventions||[]).filter(i=>i.accountId===a.id).length;
+      return `<div class="card" onclick="selectItem('${a.id}')">
+        <div class="title">${a.nom}</div>
+        <div class="meta"><span>${a.type}</span><span>${a.adresse}</span><span>☎ ${a.tel}</span><span>${contacts} contacts</span><span>${objs} objets</span><span>${ints} interventions</span></div>
+      </div>`;
+    });
+  } else if(state.view==='objects'){
+    const arr = byQuery(db.objects.map(o=>({...o, account: (db.accounts.find(a=>a.id===o.accountId)||{}).nom||'—'})), ['libelle','adresse','account']);
+    if(arr.length===0){ listEl.innerHTML='<div class="empty">Aucun objet</div>'; return; }
+    items = arr.map(o => `<div class="card" onclick="selectItem('${o.id}')">
+      <div class="title">${o.libelle}</div>
+      <div class="meta"><span>${o.adresse}</span><span>Compte : ${o.account}</span></div>
+    </div>`);
+  } else if(state.view==='visits'){
+    const arr = byQuery(db.visits.map(v=>({...v, account:(db.accounts.find(a=>a.id===v.accountId)||{}).nom||'—'})), ['id','account','type','commentaire']);
+    if(arr.length===0){ listEl.innerHTML='<div class="empty">Aucune visite</div>'; return; }
+    items = arr.map(v => `<div class="card" onclick="selectItem('${v.id}')">
+      <div class="title">Visite ${v.id}</div>
+      <div class="meta"><span>${v.date}</span><span>${v.type}</span><span>Compte : ${v.account}</span><span>Prochaine étape : ${v.echeance||'—'}</span></div>
+      <div class="small">${(v.commentaire||'').slice(0,120)}</div>
+    </div>`);
+  } else {
+    const arr = byQuery((db.interventions||[]).map(i=>{
+      const a = db.accounts.find(a=>a.id===i.accountId);
+      const o = db.objects.find(o=>o.id===i.objectId);
+      return {...i, account:(a && a.nom)||'—', objet:(o && o.libelle)||'—'};
+    }), ['id','account','objet','type','statut','description','technicien']);
+    if(arr.length===0){ listEl.innerHTML='<div class="empty">Aucune intervention</div>'; return; }
+    items = arr.map(i => `<div class="card" onclick="selectItem('${i.id}')">
+      <div class="title">Intervention ${i.id}</div>
+      <div class="meta"><span>${i.date} ${i.start?('• '+i.start+(i.end?('–'+i.end):'')):''}</span><span>${i.type}</span><span>Statut : ${i.statut}</span><span>Compte : ${i.account}</span><span>Objet : ${i.objet}</span></div>
+      <div class="small">${(i.description||'').slice(0,120)}</div>
+    </div>`);
+  }
+  listEl.innerHTML = items.join('');
+}
+
+    items = arr.map(a => {
+      const contacts = (a.contacts||[]).length;
+      const objs = db.objects.filter(o=>o.accountId===a.id).length;
+      return `<div class="card" onclick="selectItem('${a.id}')">
+        <div class="title">${a.nom}</div>
+        <div class="meta"><span>${a.type}</span><span>${a.adresse}</span><span>☎ ${a.tel}</span><span>${contacts} contacts</span><span>${objs} objets</span></div>
+      </div>`;
+    });
+  } else if(state.view==='objects'){
+    const arr = byQuery(db.objects.map(o=>({...o, account: (db.accounts.find(a=>a.id===o.accountId)||{}).nom||'—'})), ['libelle','adresse','account']);
+    if(arr.length===0){ listEl.innerHTML='<div class="empty">Aucun objet</div>'; return; }
+    items = arr.map(o => `<div class="card" onclick="selectItem('${o.id}')">
+      <div class="title">${o.libelle}</div>
+      <div class="meta"><span>${o.adresse}</span><span>Compte : ${o.account}</span></div>
+    </div>`);
+  } else {
+    const arr = byQuery(db.visits.map(v=>({...v, account:(db.accounts.find(a=>a.id===v.accountId)||{}).nom||'—'})), ['id','account','type','commentaire']);
+    if(arr.length===0){ listEl.innerHTML='<div class="empty">Aucune visite</div>'; return; }
+    items = arr.map(v => `<div class="card" onclick="selectItem('${v.id}')">
+      <div class="title">Visite ${v.id}</div>
+      <div class="meta"><span>${v.date}</span><span>${v.type}</span><span>Compte : ${v.account}</span><span>Prochaine étape : ${v.echeance||'—'}</span></div>
+      <div class="small">${(v.commentaire||'').slice(0,120)}</div>
+    </div>`);
+  }
+  listEl.innerHTML = items.join('');
+}
+
+function selectItem(id){
+  state.sel=id;
+  renderDetail();
+
+function seedDemoData(){
+  try{
+    db = {accounts:[], objects:[], visits:[], interventions:[]};
+    // Création d'un compte de démo
+    const acc = {id:Store.id('ACC'), type:'Entreprise', nom:'Acomet SA (Démo)', adresse:'Route du Rhône 1, 1950 Sion', tel:'+41276000000', contacts:[{id:Store.id('CT'), nom:'Dorsaz', prenom:'Pauline', lieu:'Sion', tel:'+41790000000', email:'pauline@acomet.ch'}]};
+    db.accounts.push(acc);
+    // Objet
+    const obj = {id:Store.id('OBJ'), accountId:acc.id, libelle:'Atelier principal', adresse:'Route du Rhône 1, 1950 Sion'};
+    db.objects.push(obj);
+    // Visite
+    const today = new Date().toISOString().slice(0,10);
+    const vid = (typeof nextVisitId === 'function') ? nextVisitId() : ('V-'+today.replaceAll('-','')+'-001');
+    db.visits.push({id:vid, accountId:acc.id, contactId:acc.contacts[0].id, date:today, type:'sur site', commentaire:'Kick-off projet façade.', echeance:''});
+    // Intervention
+    const iid = (typeof nextInterventionId === 'function') ? nextInterventionId() : ('INT-'+today.replaceAll('-','')+'-001');
+    db.interventions.push({id:iid, accountId:acc.id, objectId:obj.id, contactId:acc.contacts[0].id, date:today, start:'08:00', end:'10:00', type:'SAV', statut:'planifiée', priorite:'normale', technicien:'Zarco', description:'Réglage portes automatiques', echeance:'', heures:'2'});
+    Store.write(db);
+    setView('accounts');
+    renderCounts(); renderList(); renderDetail();
+    alert('Données de démo injectées.');
+  }catch(e){
+    alert('Erreur lors de l’injection de démo: '+e);
+  }
+}
+
+
+(function attachHandlers(){
+  function seedDemoData(){
+    try{
+      db = {accounts:[], objects:[], visits:[], interventions:[]};
+      const acc = {id:Store.id('ACC'), type:'Entreprise', nom:'Acomet SA (Démo)', adresse:'Route du Rhône 1, 1950 Sion', tel:'+41276000000', contacts:[{id:Store.id('CT'), nom:'Dorsaz', prenom:'Pauline', lieu:'Sion', tel:'+41790000000', email:'pauline@acomet.ch'}]};
+      db.accounts.push(acc);
+      const obj = {id:Store.id('OBJ'), accountId:acc.id, libelle:'Atelier principal', adresse:'Route du Rhône 1, 1950 Sion'};
+      db.objects.push(obj);
+      const today = new Date().toISOString().slice(0,10);
+      var vid = (typeof nextVisitId === 'function') ? nextVisitId() : ('V-'+today.replace(/-/g,'')+'-001');
+      db.visits.push({id:vid, accountId:acc.id, contactId:acc.contacts[0].id, date:today, type:'sur site', commentaire:'Kick-off projet façade.', echeance:''});
+      var iid = (typeof nextInterventionId === 'function') ? nextInterventionId() : ('INT-'+today.replace(/-/g,'')+'-001');
+      db.interventions.push({id:iid, accountId:acc.id, objectId:obj.id, contactId:acc.contacts[0].id, date:today, start:'08:00', end:'10:00', type:'SAV', statut:'planifiée', priorite:'normale', technicien:'Zarco', description:'Réglage portes automatiques', echeance:'', heures:'2'});
+      Store.write(db);
+      setView('accounts');
+      renderCounts(); renderList(); renderDetail();
+      alert('Données de démo injectées.');
+    }catch(e){
+      alert('Erreur lors de l’injection de démo: '+e);
+    }
+  }
+  window.seedDemoData = seedDemoData; // expose globally au cas où
+
+  function bind(){
+    var seedBtn = document.getElementById('btnSeed');
+    if(seedBtn && !seedBtn._bound){
+      seedBtn.addEventListener('click', seedDemoData);
+      seedBtn._bound = true;
+    }
+    var resetBtn = document.getElementById('btnReset');
+    if(resetBtn && !resetBtn._bound){
+      resetBtn.addEventListener('click', function(){
+        try{ if(Store._ls){ Store._ls.removeItem(Store.key); } }catch(e){}
+        seedDemoData();
+      });
+      resetBtn._bound = true;
+    }
+    var toolSeed = document.getElementById('btnToolSeed');
+    if(toolSeed && !toolSeed._bound){
+      toolSeed.addEventListener('click', seedDemoData);
+      toolSeed._bound = true;
+    }
+    var toolReset = document.getElementById('btnToolReset');
+    if(toolReset && !toolReset._bound){
+      toolReset.addEventListener('click', function(){
+        try{ if(Store._ls){ Store._ls.removeItem(Store.key); } }catch(e){}
+        seedDemoData();
+      });
+      toolReset._bound = true;
+    }
+  }
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', bind);
+  }else{
+    bind();
+  }
+})();
+
+
+document.getElementById('btnReset').addEventListener('click', function(){
+  try{
+    if(Store._ls){ Store._ls.removeItem(Store.key); }
+  }catch(e){}
+  // reset in-memory too
+  try{
+    db = {accounts:[], objects:[], visits:[], interventions:[]};
+    Store.write(db);
+    // seed again minimal demo so l'UX is not empty
+    const acc = {id:Store.id('ACC'), type:'Entreprise', nom:'Démo SA', adresse:'Rue de la Demo 1, 1000 Lausanne', tel:'+41210000000', contacts:[{id:Store.id('CT'), nom:'Durand', prenom:'Alice', lieu:'Lausanne', tel:'+41790000000', email:'alice@demo.ch'}]};
+    db.accounts.push(acc);
+    const obj = {id:Store.id('OBJ'), accountId:acc.id, libelle:'Bâtiment Démo', adresse:'Rue de la Demo 1, 1000 Lausanne'};
+    db.objects.push(obj);
+    Store.write(db);
+    setView('accounts');
+    renderCounts(); renderList(); renderDetail();
+    alert('Données réinitialisées.');
+  }catch(e){
+    alert('Impossible de réinitialiser: '+e);
+  }
+});
+
+}
+
+
+function renderDetail(){
+  let html = '';
+  if(state.view==='accounts'){
+    const a = db.accounts.find(x=>x.id===state.sel);
+    if(!a){ detailEl.innerHTML='<div class="panel"><h3>Sélectionnez un compte</h3></div>'; return; }
+    const objs = db.objects.filter(o=>o.accountId===a.id);
+    const visits = db.visits.filter(v=>v.accountId===a.id);
+    const ints = (db.interventions||[]).filter(i=>i.accountId===a.id);
+    html += `<div class="panel">
+      <div class="header-row">
+        <h2>${a.nom}</h2>
+        <span class="badge-type">${a.type}</span>
+        <div class="spacer"></div>
+        <div class="actions">
+          <button class="icon-btn" onclick="openAccountModal('${a.id}')">Éditer</button>
+          <button class="icon-btn" onclick="deleteAccount('${a.id}')">Supprimer</button>
+        </div>
+      </div>
+      <div class="grid">
+        <div class="kv"><div>Adresse</div><div>${a.adresse}</div></div>
+        <div class="kv"><div>Téléphone</div><div>${a.tel}</div></div>
+      </div>
+    </div>`;
+    // Contacts
+    html += `<div class="panel">
+      <div class="header-row"><h3>Contacts</h3><div class="spacer"></div><button class="icon-btn" onclick="openContactModal('${a.id}')">+ Contact</button></div>
+      ${ (a.contacts&&a.contacts.length) ? `
+      <table class="table">
+        <thead><tr><th>Nom</th><th>Prénom</th><th>Lieu</th><th>Tél</th><th>Email</th><th></th></tr></thead>
+        <tbody>
+          ${a.contacts.map(c=>`<tr>
+            <td>${c.nom||''}</td><td>${c.prenom||''}</td><td>${c.lieu||''}</td><td>${c.tel||''}</td><td>${c.email||''}</td>
+            <td class="actions"><button class="icon-btn" onclick="openContactModal('${a.id}','${c.id}')">Éditer</button>
+            <button class="icon-btn" onclick="deleteContact('${a.id}','${c.id}')">Supprimer</button></td>
+          </tr>`).join('')}
+        </tbody>
+      </table>` : `<div class="empty">Aucun contact</div>`}
+    </div>`;
+    // Objects
+    html += `<div class="panel">
+      <div class="header-row"><h3>Objets</h3><div class="spacer"></div><button class="icon-btn" onclick="openObjectModal('${a.id}')">+ Objet</button></div>
+      ${ objs.length ? `
+      <table class="table">
+        <thead><tr><th>Libellé</th><th>Adresse</th><th></th></tr></thead>
+        <tbody>
+          ${objs.map(o=>`<tr>
+            <td>${o.libelle}</td><td>${o.adresse}</td>
+            <td class="actions">
+              <button class="icon-btn" onclick="openObjectModal('${a.id}','${o.id}')">Éditer</button>
+              <button class="icon-btn" onclick="deleteObject('${o.id}')">Supprimer</button>
+            </td>
+          </tr>`).join('')}
+        </tbody>
+      </table>` : `<div class="empty">Aucun objet</div>`}
+      <div class="small">NB : un objet (bâtiment) doit exister avant toute intervention.</div>
+    </div>`;
+    // Visits
+    html += `<div class="panel">
+      <div class="header-row"><h3>Visites</h3><div class="spacer"></div><button class="icon-btn" onclick="openVisitModal('${a.id}')">+ Visite</button></div>
+      ${ visits.length ? `
+      <table class="table">
+        <thead><tr><th>ID</th><th>Date</th><th>Type</th><th>Contact</th><th>Commentaires</th><th>Prochaine étape</th><th></th></tr></thead>
+        <tbody>
+          ${visits.map(v=>{
+            const ct = (db.accounts.find(x=>x.id===a.id)?.contacts||[]).find(c=>c.id===v.contactId);
+            return `<tr>
+              <td>${v.id}</td><td>${v.date}</td><td>${v.type}</td><td>${ct? (ct.prenom+' '+ct.nom):'—'}</td>
+              <td>${(v.commentaire||'').slice(0,60)}</td><td>${v.echeance||'—'}</td>
+              <td class="actions">
+                <button class="icon-btn" onclick="openVisitModal('${a.id}','${v.id}')">Éditer</button>
+                <button class="icon-btn" onclick="deleteVisit('${v.id}')">Supprimer</button>
+              </td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>` : `<div class="empty">Aucune visite</div>`}
+    </div>`;
+    // Interventions
+    html += `<div class="panel">
+      <div class="header-row"><h3>Interventions</h3><div class="spacer"></div><button class="icon-btn" onclick="openInterventionModal('${a.id}')">+ Intervention</button></div>
+      ${ ints.length ? `
+      <table class="table">
+        <thead><tr><th>ID</th><th>Date</th><th>Créneau</th><th>Type</th><th>Statut</th><th>Objet</th><th>Technicien</th><th></th></tr></thead>
+        <tbody>
+          ${ints.map(i=>{
+            const o = db.objects.find(o=>o.id===i.objectId);
+            return `<tr>
+              <td>${i.id}</td><td>${i.date||'—'}</td><td>${(i.start||'')}${i.end?('–'+i.end):''}</td><td>${i.type||'—'}</td><td>${i.statut||'—'}</td>
+              <td>${o?o.libelle:'—'}</td><td>${i.technicien||'—'}</td>
+              <td class="actions"><button class="icon-btn" onclick="openInterventionModal('${a.id}','${i.id}')">Éditer</button>
+              <button class="icon-btn" onclick="deleteIntervention('${i.id}')">Supprimer</button></td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>` : `<div class="empty">Aucune intervention</div>`}
+    </div>`;
+    detailEl.innerHTML = html;
+  } else if(state.view==='objects'){
+    const o = db.objects.find(x=>x.id===state.sel);
+    if(!o){ detailEl.innerHTML='<div class="panel"><h3>Sélectionnez un objet</h3></div>'; return; }
+    const a = db.accounts.find(x=>x.id===o.accountId);
+    const ints = (db.interventions||[]).filter(i=>i.objectId===o.id);
+    html += `<div class="panel">
+      <div class="header-row">
+        <h2>${o.libelle}</h2><div class="spacer"></div>
+        <div class="actions">
+          <button class="icon-btn" onclick="openObjectModal('${(a && a.id)||''}','${o.id}')">Éditer</button>
+          <button class="icon-btn" onclick="deleteObject('${o.id}')">Supprimer</button>
+        </div>
+      </div>
+      <div class="grid">
+        <div class="kv"><div>Adresse</div><div>${o.adresse}</div></div>
+        <div class="kv"><div>Compte</div><div>${a? a.nom : '—'}</div></div>
+      </div>
+    </div>`;
+    // Interventions for this object
+    html += `<div class="panel">
+      <div class="header-row"><h3>Interventions sur cet objet</h3><div class="spacer"></div><button class="icon-btn" onclick="openInterventionModal('${(a && a.id)||''}')">+ Intervention</button></div>
+      ${ ints.length ? `
+      <table class="table">
+        <thead><tr><th>ID</th><th>Date</th><th>Type</th><th>Statut</th><th>Technicien</th><th></th></tr></thead>
+        <tbody>
+          ${ints.map(i=>`
+            <tr>
+              <td>${i.id}</td><td>${i.date||'—'}</td><td>${i.type||'—'}</td><td>${i.statut||'—'}</td><td>${i.technicien||'—'}</td>
+              <td class="actions"><button class="icon-btn" onclick="openInterventionModal('${(a && a.id)||''}','${i.id}')">Éditer</button>
+              <button class="icon-btn" onclick="deleteIntervention('${i.id}')">Supprimer</button></td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>` : `<div class="empty">Aucune intervention</div>`}
+    </div>`;
+    detailEl.innerHTML = html;
+  } else if(state.view==='visits'){
+    const v = db.visits.find(x=>x.id===state.sel);
+    if(!v){ detailEl.innerHTML='<div class="panel"><h3>Sélectionnez une visite</h3></div>'; return; }
+    const a = db.accounts.find(x=>x.id===v.accountId);
+    const ct = ((a && a.contacts)||[]).find(c=>c.id===v.contactId);
+    html += `<div class="panel">
+      <div class="header-row"><h2>Visite ${v.id}</h2><div class="spacer"></div>
+        <div class="actions">
+          <button class="icon-btn" onclick="openVisitModal('${(a && a.id)||''}','${v.id}')">Éditer</button>
+          <button class="icon-btn" onclick="deleteVisit('${v.id}')">Supprimer</button>
+        </div>
+      </div>
+      <div class="grid">
+        <div class="kv"><div>Compte</div><div>${a? a.nom : '—'}</div></div>
+        <div class="kv"><div>Date</div><div>${v.date}</div></div>
+        <div class="kv"><div>Type</div><div>${v.type}</div></div>
+        <div class="kv"><div>Contact</div><div>${ct? (ct.prenom+' '+ct.nom):'—'}</div></div>
+        <div class="kv"><div>Prochaine étape</div><div>${v.echeance||'—'}</div></div>
+      </div>
+      <div class="panel" style="margin-top:10px">
+        <div class="kv" style="grid-template-columns:1fr">
+          <div>Commentaires</div>
+          <div>${v.commentaire||'—'}</div>
+        </div>
+      </div>
+    </div>`;
+    detailEl.innerHTML = html;
+  } else {
+    const i = (db.interventions||[]).find(x=>x.id===state.sel);
+    if(!i){ detailEl.innerHTML='<div class="panel"><h3>Sélectionnez une intervention</h3></div>'; return; }
+    const a = db.accounts.find(x=>x.id===i.accountId);
+    const o = db.objects.find(x=>x.id===i.objectId);
+    const ct = ((a && a.contacts)||[]).find(c=>c.id===i.contactId);
+    html += `<div class="panel">
+      <div class="header-row"><h2>Intervention ${i.id}</h2><div class="spacer"></div>
+        <div class="actions">
+          <button class="icon-btn" onclick="openInterventionModal('${(a && a.id)||''}','${i.id}')">Éditer</button>
+          <button class="icon-btn" onclick="deleteIntervention('${i.id}')">Supprimer</button>
+        </div>
+      </div>
+      <div class="grid">
+        <div class="kv"><div>Compte</div><div>${a? a.nom : '—'}</div></div>
+        <div class="kv"><div>Objet</div><div>${o? o.libelle : '—'}</div></div>
+        <div class="kv"><div>Date</div><div>${i.date||'—'}</div></div>
+        <div class="kv"><div>Créneau</div><div>${(i.start||'')}${i.end?('–'+i.end):''}</div></div>
+        <div class="kv"><div>Type</div><div>${i.type||'—'}</div></div>
+        <div class="kv"><div>Statut</div><div>${i.statut||'—'}</div></div>
+        <div class="kv"><div>Priorité</div><div>${i.priorite||'—'}</div></div>
+        <div class="kv"><div>Technicien</div><div>${i.technicien||'—'}</div></div>
+        <div class="kv"><div>Heures</div><div>${i.heures||'0'}</div></div>
+        <div class="kv"><div>Échéance</div><div>${i.echeance||'—'}</div></div>
+      </div>
+      <div class="panel" style="margin-top:10px">
+        <div class="kv" style="grid-template-columns:1fr">
+          <div>Description</div>
+          <div>${i.description||'—'}</div>
+        </div>
+      </div>
+    </div>`;
+    detailEl.innerHTML = html;
+  }
+}
+
+    const objs = db.objects.filter(o=>o.accountId===a.id);
+    const visits = db.visits.filter(v=>v.accountId===a.id);
+    html += `<div class="panel">
+      <div class="header-row">
+        <h2>${a.nom}</h2>
+        <span class="badge-type">${a.type}</span>
+        <div class="spacer"></div>
+        <div class="actions">
+          <button class="icon-btn" onclick="openAccountModal('${a.id}')">Éditer</button>
+          <button class="icon-btn" onclick="deleteAccount('${a.id}')">Supprimer</button>
+        </div>
+      </div>
+      <div class="grid">
+        <div class="kv"><div>Adresse</div><div>${a.adresse}</div></div>
+        <div class="kv"><div>Téléphone</div><div>${a.tel}</div></div>
+      </div>
+    </div>`;
+    // Contacts
+    html += `<div class="panel">
+      <div class="header-row"><h3>Contacts</h3><div class="spacer"></div><button class="icon-btn" onclick="openContactModal('${a.id}')">+ Contact</button></div>
+      ${ (a.contacts&&a.contacts.length) ? `
+      <table class="table">
+        <thead><tr><th>Nom</th><th>Prénom</th><th>Lieu</th><th>Tél</th><th>Email</th><th></th></tr></thead>
+        <tbody>
+          ${a.contacts.map(c=>`<tr>
+            <td>${c.nom||''}</td><td>${c.prenom||''}</td><td>${c.lieu||''}</td><td>${c.tel||''}</td><td>${c.email||''}</td>
+            <td class="actions"><button class="icon-btn" onclick="openContactModal('${a.id}','${c.id}')">Éditer</button>
+            <button class="icon-btn" onclick="deleteContact('${a.id}','${c.id}')">Supprimer</button></td>
+          </tr>`).join('')}
+        </tbody>
+      </table>` : `<div class="empty">Aucun contact</div>`}
+    </div>`;
+    // Objects
+    html += `<div class="panel">
+      <div class="header-row"><h3>Objets</h3><div class="spacer"></div><button class="icon-btn" onclick="openObjectModal('${a.id}')">+ Objet</button></div>
+      ${ objs.length ? `
+      <table class="table">
+        <thead><tr><th>Libellé</th><th>Adresse</th><th></th></tr></thead>
+        <tbody>
+          ${objs.map(o=>`<tr>
+            <td>${o.libelle}</td><td>${o.adresse}</td>
+            <td class="actions">
+              <button class="icon-btn" onclick="openObjectModal('${a.id}','${o.id}')">Éditer</button>
+              <button class="icon-btn" onclick="deleteObject('${o.id}')">Supprimer</button>
+            </td>
+          </tr>`).join('')}
+        </tbody>
+      </table>` : `<div class="empty">Aucun objet</div>`}
+      <div class="small">NB : un objet (bâtiment) doit exister avant toute intervention.</div>
+    </div>`;
+    // Visits
+    html += `<div class="panel">
+      <div class="header-row"><h3>Visites</h3><div class="spacer"></div><button class="icon-btn" onclick="openVisitModal('${a.id}')">+ Visite</button></div>
+      ${ visits.length ? `
+      <table class="table">
+        <thead><tr><th>ID</th><th>Date</th><th>Type</th><th>Contact</th><th>Commentaires</th><th>Prochaine étape</th><th></th></tr></thead>
+        <tbody>
+          ${visits.map(v=>{
+            const ct = (db.accounts.find(x=>x.id===a.id)?.contacts||[]).find(c=>c.id===v.contactId);
+            return `<tr>
+              <td>${v.id}</td><td>${v.date}</td><td>${v.type}</td><td>${ct? (ct.prenom+' '+ct.nom):'—'}</td>
+              <td>${(v.commentaire||'').slice(0,60)}</td><td>${v.echeance||'—'}</td>
+              <td class="actions">
+                <button class="icon-btn" onclick="openVisitModal('${a.id}','${v.id}')">Éditer</button>
+                <button class="icon-btn" onclick="deleteVisit('${v.id}')">Supprimer</button>
+              </td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>` : `<div class="empty">Aucune visite</div>`}
+    </div>`;
+    detailEl.innerHTML = html;
+  } else if(state.view==='objects'){
+    const o = db.objects.find(x=>x.id===state.sel);
+    if(!o){ detailEl.innerHTML='<div class="panel"><h3>Sélectionnez un objet</h3></div>'; return; }
+    const a = db.accounts.find(x=>x.id===o.accountId);
+    html += `<div class="panel">
+      <div class="header-row">
+        <h2>${o.libelle}</h2><div class="spacer"></div>
+        <div class="actions">
+          <button class="icon-btn" onclick="openObjectModal('${(a && a.id)||''}','${o.id}')">Éditer</button>
+          <button class="icon-btn" onclick="deleteObject('${o.id}')">Supprimer</button>
+        </div>
+      </div>
+      <div class="grid">
+        <div class="kv"><div>Adresse</div><div>${o.adresse}</div></div>
+        <div class="kv"><div>Compte</div><div>${a? a.nom : '—'}</div></div>
+      </div>
+    </div>`;
+    detailEl.innerHTML = html;
+  } else {
+    const v = db.visits.find(x=>x.id===state.sel);
+    if(!v){ detailEl.innerHTML='<div class="panel"><h3>Sélectionnez une visite</h3></div>'; return; }
+    const a = db.accounts.find(x=>x.id===v.accountId);
+    const ct = ((a && a.contacts)||[]).find(c=>c.id===v.contactId);
+    html += `<div class="panel">
+      <div class="header-row"><h2>Visite ${v.id}</h2><div class="spacer"></div>
+        <div class="actions">
+          <button class="icon-btn" onclick="openVisitModal('${(a && a.id)||''}','${v.id}')">Éditer</button>
+          <button class="icon-btn" onclick="deleteVisit('${v.id}')">Supprimer</button>
+        </div>
+      </div>
+      <div class="grid">
+        <div class="kv"><div>Compte</div><div>${a? a.nom : '—'}</div></div>
+        <div class="kv"><div>Date</div><div>${v.date}</div></div>
+        <div class="kv"><div>Type</div><div>${v.type}</div></div>
+        <div class="kv"><div>Contact</div><div>${ct? (ct.prenom+' '+ct.nom):'—'}</div></div>
+        <div class="kv"><div>Prochaine étape</div><div>${v.echeance||'—'}</div></div>
+      </div>
+      <div class="panel" style="margin-top:10px">
+        <div class="kv" style="grid-template-columns:1fr">
+          <div>Commentaires</div>
+          <div>${v.commentaire||'—'}</div>
+        </div>
+      </div>
+    </div>`;
+    detailEl.innerHTML = html;
+  }
+}
+
+function setView(v){
+  state.view=v; state.sel=null;
+  document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active', b.dataset.view===v));
+  renderList(); renderDetail();
+}
+
+// --- Modals (create/edit) ---
+function openAccountModal(id=null){
+  const editing = !!id;
+  const a = editing ? db.accounts.find(x=>x.id===id) : {type:'Entreprise', nom:'', adresse:'', tel:'', contacts:[]};
+  openModal(`
+    <h3>${editing?'Éditer':'Nouveau'} compte</h3>
+    <div class="grid">
+      <div class="kv"><div>Type *</div>
+        <div><select id="ac-type">
+          <option ${a.type==='Entreprise'?'selected':''}>Entreprise</option>
+          <option ${a.type==='Personne'?'selected':''}>Personne</option>
+        </select></div>
+      </div>
+      <div class="kv"><div>Nom *</div><div><input id="ac-nom" value="${a.nom||''}" placeholder="${a.type==='Entreprise'?'Raison sociale':'Nom complet'}"></div></div>
+      <div class="kv"><div>Adresse *</div><div><input id="ac-adr" value="${a.adresse||''}" placeholder="Rue, N°, NPA, Ville"></div></div>
+      <div class="kv"><div>Téléphone *</div><div><input id="ac-tel" value="${a.tel||''}" placeholder="+41..."></div></div>
+    </div>
+    <div id="ac-err" class="alert" style="display:none;margin-top:8px"></div>
+    <div class="footer">
+      <button class="icon-btn" onclick="closeModal()">Annuler</button>
+      <button class="icon-btn" onclick="saveAccount('${editing? a.id : ''}')">${editing?'Enregistrer':'Créer'}</button>
+    </div>
+  `);
+}
+function saveAccount(id){
+  const type = document.getElementById('ac-type').value;
+  const nom = document.getElementById('ac-nom').value.trim();
+  const adresse = document.getElementById('ac-adr').value.trim();
+  const tel = fmtPhone(document.getElementById('ac-tel').value.trim());
+  const err = [];
+  if(!nom) err.push('Nom requis');
+  if(!adresse) err.push('Adresse requise');
+  if(!tel) err.push('Téléphone requis');
+  if(err.length){ const e=document.getElementById('ac-err'); e.textContent=err.join(' · '); e.style.display='block'; return; }
+  if(id){
+    const a = db.accounts.find(x=>x.id===id);
+    Object.assign(a,{type,nom,adresse,tel});
+  }else{
+    db.accounts.push({id:Store.id('ACC'), type, nom, adresse, tel, contacts:[]});
+  }
+  Store.write(db); closeModal(); setView('accounts'); renderCounts();
+
+// Show compatibility banner when running without localStorage
+try {
+  if (!Store._ls) {
+    document.getElementById('compat-banner').style.display = 'block';
+  }
+} catch(e) {}
+ renderList();
+}
+
+function openContactModal(accountId, contactId=null){
+  const a = db.accounts.find(x=>x.id===accountId);
+  const editing = !!contactId;
+  const c = editing ? (a.contacts||[]).find(x=>x.id===contactId) : {nom:'', prenom:'', lieu:'', tel:'', email:''};
+  openModal(`
+    <h3>${editing?'Éditer':'Nouveau'} contact – ${a.nom}</h3>
+    <div class="grid">
+      <div class="kv"><div>Nom *</div><div><input id="ct-nom" value="${c.nom||''}"></div></div>
+      <div class="kv"><div>Prénom *</div><div><input id="ct-prenom" value="${c.prenom||''}"></div></div>
+      <div class="kv"><div>Lieu</div><div><input id="ct-lieu" value="${c.lieu||''}"></div></div>
+      <div class="kv"><div>Tél</div><div><input id="ct-tel" value="${c.tel||''}"></div></div>
+      <div class="kv"><div>Email</div><div><input id="ct-email" value="${c.email||''}"></div></div>
+    </div>
+    <div id="ct-err" class="alert" style="display:none;margin-top:8px"></div>
+    <div class="footer">
+      <button class="icon-btn" onclick="closeModal()">Annuler</button>
+      <button class="icon-btn" onclick="saveContact('${accountId}','${editing? c.id : ''}')">${editing?'Enregistrer':'Ajouter'}</button>
+    </div>
+  `);
+}
+function saveContact(accountId, contactId){
+  const a = db.accounts.find(x=>x.id===accountId);
+  const nom = document.getElementById('ct-nom').value.trim();
+  const prenom = document.getElementById('ct-prenom').value.trim();
+  if(!nom || !prenom){ const e=document.getElementById('ct-err'); e.textContent='Nom et prénom requis'; e.style.display='block'; return; }
+  const c = {
+    nom, prenom,
+    lieu: document.getElementById('ct-lieu').value.trim(),
+    tel: document.getElementById('ct-tel').value.trim(),
+    email: document.getElementById('ct-email').value.trim(),
+  };
+  a.contacts = a.contacts || [];
+  if(contactId){
+    const idx = a.contacts.findIndex(x=>x.id===contactId);
+    a.contacts[idx] = {...a.contacts[idx], ...c};
+  }else{
+    a.contacts.push({id:Store.id('CT'), ...c});
+  }
+  Store.write(db); closeModal(); renderDetail(); renderList();
+}
+
+function deleteContact(accountId, contactId){
+  const a = db.accounts.find(x=>x.id===accountId);
+  a.contacts = (a.contacts||[]).filter(c=>c.id!==contactId);
+  Store.write(db); renderDetail(); renderList();
+}
+
+function openObjectModal(accountId=null, objectId=null){
+  const editing = !!objectId;
+  const o = editing ? db.objects.find(x=>x.id===objectId) : {accountId, libelle:'', adresse:''};
+  const options = db.accounts.map(a=>`<option value="${a.id}" ${ (o.accountId===a.id)?'selected':'' }>${a.nom}</option>`).join('');
+  openModal(`
+    <h3>${editing?'Éditer':'Nouvel'} objet (bâtiment)</h3>
+    <div class="grid">
+      <div class="kv"><div>Compte *</div><div><select id="ob-acc">${options}</select></div></div>
+      <div class="kv"><div>Libellé *</div><div><input id="ob-lib" value="${o.libelle||''}" placeholder="Ex. Bâtiment A – Rue du Port 12"></div></div>
+      <div class="kv"><div>Adresse *</div><div><input id="ob-adr" value="${o.adresse||''}" placeholder="Rue, N°, NPA, Ville"></div></div>
+    </div>
+    <div id="ob-err" class="alert" style="display:none;margin-top:8px"></div>
+    <div class="footer">
+      <button class="icon-btn" onclick="closeModal()">Annuler</button>
+      <button class="icon-btn" onclick="saveObject('${editing? o.id : ''}')">${editing?'Enregistrer':'Créer'}</button>
+    </div>
+  `);
+}
+function saveObject(objectId){
+  const accountId = document.getElementById('ob-acc').value;
+  const libelle = document.getElementById('ob-lib').value.trim();
+  const adresse = document.getElementById('ob-adr').value.trim();
+  if(!accountId || !libelle || !adresse){ const e=document.getElementById('ob-err'); e.textContent='Compte, libellé et adresse requis'; e.style.display='block'; return; }
+  if(objectId){
+    const o = db.objects.find(x=>x.id===objectId);
+    Object.assign(o,{accountId, libelle, adresse});
+  }else{
+    const id = Store.id('OBJ');
+    db.objects.push({id, accountId, libelle, adresse});
+  }
+  Store.write(db); closeModal(); setView('objects'); renderCounts(); renderList();
+}
+function deleteObject(id){
+  db.objects = db.objects.filter(o=>o.id!==id);
+  // also remove references in visits if any
+  Store.write(db); renderCounts(); setView('objects');
+}
+
+function nextVisitId(){
+  const d = new Date();
+  const ymd = d.toISOString().slice(0,10).replaceAll('-','');
+  const today = db.visits.filter(v=>v.id.startsWith('V-'+ymd+'-')).length + 1;
+  return `V-${ymd}-${String(today).padStart(3,'0')}`;
+}
+function openVisitModal(accountId=null, visitId=null){
+  const editing = !!visitId;
+  const v = editing ? db.visits.find(x=>x.id===visitId) : {id: nextVisitId(), accountId, contactId:'', date: new Date().toISOString().slice(0,10), type:'sur site', commentaire:'', echeance:''};
+  const accountsOpts = db.accounts.map(a=>`<option value="${a.id}" ${ (v.accountId===a.id)?'selected':'' }>${a.nom}</option>`).join('');
+  const contacts = (db.accounts.find(a=>a.id===v.accountId)?.contacts)||[];
+  const contactOpts = contacts.length ? contacts.map(c=>`<option value="${c.id}" ${ (v.contactId===c.id)?'selected':'' }>${c.prenom} ${c.nom}</option>`).join('') : '<option value="">— Aucun contact —</option>';
+  openModal(`
+    <h3>${editing?'Éditer':'Nouvelle'} visite</h3>
+    <div class="grid">
+      <div class="kv"><div>ID</div><div><input id="vi-id" value="${v.id}" disabled></div></div>
+      <div class="kv"><div>Compte *</div><div><select id="vi-acc" onchange="refreshVisitContacts()">${accountsOpts}</select></div></div>
+      <div class="kv"><div>Contact</div><div><select id="vi-ct">${contactOpts}</select></div></div>
+      <div class="kv"><div>Date *</div><div><input id="vi-date" type="date" value="${v.date}"></div></div>
+      <div class="kv"><div>Type *</div><div>
+        <select id="vi-type">
+          <option ${v.type==='sur site'?'selected':''}>sur site</option>
+          <option ${v.type==='appel'?'selected':''}>appel</option>
+          <option ${v.type==='visio'?'selected':''}>visio</option>
+        </select></div></div>
+      <div class="kv" style="grid-column:1/-1"><div>Commentaires</div><div><textarea id="vi-com" rows="4" placeholder="Informations discutées…">${v.commentaire||''}</textarea></div></div>
+      <div class="kv"><div>Prochaine étape</div><div><input id="vi-ech" type="date" value="${v.echeance||''}"></div></div>
+    </div>
+    <div id="vi-err" class="alert" style="display:none;margin-top:8px"></div>
+    <div class="footer">
+      <button class="icon-btn" onclick="closeModal()">Annuler</button>
+      <button class="icon-btn" onclick="saveVisit('${editing? v.id : ''}')">${editing?'Enregistrer':'Créer'}</button>
+    </div>
+  `);
+}
+function refreshVisitContacts(){
+  const accId = document.getElementById('vi-acc').value;
+  const contacts = (db.accounts.find(a=>a.id===accId)?.contacts)||[];
+  const sel = document.getElementById('vi-ct');
+  sel.innerHTML = contacts.length ? contacts.map(c=>`<option value="${c.id}">${c.prenom} ${c.nom}</option>`).join('') : '<option value="">— Aucun contact —</option>';
+}
+
+function saveVisit(visitId){
+  const id = visitId || document.getElementById('vi-id').value;
+  const accountId = document.getElementById('vi-acc').value;
+  const contactId = document.getElementById('vi-ct').value;
+  const date = document.getElementById('vi-date').value;
+  const type = document.getElementById('vi-type').value;
+  const commentaire = document.getElementById('vi-com').value.trim();
+  const echeance = document.getElementById('vi-ech').value;
+  const err = [];
+  if(!accountId) err.push('Compte requis');
+  if(!date) err.push('Date requise');
+  if(!type) err.push('Type requis');
+  if(err.length){ const e=document.getElementById('vi-err'); e.textContent=err.join(' · '); e.style.display='block'; return; }
+  if(visitId){
+    const v = db.visits.find(x=>x.id===visitId);
+    Object.assign(v,{accountId, contactId, date, type, commentaire, echeance});
+  }else{
+    db.visits.push({id, accountId, contactId, date, type, commentaire, echeance});
+  }
+  Store.write(db); closeModal(); setView('visits'); renderCounts(); renderList();
+}
+function deleteVisit(id){
+  db.visits = db.visits.filter(v=>v.id!==id);
+  Store.write(db); renderCounts(); setView('visits');
+}
+
+function deleteAccount(id){
+  if(db.objects.some(o=>o.accountId===id) || db.visits.some(v=>v.accountId===id)){
+    alert("Impossible de supprimer : le compte possède des objets et/ou des visites. Supprimez-les d’abord.");
+    return;
+  }
+  db.accounts = db.accounts.filter(a=>a.id!==id);
+  Store.write(db); renderCounts(); setView('accounts');
+}
+
+// --- Top bar & nav ---
+document.getElementById('btnAdd').addEventListener('click', ()=>{
+  if(state.view==='accounts') openAccountModal();
+  else if(state.view==='objects') openObjectModal();
+  else openVisitModal();
+});
+document.querySelectorAll('.nav button').forEach(b=> b.addEventListener('click', ()=> setView(b.dataset.view)));
+document.getElementById('search').addEventListener('input', e=>{ state.query=e.target.value; renderList(); });
+
+// Seed example data for first run to showcase UX
+if(db.accounts.length===0){
+  const accA = {id:Store.id('ACC'), type:'Entreprise', nom:'Swissroc SA', adresse:'Rue du Rhône 120, 1204 Genève', tel:'+41221234567', contacts:[{id:Store.id('CT'), nom:'Dupont', prenom:'Claire', lieu:'Genève', tel:'+41791234567', email:'claire.dupont@swissroc.ch'}]};
+  const accB = {id:Store.id('ACC'), type:'Personne', nom:'Paul Martin', adresse:'Chemin des Sources 9, 1950 Sion', tel:'+41761234567', contacts:[{id:Store.id('CT'), nom:'Martin', prenom:'Paul', lieu:'Sion', tel:'+41761234567', email:'paul.martin@mail.ch'}]};
+  db.accounts.push(accA, accB);
+  const obj1 = {id:Store.id('OBJ'), accountId:accA.id, libelle:'Immeuble “Orion”', adresse:'Avenue Wendt 15, 1203 Genève'};
+  const obj2 = {id:Store.id('OBJ'), accountId:accB.id, libelle:'Villa Martin', adresse:'Chemin des Sources 9, 1950 Sion'};
+  db.objects.push(obj1,obj2);
+  const vi1 = {id: nextVisitId(), accountId:accA.id, contactId:accA.contacts[0].id, date:new Date().toISOString().slice(0,10), type:'sur site', commentaire:'Point façade métallique, variantes de profilés.', echeance:''};
+  db.visits.push(vi1);
+  Store.write(db);
+}
+
+renderCounts();
+renderList();
+renderDetail();
+
+<script>
+function nextInterventionId(){
+  const d = new Date();
+  const ymd = d.toISOString().slice(0,10).replaceAll('-','');
+  const today = (db.interventions||[]).filter(i=>i.id.startsWith('INT-'+ymd+'-')).length + 1;
+  return `INT-${ymd}-${String(today).padStart(3,'0')}`;
+}
+
+function openInterventionModal(accountId=null, interventionId=null){
+  db.interventions = db.interventions || [];
+  const editing = !!interventionId;
+  const i = editing ? db.interventions.find(x=>x.id===interventionId) : {
+    id: nextInterventionId(), accountId, objectId:'', contactId:'', date: new Date().toISOString().slice(0,10),
+    start:'', end:'', type:'SAV', statut:'à planifier', priorite:'normale', technicien:'', description:'', echeance:'', heures:''
+  };
+  const accountsOpts = db.accounts.map(a=>`<option value="${a.id}" ${ (i.accountId===a.id)?'selected':'' }>${a.nom}</option>`).join('');
+  const objects = db.objects.filter(o=>!i.accountId || o.accountId===i.accountId);
+  const objectOpts = objects.length ? objects.map(o=>`<option value="${o.id}" ${ (i.objectId===o.id)?'selected':'' }>${o.libelle}</option>`).join('') : '<option value="">— Aucun objet —</option>';
+  const contacts = (db.accounts.find(a=>a.id===i.accountId)?.contacts)||[];
+  const contactOpts = contacts.length ? contacts.map(c=>`<option value="${c.id}" ${ (i.contactId===c.id)?'selected':'' }>${c.prenom} ${c.nom}</option>`).join('') : '<option value="">— Aucun contact —</option>';
+
+  openModal(`
+    <h3>${editing?'Éditer':'Nouvelle'} intervention</h3>
+    <div class="grid">
+      <div class="kv"><div>ID</div><div><input id="in-id" value="${i.id}" disabled></div></div>
+      <div class="kv"><div>Compte *</div><div><select id="in-acc" onchange="refreshInterventionLinks()">${accountsOpts}</select></div></div>
+      <div class="kv"><div>Objet *</div><div><select id="in-obj">${objectOpts}</select></div></div>
+      <div class="kv"><div>Contact</div><div><select id="in-ct">${contactOpts}</select></div></div>
+      <div class="kv"><div>Date *</div><div><input id="in-date" type="date" value="${i.date}"></div></div>
+      <div class="kv"><div>Début</div><div><input id="in-start" type="time" value="${i.start||''}"></div></div>
+      <div class="kv"><div>Fin</div><div><input id="in-end" type="time" value="${i.end||''}"></div></div>
+      <div class="kv"><div>Type *</div><div>
+        <select id="in-type">
+          <option ${i.type==='SAV'?'selected':''}>SAV</option>
+          <option ${i.type==='Installation'?'selected':''}>Installation</option>
+          <option ${i.type==='Maintenance'?'selected':''}>Maintenance</option>
+        </select>
+      </div></div>
+      <div class="kv"><div>Statut *</div><div>
+        <select id="in-statut">
+          <option ${i.statut==='à planifier'?'selected':''}>à planifier</option>
+          <option ${i.statut==='planifiée'?'selected':''}>planifiée</option>
+          <option ${i.statut==='en cours'?'selected':''}>en cours</option>
+          <option ${i.statut==='terminée'?'selected':''}>terminée</option>
+          <option ${i.statut==='facturée'?'selected':''}>facturée</option>
+        </select>
+      </div></div>
+      <div class="kv"><div>Priorité</div><div>
+        <select id="in-prio">
+          <option ${i.priorite==='basse'?'selected':''}>basse</option>
+          <option ${i.priorite==='normale'?'selected':''}>normale</option>
+          <option ${i.priorite==='haute'?'selected':''}>haute</option>
+        </select>
+      </div></div>
+      <div class="kv"><div>Technicien</div><div><input id="in-tech" value="${i.technicien||''}" placeholder="Nom du technicien"></div></div>
+      <div class="kv"><div>Heures</div><div><input id="in-hours" type="number" min="0" step="0.25" value="${i.heures||''}" placeholder="0"></div></div>
+      <div class="kv"><div>Échéance</div><div><input id="in-ech" type="date" value="${i.echeance||''}"></div></div>
+      <div class="kv" style="grid-column:1/-1"><div>Description</div><div><textarea id="in-desc" rows="4" placeholder="Détail de l’intervention, pièces nécessaires, constat…">${i.description||''}</textarea></div></div>
+    </div>
+    <div id="in-err" class="alert" style="display:none;margin-top:8px"></div>
+    <div class="footer">
+      <button class="icon-btn" onclick="closeModal()">Annuler</button>
+      <button class="icon-btn" onclick="saveIntervention('${editing? i.id : ''}')">${editing?'Enregistrer':'Créer'}</button>
+    </div>
+  `);
+}
+
+function refreshInterventionLinks(){
+  const accId = document.getElementById('in-acc').value;
+  const objs = db.objects.filter(o=>o.accountId===accId);
+  const selObj = document.getElementById('in-obj');
+  selObj.innerHTML = objs.length ? objs.map(o=>`<option value="${o.id}">${o.libelle}</option>`).join('') : '<option value="">— Aucun objet —</option>';
+  const contacts = (db.accounts.find(a=>a.id===accId)?.contacts)||[];
+  const selCt = document.getElementById('in-ct');
+  selCt.innerHTML = contacts.length ? contacts.map(c=>`<option value="${c.id}">${c.prenom} ${c.nom}</option>`).join('') : '<option value="">— Aucun contact —</option>';
+}
+
+function saveIntervention(interventionId){
+  db.interventions = db.interventions || [];
+  const id = interventionId || document.getElementById('in-id').value;
+  const accountId = document.getElementById('in-acc').value;
+  const objectId = document.getElementById('in-obj').value;
+  const contactId = document.getElementById('in-ct').value;
+  const date = document.getElementById('in-date').value;
+  const start = document.getElementById('in-start').value;
+  const end = document.getElementById('in-end').value;
+  const type = document.getElementById('in-type').value;
+  const statut = document.getElementById('in-statut').value;
+  const priorite = document.getElementById('in-prio').value;
+  const technicien = document.getElementById('in-tech').value.trim();
+  const heures = document.getElementById('in-hours').value;
+  const description = document.getElementById('in-desc').value.trim();
+  const echeance = document.getElementById('in-ech').value;
+
+  const err = [];
+  if(!accountId) err.push('Compte requis');
+  if(!objectId) err.push('Objet requis');
+  if(!date) err.push('Date requise');
+  if(!type) err.push('Type requis');
+  if(!statut) err.push('Statut requis');
+  if(err.length){ const e=document.getElementById('in-err'); e.textContent=err.join(' · '); e.style.display='block'; return; }
+
+  if(interventionId){
+    const i = db.interventions.find(x=>x.id===interventionId);
+    Object.assign(i,{accountId, objectId, contactId, date, start, end, type, statut, priorite, technicien, description, echeance, heures});
+  }else{
+    db.interventions.push({id, accountId, objectId, contactId, date, start, end, type, statut, priorite, technicien, description, echeance, heures});
+  }
+  Store.write(db); closeModal(); state.view='interventions'; renderCounts(); renderList(); renderDetail();
+}
+
+function deleteIntervention(id){
+  db.interventions = (db.interventions||[]).filter(i=>i.id!==id);
+  Store.write(db); renderCounts(); setView('interventions');
+}
+
+// Hook top "Nouveau" button for interventions view too
+(function(){
+  const btn = document.getElementById('btnAdd');
+  const old = btn.onclick;
+  btn.addEventListener('click', ()=>{
+    if(state.view==='interventions') openInterventionModal();
+  });
+})();
+
+// Seed example intervention if none exists
+if(!db.interventions || db.interventions.length===0){
+  const acc = db.accounts[0];
+  const obj = db.objects.find(o=>o.accountId===acc.id);
+  db.interventions = db.interventions || [];
+  db.interventions.push({
+    id: nextInterventionId(),
+    accountId: acc.id,
+    objectId: (obj && obj.id)||'',
+    contactId: acc.contacts?.[0]?.id||'',
+    date: new Date().toISOString().slice(0,10),
+    start: '08:00',
+    end: '10:30',
+    type: 'SAV',
+    statut: 'planifiée',
+    priorite: 'normale',
+    technicien: 'Zarco',
+    description: 'Réglage porte d’entrée + contrôle étanchéité. Prévoir joints EPDM.',
+    echeance: '',
+    heures: '2.5'
+  });
+  Store.write(db);
+}
+</script>
+
+<style>
+#js-error-overlay{display:none; position:fixed; left:12px; right:12px; bottom:12px; background:#ffebee; border:1px solid #ffcdd2; color:#b71c1c; padding:10px 12px; border-radius:8px; z-index:99999; font:13px/1.4 system-ui, -apple-system, Segoe UI, Roboto;}
+#js-error-overlay pre{white-space:pre-wrap; margin:6px 0 0 0}
+</style>
+<div id="js-error-overlay"><b>Erreur JavaScript détectée :</b><pre id="js-error-text"></pre></div>
+<script>
+window.onerror = function(message, source, lineno, colno, error){
+  var box = document.getElementById('js-error-overlay');
+  var txt = document.getElementById('js-error-text');
+  if(box && txt){
+    txt.textContent = (message||'') + '\\n' + (source||'') + ':' + (lineno||'') + ':' + (colno||'') + '\\n' + (error && error.stack ? error.stack : '');
+    box.style.display = 'block';
+  }else{
+    alert('Erreur JS: '+message);
+  }
+  return false;
+};
+</script>
+
+
+<div id="toolbox" style="position:fixed; right:16px; bottom:16px; display:flex; gap:8px; z-index:9999">
+  <button id="btnToolSeed" class="icon-btn" title="Injecter des données démo">Démo</button>
+  <button id="btnToolReset" class="icon-btn" title="Réinitialiser + Démo">Reset+Démo</button>
+</div>
+
+</body>
+
+</html>
