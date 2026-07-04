@@ -8,13 +8,18 @@ import { deriveRailing } from "@/lib/engine/geometry";
 import { chf } from "@/lib/engine/pricing";
 import { findType } from "@/lib/store";
 import {
+  acceptQuote,
   clearSession,
+  deleteSavedConfig,
+  encodeConfig,
   getSession,
   loadOrders,
+  loadSavedConfigs,
   ORDER_FLOW,
   QUOTE_FLOW,
   type Order,
   type OrderStatus,
+  type SavedConfig,
 } from "@/lib/store";
 import type { Dict } from "@/lib/i18n";
 
@@ -48,10 +53,12 @@ function OrderCard({
   order,
   t,
   cfgDict,
+  onRefresh,
 }: {
   order: Order;
   t: Dict["portal"];
   cfgDict: Dict["cfg"];
+  onRefresh: () => void;
 }) {
   const flow = order.kind === "order" ? ORDER_FLOW : QUOTE_FLOW;
   const svgRef = useRef<SVGSVGElement>(null);
@@ -76,6 +83,25 @@ function OrderCard({
         <span className="text-xs font-light text-stone">{t.total}</span>
         <span className="text-base font-light text-ink">{chf(order.gross)}</span>
       </div>
+      {order.kind === "quote" && order.status === "quoted" && (
+        <div className="flex flex-col gap-2 border-l-2 border-steel bg-mist/70 p-3">
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-steel">{t.quotedPrice}</span>
+            <span className="text-base text-ink">{chf(order.quotedGross ?? order.gross)}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              acceptQuote(order.ref);
+              onRefresh();
+            }}
+            className="self-start bg-ink px-4 py-2.5 text-[11px] font-medium uppercase tracking-[0.14em] text-paper transition-colors hover:bg-graphite"
+          >
+            {t.acceptQuote}
+          </button>
+          <p className="text-[11px] font-light leading-relaxed text-stone">{t.acceptNote}</p>
+        </div>
+      )}
       {order.config && derived && (
         <>
           <button
@@ -105,13 +131,17 @@ export default function PortalDashboard({
 }) {
   const [session, setSess] = useState<{ email: string } | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [saved, setSaved] = useState<SavedConfig[]>([]);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     setSess(getSession());
     setOrders(loadOrders());
+    setSaved(loadSavedConfigs());
     setReady(true);
   }, []);
+
+  const refresh = () => setOrders(loadOrders());
 
   if (!ready) return null;
 
@@ -159,13 +189,57 @@ export default function PortalDashboard({
       </div>
 
       <section className="flex flex-col gap-5">
+        <h2 className="border-t border-ink/60 pt-4 text-lg font-normal text-ink">{t.savedTitle}</h2>
+        {saved.length === 0 ? (
+          <p className="text-sm font-light text-stone">{t.noSaved}</p>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {saved.map((s) => {
+              const lengthM = s.config.segments.reduce((sum, x) => sum + x.length, 0) / 1000;
+              return (
+                <div key={s.id} className="flex flex-col gap-3 border border-hairline bg-paper p-5">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <span className="text-sm font-medium tracking-[0.02em] text-ink">{s.name}</span>
+                    <span className="text-xs font-light text-stone">
+                      {t.date} {s.createdAt}
+                    </span>
+                  </div>
+                  <p className="text-sm font-light text-graphite">
+                    {s.config.system === "glass" ? cfgDict.systemGlass : cfgDict.systemBars} · {lengthM.toLocaleString("de-CH")} m
+                  </p>
+                  <div className="flex items-center gap-5 border-t border-hairline pt-3">
+                    <Link
+                      href={`/${locale}/configurator/?c=${encodeConfig(s.config)}`}
+                      className="text-xs uppercase tracking-[0.12em] text-ink underline underline-offset-4"
+                    >
+                      {t.openCfg} →
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        deleteSavedConfig(s.id);
+                        setSaved(loadSavedConfigs());
+                      }}
+                      className="text-xs uppercase tracking-[0.12em] text-stone underline-offset-4 hover:text-ink hover:underline"
+                    >
+                      {t.deleteCfg}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      <section className="flex flex-col gap-5">
         <h2 className="border-t border-ink/60 pt-4 text-lg font-normal text-ink">{t.ordersTitle}</h2>
         {myOrders.length === 0 ? (
           <p className="text-sm font-light text-stone">{t.empty}</p>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {myOrders.map((o) => (
-              <OrderCard key={o.ref} order={o} t={t} cfgDict={cfgDict} />
+              <OrderCard key={o.ref} order={o} t={t} cfgDict={cfgDict} onRefresh={refresh} />
             ))}
           </div>
         )}
@@ -178,7 +252,7 @@ export default function PortalDashboard({
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {myQuotes.map((o) => (
-              <OrderCard key={o.ref} order={o} t={t} cfgDict={cfgDict} />
+              <OrderCard key={o.ref} order={o} t={t} cfgDict={cfgDict} onRefresh={refresh} />
             ))}
           </div>
         )}

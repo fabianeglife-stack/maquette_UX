@@ -8,7 +8,7 @@ import { deriveRailing } from "@/lib/engine/geometry";
 import { evaluateSia, siaSummary, type RuleStatus } from "@/lib/engine/sia";
 import { chf, defaultPriceBook, priceRailing, type PriceBook } from "@/lib/engine/pricing";
 import { builtinTypes, defaultConfig, newSegment, normalizeForType, type RailingConfig, type TypeProfile } from "@/lib/engine/types";
-import { loadAllTypes, loadPriceBook, newRef, saveOrder, type Order } from "@/lib/store";
+import { decodeConfig, encodeConfig, loadAllTypes, loadPriceBook, newRef, saveOrder, saveSavedConfig, type Order } from "@/lib/store";
 import type { Dict } from "@/lib/i18n";
 import Link from "next/link";
 
@@ -197,21 +197,46 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
   const [pb, setPb] = useState<PriceBook>(defaultPriceBook);
   const [types, setTypes] = useState<TypeProfile[]>(builtinTypes);
   const [loaded, setLoaded] = useState(false);
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [saveName, setSaveName] = useState("");
+  const [shareMsg, setShareMsg] = useState<"saved" | "copied" | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
 
   const refNo = useMemo(() => "AX-" + Date.now().toString(36).toUpperCase().slice(-6), []);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) setCfg({ ...defaultConfig(), ...(JSON.parse(raw) as RailingConfig) });
-    } catch {
-      /* corrupted storage — start fresh */
+    // A `?c=` share link wins over the locally persisted configuration.
+    const shared = new URLSearchParams(window.location.search).get("c");
+    const fromLink = shared ? decodeConfig(shared) : null;
+    if (fromLink) {
+      setCfg({ ...defaultConfig(), ...fromLink });
+    } else {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) setCfg({ ...defaultConfig(), ...(JSON.parse(raw) as RailingConfig) });
+      } catch {
+        /* corrupted storage — start fresh */
+      }
     }
     setPb(loadPriceBook());
     setTypes(loadAllTypes());
     setLoaded(true);
   }, []);
+
+  const copyShareLink = () => {
+    const url = `${window.location.origin}${window.location.pathname}?c=${encodeConfig(cfg)}`;
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(url).catch(() => {});
+    } else {
+      const ta = document.createElement("textarea");
+      ta.value = url;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+    }
+    setShareMsg("copied");
+  };
 
   useEffect(() => {
     if (loaded) localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
@@ -494,6 +519,56 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
               </button>
             </div>
             {overall === "fail" && <p className="text-xs font-light text-[#b04a3a]">{t.buyBlocked}</p>}
+
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+              {saveOpen ? (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    saveSavedConfig(saveName.trim(), cfg);
+                    setSaveOpen(false);
+                    setSaveName("");
+                    setShareMsg("saved");
+                  }}
+                  className="flex items-center gap-2"
+                >
+                  <input
+                    required
+                    autoFocus
+                    value={saveName}
+                    onChange={(e) => setSaveName(e.target.value)}
+                    placeholder={t.share.namePlaceholder}
+                    className="border border-hairline bg-paper px-3 py-2 text-sm font-light text-ink outline-none placeholder:text-stone focus:border-graphite"
+                  />
+                  <button type="submit" className="text-xs uppercase tracking-[0.14em] text-ink underline underline-offset-4">
+                    {t.share.saveConfirm}
+                  </button>
+                </form>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSaveOpen(true);
+                    setShareMsg(null);
+                  }}
+                  className="text-xs uppercase tracking-[0.14em] text-graphite underline-offset-4 hover:text-ink hover:underline"
+                >
+                  {t.share.save}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={copyShareLink}
+                className="text-xs uppercase tracking-[0.14em] text-graphite underline-offset-4 hover:text-ink hover:underline"
+              >
+                {t.share.link}
+              </button>
+            </div>
+            {shareMsg && (
+              <p role="status" className="text-xs font-light text-graphite">
+                {shareMsg === "saved" ? t.share.savedMsg : t.share.copied}
+              </p>
+            )}
 
             {checkout && (
               <CheckoutForm

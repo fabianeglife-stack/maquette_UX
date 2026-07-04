@@ -16,6 +16,7 @@ import {
   resetPriceBook,
   saveCustomType,
   savePriceBook,
+  updateOrder,
   updateOrderStatus,
   type Order,
   type OrderStatus,
@@ -23,7 +24,102 @@ import {
 import type { Dict } from "@/lib/i18n";
 
 type AdminDict = Dict["admin"];
-type Tab = "orders" | "pricing" | "products";
+type Tab = "dashboard" | "orders" | "pricing" | "products";
+
+/* ---------- dashboard tab ---------- */
+
+function Kpi({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex flex-col gap-2 border border-hairline p-5">
+      <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone">{label}</span>
+      <span className="text-2xl font-light tracking-tight text-ink">{value}</span>
+    </div>
+  );
+}
+
+function BarRow({ label, value, max, display }: { label: string; value: number; max: number; display: string }) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="w-32 shrink-0 text-[12px] font-light text-graphite">{label}</span>
+      <div className="h-4 flex-1 bg-mist">
+        <div className="h-full bg-graphite" style={{ width: `${(value / max) * 100}%` }} />
+      </div>
+      <span className="w-24 shrink-0 text-right text-[12px] font-light text-ink">{display}</span>
+    </div>
+  );
+}
+
+function DashboardTab({
+  t,
+  statusLabels,
+  cfgDict,
+}: {
+  t: AdminDict;
+  statusLabels: Dict["portal"]["status"];
+  cfgDict: Dict["cfg"];
+}) {
+  const [orders, setOrders] = useState<Order[]>([]);
+  useEffect(() => setOrders(loadOrders()), []);
+
+  const real = orders.filter((o) => o.kind === "order");
+  const quotes = orders.filter((o) => o.kind === "quote");
+  const revenue = real.reduce((s, o) => s + o.gross, 0);
+  const openOrders = real.filter((o) => o.status !== "shipped").length;
+
+  const byStatus = ORDER_FLOW.map((s) => ({ s, n: real.filter((o) => o.status === s).length }));
+  const maxN = Math.max(1, ...byStatus.map((x) => x.n));
+  const bySystem = (["bars", "glass"] as const).map((sys) => ({
+    sys,
+    v: real.filter((o) => o.system === sys).reduce((s, o) => s + o.gross, 0),
+  }));
+  const maxV = Math.max(1, ...bySystem.map((x) => x.v));
+
+  return (
+    <div className="flex flex-col gap-8">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Kpi label={t.dash.revenue} value={chf(revenue)} />
+        <Kpi label={t.dash.openOrders} value={String(openOrders)} />
+        <Kpi label={t.dash.openQuotes} value={String(quotes.length)} />
+        <Kpi label={t.dash.avgOrder} value={real.length ? chf(revenue / real.length) : "—"} />
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="flex flex-col gap-3 border border-hairline p-5">
+          <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone">{t.dash.byStatus}</span>
+          {byStatus.map((x) => (
+            <BarRow key={x.s} label={statusLabels[x.s]} value={x.n} max={maxN} display={String(x.n)} />
+          ))}
+        </div>
+        <div className="flex flex-col gap-3 border border-hairline p-5">
+          <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone">{t.dash.bySystem}</span>
+          {bySystem.map((x) => (
+            <BarRow
+              key={x.sys}
+              label={x.sys === "glass" ? cfgDict.systemGlass : cfgDict.systemBars}
+              value={x.v}
+              max={maxV}
+              display={chf(x.v)}
+            />
+          ))}
+        </div>
+      </div>
+
+      <div className="flex flex-col border border-hairline p-5">
+        <span className="pb-3 text-[11px] font-medium uppercase tracking-[0.14em] text-stone">{t.dash.recent}</span>
+        {orders.slice(0, 5).map((o) => (
+          <div key={o.ref} className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 border-t border-hairline/70 py-2">
+            <span className="text-sm text-ink">{o.ref}</span>
+            <span className="flex-1 text-sm font-light text-graphite">
+              {o.customer.name} · {o.system === "glass" ? cfgDict.systemGlass : cfgDict.systemBars} · {o.lengthM.toLocaleString("de-CH")} m
+            </span>
+            <span className="text-xs font-light text-stone">{statusLabels[o.status]}</span>
+            <span className="text-sm font-light text-ink">{chf(o.gross)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 /* ---------- orders tab ---------- */
 
@@ -74,11 +170,19 @@ function BomDetail({ order, t }: { order: Order; t: AdminDict }) {
 function OrdersTable({ t, statusLabels, cfgDict }: { t: AdminDict; statusLabels: Dict["portal"]["status"]; cfgDict: Dict["cfg"] }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [open, setOpen] = useState<string | null>(null);
+  const [quoteDraft, setQuoteDraft] = useState<Record<string, string>>({});
 
   useEffect(() => setOrders(loadOrders()), []);
 
   const advance = (ref: string, status: OrderStatus) => {
     updateOrderStatus(ref, status);
+    setOrders(loadOrders());
+  };
+
+  const sendQuote = (o: Order) => {
+    const v = Number(quoteDraft[o.ref] ?? Math.round(o.gross));
+    if (!Number.isFinite(v) || v <= 0) return;
+    updateOrder(o.ref, { status: "quoted", quotedGross: v });
     setOrders(loadOrders());
   };
 
@@ -122,17 +226,42 @@ function OrdersTable({ t, statusLabels, cfgDict }: { t: AdminDict; statusLabels:
                     </span>
                   </td>
                   <td className="py-3 pr-4">
-                    <select
-                      value={o.status}
-                      onChange={(e) => advance(o.ref, e.target.value as OrderStatus)}
-                      className="border border-hairline bg-paper px-2 py-1.5 text-xs font-light text-ink outline-none focus:border-graphite"
-                    >
-                      {flow.map((s) => (
-                        <option key={s} value={s}>
-                          {statusLabels[s]}
-                        </option>
-                      ))}
-                    </select>
+                    {o.kind === "quote" ? (
+                      o.status === "quote_requested" ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            min={1}
+                            value={quoteDraft[o.ref] ?? String(Math.round(o.gross))}
+                            onChange={(e) => setQuoteDraft({ ...quoteDraft, [o.ref]: e.target.value })}
+                            className="w-24 border border-hairline bg-paper px-2 py-1.5 text-xs font-light text-ink outline-none focus:border-graphite"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => sendQuote(o)}
+                            className="whitespace-nowrap border border-ink/40 px-2.5 py-1.5 text-[10px] uppercase tracking-[0.12em] text-ink transition-colors hover:border-ink"
+                          >
+                            {t.sendQuote}
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="whitespace-nowrap text-xs font-light text-graphite">
+                          {statusLabels[o.status]} · {chf(o.quotedGross ?? o.gross)}
+                        </span>
+                      )
+                    ) : (
+                      <select
+                        value={o.status}
+                        onChange={(e) => advance(o.ref, e.target.value as OrderStatus)}
+                        className="border border-hairline bg-paper px-2 py-1.5 text-xs font-light text-ink outline-none focus:border-graphite"
+                      >
+                        {flow.map((s) => (
+                          <option key={s} value={s}>
+                            {statusLabels[s]}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </td>
                   <td className="py-3">
                     <button
@@ -452,12 +581,12 @@ export default function AdminApp({
   statusLabels: Dict["portal"]["status"];
   cfgDict: Dict["cfg"];
 }) {
-  const [tab, setTab] = useState<Tab>("orders");
+  const [tab, setTab] = useState<Tab>("dashboard");
 
   return (
     <div className="flex flex-col gap-8">
       <div className="flex gap-px self-start bg-hairline">
-        {(["orders", "pricing", "products"] as const).map((v) => (
+        {(["dashboard", "orders", "pricing", "products"] as const).map((v) => (
           <button
             key={v}
             type="button"
@@ -471,6 +600,7 @@ export default function AdminApp({
         ))}
       </div>
 
+      {tab === "dashboard" && <DashboardTab t={t} statusLabels={statusLabels} cfgDict={cfgDict} />}
       {tab === "orders" && <OrdersTable t={t} statusLabels={statusLabels} cfgDict={cfgDict} />}
       {tab === "pricing" && <PricingEditor t={t} />}
       {tab === "products" && <ProductsTab t={t} />}

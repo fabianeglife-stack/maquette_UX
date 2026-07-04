@@ -23,6 +23,8 @@ export interface Order {
   system: "bars" | "glass";
   lengthM: number;
   gross: number;
+  /** Binding price set by the admin when quoting; becomes `gross` on acceptance. */
+  quotedGross?: number;
   config?: RailingConfig;
   seeded?: boolean;
 }
@@ -54,6 +56,11 @@ const seedOrders: Order[] = [
     customer: { name: "Hotel Alpina", email: "technik@alpina.example.ch", street: "Via Maistra 12", city: "7500 St. Moritz" },
     system: "bars", lengthM: 56, gross: 15890.4,
   },
+  {
+    ref: "AX-H4W8S2", kind: "quote", createdAt: "2026-06-28", status: "quoted", seeded: true,
+    customer: { name: "Baugenossenschaft Rütli", email: "verwaltung@ruetli.example.ch", street: "Am Rain 5", city: "6003 Luzern" },
+    system: "glass", lengthM: 18.5, gross: 10240.8, quotedGross: 9840,
+  },
 ];
 
 export function loadOrders(): Order[] {
@@ -74,19 +81,30 @@ export function saveOrder(order: Order): void {
   localStorage.setItem(ORDERS_KEY, JSON.stringify(own));
 }
 
-export function updateOrderStatus(ref: string, status: OrderStatus): void {
+export function updateOrder(ref: string, patch: Partial<Order>): void {
   // Seeded fixtures are read-only templates; materialise the change as an
   // override entry so it survives reloads.
   const raw = localStorage.getItem(ORDERS_KEY);
   const own: Order[] = raw ? JSON.parse(raw) : [];
   const idx = own.findIndex((o) => o.ref === ref);
   if (idx >= 0) {
-    own[idx].status = status;
+    own[idx] = { ...own[idx], ...patch };
   } else {
     const seed = seedOrders.find((o) => o.ref === ref);
-    if (seed) own.push({ ...seed, status, seeded: false });
+    if (seed) own.push({ ...seed, ...patch, seeded: false });
   }
   localStorage.setItem(ORDERS_KEY, JSON.stringify(own));
+}
+
+export function updateOrderStatus(ref: string, status: OrderStatus): void {
+  updateOrder(ref, { status });
+}
+
+/** Customer accepts a binding quote: it converts into a confirmed order. */
+export function acceptQuote(ref: string): void {
+  const q = loadOrders().find((o) => o.ref === ref);
+  if (!q || q.kind !== "quote") return;
+  updateOrder(ref, { kind: "order", status: "confirmed", gross: q.quotedGross ?? q.gross, payment: "invoice" });
 }
 
 export function dedupeOrders(orders: Order[]): Order[] {
@@ -150,6 +168,56 @@ export function saveCustomType(tp: TypeProfile): void {
 
 export function deleteCustomType(id: string): void {
   localStorage.setItem(TYPES_KEY, JSON.stringify(loadCustomTypes().filter((t) => t.id !== id)));
+}
+
+/* ---------- saved configurations & share links ---------- */
+
+const SAVED_KEY = "axioform-saved-v1";
+
+export interface SavedConfig {
+  id: string;
+  name: string;
+  createdAt: string; // ISO date
+  config: RailingConfig;
+}
+
+export function loadSavedConfigs(): SavedConfig[] {
+  try {
+    const raw = localStorage.getItem(SAVED_KEY);
+    return raw ? (JSON.parse(raw) as SavedConfig[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveSavedConfig(name: string, config: RailingConfig): SavedConfig {
+  const entry: SavedConfig = {
+    id: "sc-" + Math.random().toString(36).slice(2, 8),
+    name,
+    createdAt: new Date().toISOString().slice(0, 10),
+    config,
+  };
+  localStorage.setItem(SAVED_KEY, JSON.stringify([entry, ...loadSavedConfigs()]));
+  return entry;
+}
+
+export function deleteSavedConfig(id: string): void {
+  localStorage.setItem(SAVED_KEY, JSON.stringify(loadSavedConfigs().filter((s) => s.id !== id)));
+}
+
+/** URL-safe base64 of the config JSON — the payload of `?c=` share links. */
+export function encodeConfig(config: RailingConfig): string {
+  const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(config))));
+  return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+export function decodeConfig(payload: string): RailingConfig | null {
+  try {
+    const b64 = payload.replace(/-/g, "+").replace(/_/g, "/");
+    return JSON.parse(decodeURIComponent(escape(atob(b64)))) as RailingConfig;
+  } catch {
+    return null;
+  }
 }
 
 /* ---------- demo session ---------- */
