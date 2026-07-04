@@ -1,8 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import DrawingSVG from "@/components/configurator/DrawingSVG";
+import { downloadDrawingPdf } from "@/components/configurator/pdf";
+import { deriveRailing } from "@/lib/engine/geometry";
 import { chf } from "@/lib/engine/pricing";
+import { findType } from "@/lib/store";
 import {
   clearSession,
   getSession,
@@ -50,6 +54,12 @@ function OrderCard({
   cfgDict: Dict["cfg"];
 }) {
   const flow = order.kind === "order" ? ORDER_FLOW : QUOTE_FLOW;
+  const svgRef = useRef<SVGSVGElement>(null);
+  const derived = useMemo(() => {
+    if (!order.config) return null;
+    return deriveRailing(order.config, findType(order.config.typeId, order.config.system));
+  }, [order.config]);
+
   return (
     <div className="flex flex-col gap-3 border border-hairline bg-paper p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -66,6 +76,20 @@ function OrderCard({
         <span className="text-xs font-light text-stone">{t.total}</span>
         <span className="text-base font-light text-ink">{chf(order.gross)}</span>
       </div>
+      {order.config && derived && (
+        <>
+          <button
+            type="button"
+            onClick={() => svgRef.current && downloadDrawingPdf(svgRef.current, `axioform-${order.ref}.pdf`)}
+            className="self-start text-xs uppercase tracking-[0.12em] text-graphite underline-offset-4 hover:text-ink hover:underline"
+          >
+            ↓ {t.drawingPdf}
+          </button>
+          <div className="hidden">
+            <DrawingSVG ref={svgRef} cfg={order.config} derived={derived} labels={cfgDict.drawing} refNo={order.ref} />
+          </div>
+        </>
+      )}
     </div>
   );
 }

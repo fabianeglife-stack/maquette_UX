@@ -5,7 +5,7 @@
  */
 
 import { defaultPriceBook, type PriceBook } from "./engine/pricing";
-import type { RailingConfig } from "./engine/types";
+import { builtinTypes, type RailingConfig, type TypeProfile } from "./engine/types";
 
 export type OrderKind = "order" | "quote";
 export type OrderStatus = "new" | "confirmed" | "production" | "shipped" | "quote_requested" | "quoted";
@@ -116,6 +116,40 @@ export function savePriceBook(pb: PriceBook): void {
 
 export function resetPriceBook(): void {
   localStorage.removeItem(PB_KEY);
+}
+
+/* ---------- guardrail types ---------- */
+
+const TYPES_KEY = "axioform-types-v1";
+
+export function loadCustomTypes(): TypeProfile[] {
+  try {
+    const raw = localStorage.getItem(TYPES_KEY);
+    return raw ? (JSON.parse(raw) as TypeProfile[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function loadAllTypes(): TypeProfile[] {
+  return [...builtinTypes, ...loadCustomTypes()];
+}
+
+export function findType(id: string | undefined, fallbackTemplate: "bars" | "glass"): TypeProfile {
+  const all = loadAllTypes();
+  return all.find((t) => t.id === id) ?? all.find((t) => t.id === fallbackTemplate)!;
+}
+
+export function saveCustomType(tp: TypeProfile): void {
+  const customs = loadCustomTypes();
+  const idx = customs.findIndex((t) => t.id === tp.id);
+  if (idx >= 0) customs[idx] = tp;
+  else customs.push(tp);
+  localStorage.setItem(TYPES_KEY, JSON.stringify(customs));
+}
+
+export function deleteCustomType(id: string): void {
+  localStorage.setItem(TYPES_KEY, JSON.stringify(loadCustomTypes().filter((t) => t.id !== id)));
 }
 
 /* ---------- demo session ---------- */

@@ -7,8 +7,8 @@ import { downloadDrawingPdf } from "./pdf";
 import { deriveRailing } from "@/lib/engine/geometry";
 import { evaluateSia, siaSummary, type RuleStatus } from "@/lib/engine/sia";
 import { chf, defaultPriceBook, priceRailing, type PriceBook } from "@/lib/engine/pricing";
-import { defaultConfig, newSegment, normalizeForSystem, type RailingConfig } from "@/lib/engine/types";
-import { loadPriceBook, newRef, saveOrder, type Order } from "@/lib/store";
+import { builtinTypes, defaultConfig, newSegment, normalizeForType, type RailingConfig, type TypeProfile } from "@/lib/engine/types";
+import { loadAllTypes, loadPriceBook, newRef, saveOrder, type Order } from "@/lib/store";
 import type { Dict } from "@/lib/i18n";
 import Link from "next/link";
 
@@ -195,6 +195,7 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
   const [checkout, setCheckout] = useState<"order" | "quote" | null>(null);
   const [panel, setPanel] = useState<{ kind: "order" | "quote"; ref: string } | null>(null);
   const [pb, setPb] = useState<PriceBook>(defaultPriceBook);
+  const [types, setTypes] = useState<TypeProfile[]>(builtinTypes);
   const [loaded, setLoaded] = useState(false);
   const svgRef = useRef<SVGSVGElement>(null);
 
@@ -208,6 +209,7 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
       /* corrupted storage — start fresh */
     }
     setPb(loadPriceBook());
+    setTypes(loadAllTypes());
     setLoaded(true);
   }, []);
 
@@ -215,10 +217,14 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
     if (loaded) localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
   }, [cfg, loaded]);
 
-  const derived = useMemo(() => deriveRailing(cfg), [cfg]);
-  const sia = useMemo(() => evaluateSia(cfg, derived), [cfg, derived]);
+  const tp = useMemo(
+    () => types.find((t) => t.id === (cfg.typeId ?? cfg.system)) ?? types.find((t) => t.id === cfg.system) ?? types[0],
+    [types, cfg.typeId, cfg.system],
+  );
+  const derived = useMemo(() => deriveRailing(cfg, tp), [cfg, tp]);
+  const sia = useMemo(() => evaluateSia(cfg, derived, tp), [cfg, derived, tp]);
   const overall = siaSummary(sia);
-  const price = useMemo(() => priceRailing(cfg, derived, pb), [cfg, derived, pb]);
+  const price = useMemo(() => priceRailing(cfg, derived, pb, tp), [cfg, derived, pb, tp]);
 
   const set = (patch: Partial<RailingConfig>) => setCfg((c) => ({ ...c, ...patch }));
   const setSeg = (id: string, patch: Partial<RailingConfig["segments"][number]>) =>
@@ -238,24 +244,36 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
             {t.stepSystem}
           </h2>
           <div className="grid grid-cols-2 gap-2">
-            {(
-              [
-                { v: "bars", name: t.systemBars, desc: t.systemBarsDesc },
-                { v: "glass", name: t.systemGlass, desc: t.systemGlassDesc },
-              ] as const
-            ).map((s) => (
-              <button
-                key={s.v}
-                type="button"
-                onClick={() => setCfg((c) => normalizeForSystem(c, s.v))}
-                className={`flex flex-col gap-1 border px-4 py-3 text-left transition-colors ${
-                  cfg.system === s.v ? "border-ink bg-ink text-paper" : "border-hairline hover:border-graphite"
-                }`}
-              >
-                <span className={`text-sm ${cfg.system === s.v ? "" : "text-graphite"}`}>{s.name}</span>
-                <span className={`text-[11px] font-light ${cfg.system === s.v ? "text-paper/60" : "text-stone"}`}>{s.desc}</span>
-              </button>
-            ))}
+            {types
+              .filter((x) => x.active)
+              .map((x) => {
+                const name = x.builtin
+                  ? x.template === "bars"
+                    ? t.systemBars
+                    : t.systemGlass
+                  : (x.name?.[locale as "de" | "fr" | "en"] ?? x.name?.de ?? x.id);
+                const desc = x.builtin
+                  ? x.template === "bars"
+                    ? t.systemBarsDesc
+                    : t.systemGlassDesc
+                  : x.template === "bars"
+                    ? `Ø ${x.barDia} mm · ≤ ${x.maxSlope}°${x.basePerM ? ` · CHF ${x.basePerM}/m` : ""}`
+                    : `VSG · ≤ ${x.maxPanelWidth} mm${x.basePerM ? ` · CHF ${x.basePerM}/m` : ""}`;
+                const selected = tp.id === x.id;
+                return (
+                  <button
+                    key={x.id}
+                    type="button"
+                    onClick={() => setCfg((c) => normalizeForType(c, x))}
+                    className={`flex flex-col gap-1 border px-4 py-3 text-left transition-colors ${
+                      selected ? "border-ink bg-ink text-paper" : "border-hairline hover:border-graphite"
+                    }`}
+                  >
+                    <span className={`text-sm ${selected ? "" : "text-graphite"}`}>{name}</span>
+                    <span className={`text-[11px] font-light ${selected ? "text-paper/60" : "text-stone"}`}>{desc}</span>
+                  </button>
+                );
+              })}
           </div>
         </section>
 

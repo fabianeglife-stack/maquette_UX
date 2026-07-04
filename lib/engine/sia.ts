@@ -5,7 +5,7 @@
  */
 
 import type { DerivedRailing } from "./geometry";
-import { MAX_POST_SPACING, MAX_SEGMENT_LENGTH, SYSTEM_MAX_SLOPE, type RailingConfig } from "./types";
+import { MAX_POST_SPACING, MAX_SEGMENT_LENGTH, SYSTEM_MAX_SLOPE, type RailingConfig, type TypeProfile } from "./types";
 
 export type RuleStatus = "pass" | "warn" | "fail";
 
@@ -19,8 +19,9 @@ export interface RuleResult {
 
 export const SIA_RULES_VERSION = "SIA358-2010/rev1";
 
-export function evaluateSia(cfg: RailingConfig, derived: DerivedRailing): RuleResult[] {
+export function evaluateSia(cfg: RailingConfig, derived: DerivedRailing, tp?: TypeProfile): RuleResult[] {
   const results: RuleResult[] = [];
+  const maxSlope = tp?.maxSlope ?? (cfg.system === "glass" ? 0 : SYSTEM_MAX_SLOPE);
 
   // 1 — Minimum guard height ≥ 1.00 m; 1.10 m recommended above 12 m fall height.
   if (cfg.height < 1000) {
@@ -77,9 +78,9 @@ export function evaluateSia(cfg: RailingConfig, derived: DerivedRailing): RuleRe
     }
   }
 
-  // 6 — Stairs: bar system up to 37°, glass system flat only.
+  // 6 — Stairs within the type's slope limit (0 = flat only, e.g. glass).
   const worstSlope = Math.max(0, ...cfg.segments.map((s) => (s.stair ? s.slope : 0)));
-  if (cfg.system === "glass") {
+  if (maxSlope <= 0) {
     results.push({
       id: "glassStairs",
       status: worstSlope > 0 ? "fail" : "pass",
@@ -89,9 +90,9 @@ export function evaluateSia(cfg: RailingConfig, derived: DerivedRailing): RuleRe
   } else {
     results.push({
       id: "slope",
-      status: worstSlope <= SYSTEM_MAX_SLOPE ? "pass" : "fail",
+      status: worstSlope <= maxSlope ? "pass" : "fail",
       ref: "System AxioForm Flex",
-      params: { slope: worstSlope, limit: SYSTEM_MAX_SLOPE },
+      params: { slope: worstSlope, limit: maxSlope },
     });
   }
 

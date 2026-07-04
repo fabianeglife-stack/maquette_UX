@@ -11,6 +11,7 @@ import {
   PANEL_GAP,
   type RailingConfig,
   type SegmentInput,
+  type TypeProfile,
 } from "./types";
 
 export interface Vec3 {
@@ -71,11 +72,13 @@ export interface DerivedRailing {
 
 const rad = (deg: number) => (deg * Math.PI) / 180;
 
-export function deriveRailing(cfg: RailingConfig): DerivedRailing {
+export function deriveRailing(cfg: RailingConfig, tp?: TypeProfile): DerivedRailing {
   const segments: DerivedSegment[] = [];
   let cursor: Vec3 = { x: 0, y: 0, z: 0 };
   let heading = 0;
   const maxSpacing = MAX_POST_SPACING[cfg.usage];
+  const barDia = tp?.barDia ?? BAR_DIA;
+  const maxPanel = tp?.maxPanelWidth ?? MAX_PANEL_WIDTH;
 
   cfg.segments.forEach((seg, i) => {
     if (i > 0) heading += seg.angle;
@@ -114,11 +117,11 @@ export function deriveRailing(cfg: RailingConfig): DerivedRailing {
 
       // Bars: fill each post field with vertical bars at ≤ barClear openings.
       const span = spacing; // per field, along the axis
-      const n = Math.max(1, Math.ceil((span - cfg.barClear) / (BAR_DIA + cfg.barClear)));
-      actualClear = (span - n * BAR_DIA) / (n + 1);
+      const n = Math.max(1, Math.ceil((span - cfg.barClear) / (barDia + cfg.barClear)));
+      actualClear = (span - n * barDia) / (n + 1);
       for (let f = 0; f < fields; f++) {
         for (let b = 1; b <= n; b++) {
-          const t = f * spacing + ((actualClear + BAR_DIA) * b - BAR_DIA / 2);
+          const t = f * spacing + ((actualClear + barDia) * b - barDia / 2);
           const foot: Vec3 = {
             x: cursor.x + dir.x * t,
             y: cursor.y + dir.y * t + cfg.bottomGap,
@@ -130,7 +133,7 @@ export function deriveRailing(cfg: RailingConfig): DerivedRailing {
     } else {
       // Glass: continuous base profile, VSG panels of ≤ MAX_PANEL_WIDTH with
       // PANEL_GAP joints; no posts.
-      const n = Math.max(1, Math.ceil((seg.length - PANEL_GAP) / (MAX_PANEL_WIDTH + PANEL_GAP)));
+      const n = Math.max(1, Math.ceil((seg.length - PANEL_GAP) / (maxPanel + PANEL_GAP)));
       const width = (seg.length - (n + 1) * PANEL_GAP) / n;
       actualClear = PANEL_GAP;
       spacing = 0;

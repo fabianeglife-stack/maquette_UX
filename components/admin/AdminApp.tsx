@@ -1,13 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { chf, defaultPriceBook, type PriceBook } from "@/lib/engine/pricing";
+import { deriveRailing } from "@/lib/engine/geometry";
+import { buildBom } from "@/lib/engine/bom";
+import { type System, type TypeProfile } from "@/lib/engine/types";
 import {
+  deleteCustomType,
+  findType,
+  loadAllTypes,
   loadOrders,
   loadPriceBook,
   ORDER_FLOW,
   QUOTE_FLOW,
   resetPriceBook,
+  saveCustomType,
   savePriceBook,
   updateOrderStatus,
   type Order,
@@ -20,8 +27,53 @@ type Tab = "orders" | "pricing" | "products";
 
 /* ---------- orders tab ---------- */
 
+function BomDetail({ order, t }: { order: Order; t: AdminDict }) {
+  if (!order.config) {
+    return <p className="py-2 text-sm font-light text-stone">{t.bom.noBom}</p>;
+  }
+  const tp = findType(order.config.typeId, order.config.system);
+  const derived = deriveRailing(order.config, tp);
+  const bom = buildBom(order.config, derived, tp);
+  const parts: Record<string, string> = t.bom.parts;
+
+  return (
+    <div className="grid gap-8 py-2 md:grid-cols-[1fr_1fr]">
+      <div className="flex flex-col">
+        <span className="pb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-stone">{t.bom.title}</span>
+        {bom.map((l, i) => (
+          <div key={i} className="flex items-baseline justify-between gap-4 border-t border-hairline/70 py-1.5">
+            <span className="text-[13px] font-light text-graphite">
+              {parts[l.id] ?? l.id}
+              {l.detail && <span className="text-stone"> · {l.detail}</span>}
+            </span>
+            <span className="whitespace-nowrap text-[13px] font-light text-ink">
+              {l.qty.toLocaleString("de-CH")} {t.bom.units[l.unit]}
+            </span>
+          </div>
+        ))}
+      </div>
+      <div className="flex flex-col gap-4">
+        <div>
+          <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone">{t.bom.address}</span>
+          <p className="pt-1 text-sm font-light text-graphite">
+            {order.customer.name} · {order.customer.street}, {order.customer.city}
+            <span className="block text-xs text-stone">{order.customer.email}</span>
+          </p>
+        </div>
+        {order.payment && (
+          <div>
+            <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone">{t.bom.payment}</span>
+            <p className="pt-1 text-sm font-light uppercase text-graphite">{order.payment}</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function OrdersTable({ t, statusLabels, cfgDict }: { t: AdminDict; statusLabels: Dict["portal"]["status"]; cfgDict: Dict["cfg"] }) {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [open, setOpen] = useState<string | null>(null);
 
   useEffect(() => setOrders(loadOrders()), []);
 
@@ -32,11 +84,11 @@ function OrdersTable({ t, statusLabels, cfgDict }: { t: AdminDict; statusLabels:
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[820px] border-collapse text-left">
+      <table className="w-full min-w-[900px] border-collapse text-left">
         <thead>
           <tr className="border-b border-ink/50">
-            {[t.table.ref, t.table.date, t.table.customer, t.table.system, t.table.length, t.table.total, t.table.kind, t.table.status].map((h) => (
-              <th key={h} className="py-3 pr-4 text-[11px] font-medium uppercase tracking-[0.14em] text-stone">
+            {[t.table.ref, t.table.date, t.table.customer, t.table.system, t.table.length, t.table.total, t.table.kind, t.table.status, ""].map((h, i) => (
+              <th key={i} className="py-3 pr-4 text-[11px] font-medium uppercase tracking-[0.14em] text-stone">
                 {h}
               </th>
             ))}
@@ -45,42 +97,61 @@ function OrdersTable({ t, statusLabels, cfgDict }: { t: AdminDict; statusLabels:
         <tbody>
           {orders.map((o) => {
             const flow = o.kind === "order" ? ORDER_FLOW : QUOTE_FLOW;
+            const expanded = open === o.ref;
             return (
-              <tr key={o.ref} className="border-b border-hairline align-baseline">
-                <td className="py-3 pr-4 text-sm text-ink">{o.ref}</td>
-                <td className="py-3 pr-4 text-sm font-light text-graphite">{o.createdAt}</td>
-                <td className="py-3 pr-4 text-sm font-light text-graphite">
-                  {o.customer.name}
-                  <span className="block text-xs text-stone">{o.customer.city}</span>
-                </td>
-                <td className="py-3 pr-4 text-sm font-light text-graphite">
-                  {o.system === "glass" ? cfgDict.systemGlass : cfgDict.systemBars}
-                </td>
-                <td className="py-3 pr-4 text-sm font-light text-graphite">{o.lengthM.toLocaleString("de-CH")} m</td>
-                <td className="py-3 pr-4 whitespace-nowrap text-sm font-light text-ink">{chf(o.gross)}</td>
-                <td className="py-3 pr-4">
-                  <span
-                    className={`inline-block border px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] ${
-                      o.kind === "order" ? "border-ink/40 text-ink" : "border-steel/50 text-steel"
-                    }`}
-                  >
-                    {t.kind[o.kind]}
-                  </span>
-                </td>
-                <td className="py-3">
-                  <select
-                    value={o.status}
-                    onChange={(e) => advance(o.ref, e.target.value as OrderStatus)}
-                    className="border border-hairline bg-paper px-2 py-1.5 text-xs font-light text-ink outline-none focus:border-graphite"
-                  >
-                    {flow.map((s) => (
-                      <option key={s} value={s}>
-                        {statusLabels[s]}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-              </tr>
+              <Fragment key={o.ref}>
+                <tr className={`align-baseline ${expanded ? "" : "border-b border-hairline"}`}>
+                  <td className="py-3 pr-4 text-sm text-ink">{o.ref}</td>
+                  <td className="py-3 pr-4 text-sm font-light text-graphite">{o.createdAt}</td>
+                  <td className="py-3 pr-4 text-sm font-light text-graphite">
+                    {o.customer.name}
+                    <span className="block text-xs text-stone">{o.customer.city}</span>
+                  </td>
+                  <td className="py-3 pr-4 text-sm font-light text-graphite">
+                    {o.system === "glass" ? cfgDict.systemGlass : cfgDict.systemBars}
+                  </td>
+                  <td className="py-3 pr-4 text-sm font-light text-graphite">{o.lengthM.toLocaleString("de-CH")} m</td>
+                  <td className="py-3 pr-4 whitespace-nowrap text-sm font-light text-ink">{chf(o.gross)}</td>
+                  <td className="py-3 pr-4">
+                    <span
+                      className={`inline-block border px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] ${
+                        o.kind === "order" ? "border-ink/40 text-ink" : "border-steel/50 text-steel"
+                      }`}
+                    >
+                      {t.kind[o.kind]}
+                    </span>
+                  </td>
+                  <td className="py-3 pr-4">
+                    <select
+                      value={o.status}
+                      onChange={(e) => advance(o.ref, e.target.value as OrderStatus)}
+                      className="border border-hairline bg-paper px-2 py-1.5 text-xs font-light text-ink outline-none focus:border-graphite"
+                    >
+                      {flow.map((s) => (
+                        <option key={s} value={s}>
+                          {statusLabels[s]}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="py-3">
+                    <button
+                      type="button"
+                      onClick={() => setOpen(expanded ? null : o.ref)}
+                      className="text-xs uppercase tracking-[0.12em] text-graphite underline-offset-4 hover:text-ink hover:underline"
+                    >
+                      {expanded ? t.bom.hide : t.bom.show}
+                    </button>
+                  </td>
+                </tr>
+                {expanded && (
+                  <tr className="border-b border-hairline bg-mist/40">
+                    <td colSpan={9} className="px-4">
+                      <BomDetail order={o} t={t} />
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
             );
           })}
         </tbody>
@@ -182,31 +253,190 @@ function PricingEditor({ t }: { t: AdminDict }) {
   );
 }
 
-/* ---------- products tab ---------- */
+/* ---------- products tab: guardrail type builder ---------- */
+
+const emptyDraft = () => ({
+  template: "bars" as System,
+  nameDe: "",
+  nameFr: "",
+  nameEn: "",
+  basePerM: 220,
+  barDia: 14,
+  maxSlope: 30,
+  maxPanelWidth: 1100,
+});
 
 function ProductsTab({ t }: { t: AdminDict }) {
+  const [types, setTypes] = useState<TypeProfile[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [draft, setDraft] = useState(emptyDraft());
+  const [created, setCreated] = useState(false);
+
+  useEffect(() => setTypes(loadAllTypes()), []);
+  const refresh = () => setTypes(loadAllTypes());
+
+  const inputCls =
+    "w-full border border-hairline bg-paper px-3 py-2 text-sm font-light text-ink outline-none transition-colors placeholder:text-stone focus:border-graphite";
+
+  const specFor = (x: TypeProfile) =>
+    x.builtin
+      ? x.template === "bars"
+        ? t.productBarsSpec
+        : t.productGlassSpec
+      : x.template === "bars"
+        ? `Ø ${x.barDia} mm · ≤ ${x.maxSlope}° · CHF ${x.basePerM}/m`
+        : `VSG · ≤ ${x.maxPanelWidth} mm · CHF ${x.basePerM}/m`;
+
   return (
     <div className="flex max-w-3xl flex-col gap-4">
       <div className="grid gap-4 sm:grid-cols-2">
-        {[
-          { name: t.productBars, spec: t.productBarsSpec },
-          { name: t.productGlass, spec: t.productGlassSpec },
-        ].map((p) => (
-          <div key={p.name} className="flex flex-col gap-2 border border-hairline p-5">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-ink">{p.name}</span>
-              <span className="border border-[#4a7c59] px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-[#4a7c59]">
-                {t.productsActive}
+        {types.map((x) => (
+          <div key={x.id} className={`flex flex-col gap-2 border border-hairline p-5 ${x.active ? "" : "opacity-60"}`}>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm text-ink">
+                {x.builtin ? (x.template === "bars" ? t.productBars : t.productGlass) : (x.name?.de ?? x.id)}
+              </span>
+              <span
+                className={`border px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] ${
+                  x.active ? "border-[#4a7c59] text-[#4a7c59]" : "border-stone text-stone"
+                }`}
+              >
+                {x.active ? t.productsActive : t.typesForm.inactive}
               </span>
             </div>
-            <p className="text-xs font-light leading-relaxed text-graphite">{p.spec}</p>
+            <p className="text-xs font-light leading-relaxed text-graphite">{specFor(x)}</p>
+            {!x.builtin && (
+              <div className="flex gap-4 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    saveCustomType({ ...x, active: !x.active });
+                    refresh();
+                  }}
+                  className="text-[11px] uppercase tracking-[0.12em] text-graphite underline-offset-2 hover:text-ink hover:underline"
+                >
+                  {x.active ? t.typesForm.inactive : t.productsActive}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    deleteCustomType(x.id);
+                    refresh();
+                  }}
+                  className="text-[11px] uppercase tracking-[0.12em] text-[#b04a3a] underline-offset-2 hover:underline"
+                >
+                  {t.typesForm.delete}
+                </button>
+              </div>
+            )}
           </div>
         ))}
       </div>
-      <div className="flex flex-col gap-2 border border-dashed border-hairline p-5 opacity-80">
-        <span className="text-sm text-graphite">+ {t.newType}</span>
-        <p className="text-xs font-light leading-relaxed text-stone">{t.newTypeNote}</p>
-      </div>
+
+      {!showForm ? (
+        <button
+          type="button"
+          onClick={() => {
+            setDraft(emptyDraft());
+            setCreated(false);
+            setShowForm(true);
+          }}
+          className="flex flex-col gap-2 border border-dashed border-hairline p-5 text-left transition-colors hover:border-graphite"
+        >
+          <span className="text-sm text-graphite">+ {t.newType}</span>
+          <p className="text-xs font-light leading-relaxed text-stone">{t.newTypeNote}</p>
+        </button>
+      ) : (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            saveCustomType({
+              id: "ct-" + Math.random().toString(36).slice(2, 8),
+              template: draft.template,
+              name: {
+                de: draft.nameDe,
+                fr: draft.nameFr || draft.nameDe,
+                en: draft.nameEn || draft.nameDe,
+              },
+              basePerM: draft.basePerM,
+              barDia: draft.barDia,
+              maxSlope: draft.template === "glass" ? 0 : draft.maxSlope,
+              maxPanelWidth: draft.maxPanelWidth,
+              active: true,
+              builtin: false,
+            });
+            refresh();
+            setShowForm(false);
+            setCreated(true);
+          }}
+          className="flex flex-col gap-4 border border-ink/60 p-5"
+        >
+          <span className="text-xs font-medium uppercase tracking-[0.16em] text-ink">{t.newType}</span>
+
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[11px] font-medium uppercase tracking-[0.12em] text-stone">{t.typesForm.template}</span>
+            <div className="flex gap-2">
+              {(["bars", "glass"] as const).map((tmpl) => (
+                <button
+                  key={tmpl}
+                  type="button"
+                  onClick={() => setDraft({ ...draft, template: tmpl })}
+                  className={`border px-3.5 py-2 text-xs tracking-[0.06em] transition-colors ${
+                    draft.template === tmpl ? "border-ink bg-ink text-paper" : "border-hairline text-graphite hover:border-graphite"
+                  }`}
+                >
+                  {tmpl === "bars" ? t.productBars : t.productGlass}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            <input required placeholder={t.typesForm.nameDe} value={draft.nameDe} onChange={(e) => setDraft({ ...draft, nameDe: e.target.value })} className={inputCls} />
+            <input placeholder={t.typesForm.nameFr} value={draft.nameFr} onChange={(e) => setDraft({ ...draft, nameFr: e.target.value })} className={inputCls} />
+            <input placeholder={t.typesForm.nameEn} value={draft.nameEn} onChange={(e) => setDraft({ ...draft, nameEn: e.target.value })} className={inputCls} />
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[11px] font-medium uppercase tracking-[0.12em] text-stone">{t.typesForm.basePerM}</span>
+              <input type="number" min={50} max={2000} value={draft.basePerM} onChange={(e) => setDraft({ ...draft, basePerM: Number(e.target.value) })} className={inputCls} />
+            </label>
+            {draft.template === "bars" ? (
+              <>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-[11px] font-medium uppercase tracking-[0.12em] text-stone">{t.typesForm.barDia}</span>
+                  <input type="number" min={8} max={30} value={draft.barDia} onChange={(e) => setDraft({ ...draft, barDia: Number(e.target.value) })} className={inputCls} />
+                </label>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-[11px] font-medium uppercase tracking-[0.12em] text-stone">{t.typesForm.maxSlope}</span>
+                  <input type="number" min={0} max={45} value={draft.maxSlope} onChange={(e) => setDraft({ ...draft, maxSlope: Number(e.target.value) })} className={inputCls} />
+                </label>
+              </>
+            ) : (
+              <label className="flex flex-col gap-1.5">
+                <span className="text-[11px] font-medium uppercase tracking-[0.12em] text-stone">{t.typesForm.maxPanelWidth}</span>
+                <input type="number" min={400} max={2000} value={draft.maxPanelWidth} onChange={(e) => setDraft({ ...draft, maxPanelWidth: Number(e.target.value) })} className={inputCls} />
+              </label>
+            )}
+          </div>
+
+          <div className="flex gap-3">
+            <button type="submit" className="inline-flex items-center justify-center bg-ink px-5 py-3 text-xs font-medium uppercase tracking-[0.14em] text-paper transition-colors hover:bg-graphite">
+              {t.typesForm.save}
+            </button>
+            <button type="button" onClick={() => setShowForm(false)} className="inline-flex items-center justify-center border border-hairline px-5 py-3 text-xs font-medium uppercase tracking-[0.14em] text-graphite transition-colors hover:border-graphite">
+              {t.typesForm.cancel}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {created && (
+        <p role="status" className="border-l-2 border-steel bg-mist/70 p-3 text-sm font-light text-graphite">
+          {t.typesForm.created}
+        </p>
+      )}
     </div>
   );
 }

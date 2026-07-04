@@ -22,8 +22,37 @@ export interface SegmentInput {
   slope: number;
 }
 
+/**
+ * A guardrail type: template (bars/glass geometry logic) + parameter profile.
+ * Built-in types ship with the product; custom types are created in the
+ * admin type builder and carry their own names and parameters.
+ */
+export interface TypeProfile {
+  id: string;
+  template: System;
+  /** Custom display names; built-ins resolve names from the i18n dict. */
+  name?: { de: string; fr: string; en: string };
+  /** Base price CHF/m; null → price book default for the template. */
+  basePerM: number | null;
+  /** Bar diameter, mm (bars template). */
+  barDia: number;
+  /** Maximum stair slope, degrees (0 = no stairs). */
+  maxSlope: number;
+  /** Maximum glass panel width, mm (glass template). */
+  maxPanelWidth: number;
+  active: boolean;
+  builtin: boolean;
+}
+
+export const builtinTypes: TypeProfile[] = [
+  { id: "bars", template: "bars", basePerM: null, barDia: 12, maxSlope: 37, maxPanelWidth: 1200, active: true, builtin: true },
+  { id: "glass", template: "glass", basePerM: null, barDia: 12, maxSlope: 0, maxPanelWidth: 1200, active: true, builtin: true },
+];
+
 export interface RailingConfig {
   system: System;
+  /** Selected guardrail type; falls back to the template built-in. */
+  typeId?: string;
   height: number;
   /** Clear gap between finished floor and bottom rail / glass edge. */
   bottomGap: number;
@@ -67,6 +96,7 @@ export function newSegment(partial?: Partial<SegmentInput>): SegmentInput {
 export function defaultConfig(): RailingConfig {
   return {
     system: "bars",
+    typeId: "bars",
     height: 1000,
     bottomGap: 100,
     barClear: 110,
@@ -80,10 +110,10 @@ export function defaultConfig(): RailingConfig {
   };
 }
 
-/** Keep the handrail choice valid when switching systems. */
-export function normalizeForSystem(cfg: RailingConfig, system: System): RailingConfig {
+/** Keep the handrail choice valid when switching types/systems. */
+export function normalizeForType(cfg: RailingConfig, tp: TypeProfile): RailingConfig {
   let handrail = cfg.handrail;
-  if (system === "glass" && (handrail === "round_steel" || handrail === "flat_steel")) handrail = "round_inox";
-  if (system === "bars" && handrail === "none") handrail = "round_steel";
-  return { ...cfg, system, handrail };
+  if (tp.template === "glass" && (handrail === "round_steel" || handrail === "flat_steel")) handrail = "round_inox";
+  if (tp.template === "bars" && handrail === "none") handrail = "round_steel";
+  return { ...cfg, system: tp.template, typeId: tp.id, handrail };
 }

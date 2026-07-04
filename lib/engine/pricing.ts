@@ -7,7 +7,7 @@
  */
 
 import type { DerivedRailing } from "./geometry";
-import type { RailingConfig } from "./types";
+import type { RailingConfig, TypeProfile } from "./types";
 
 export const PRICEBOOK_VERSION = "PB-2026-07";
 
@@ -72,13 +72,16 @@ export function priceRailing(
   cfg: RailingConfig,
   derived: DerivedRailing,
   pb: PriceBook = defaultPriceBook,
+  tp?: TypeProfile,
 ): PriceResult {
   const m = derived.totalLength / 1000;
   const stairM = derived.slopedLength / 1000;
   const lines: PriceLine[] = [];
+  const baseBars = tp?.basePerM ?? pb.basePerM;
+  const baseGlass = tp?.basePerM ?? pb.glassBasePerM;
 
   if (cfg.system === "bars") {
-    lines.push({ id: "base", qty: r2(m), unit: "m", unitPrice: pb.basePerM, total: r2(m * pb.basePerM), params: {} });
+    lines.push({ id: "base", qty: r2(m), unit: "m", unitPrice: baseBars, total: r2(m * baseBars), params: {} });
     const hr = pb.handrailPerM[cfg.handrail];
     if (hr > 0) {
       lines.push({ id: `handrail_${cfg.handrail}`, qty: r2(m), unit: "m", unitPrice: hr, total: r2(m * hr), params: {} });
@@ -87,7 +90,7 @@ export function priceRailing(
       lines.push({ id: "stair", qty: r2(stairM), unit: "m", unitPrice: pb.stairPerM, total: r2(stairM * pb.stairPerM), params: {} });
     }
   } else {
-    lines.push({ id: "base_glass", qty: r2(m), unit: "m", unitPrice: pb.glassBasePerM, total: r2(m * pb.glassBasePerM), params: {} });
+    lines.push({ id: "base_glass", qty: r2(m), unit: "m", unitPrice: baseGlass, total: r2(m * baseGlass), params: {} });
     if (cfg.handrail === "none") {
       lines.push({ id: "glass_free_edge", qty: r2(m), unit: "m", unitPrice: pb.glassFreeEdgePerM, total: r2(m * pb.glassFreeEdgePerM), params: {} });
     }
