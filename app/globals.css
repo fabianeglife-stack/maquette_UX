@@ -1,0 +1,58 @@
+@import "tailwindcss";
+
+@theme {
+  --color-paper: #fafaf8;
+  --color-mist: #f1f0ec;
+  --color-hairline: #e3e1da;
+  --color-stone: #8b8b84;
+  --color-graphite: #45453f;
+  --color-ink: #171716;
+  --color-steel: #4d6172;
+
+  --font-sans: var(--font-geist-sans), "Helvetica Neue", Helvetica, Arial,
+    sans-serif;
+
+  --tracking-label: 0.22em;
+
+  --animate-fade-up: fade-up 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
+
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(24px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-feature-settings: "ss01", "cv11";
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--color-ink);
+  color: var(--color-paper);
+}
+
+/* Kicker label above headings */
+.label {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--color-stone);
+}
+
+.hairline-t {
+  border-top: 1px solid var(--color-hairline);
+}
