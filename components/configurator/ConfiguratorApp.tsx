@@ -6,9 +6,11 @@ import DrawingSVG from "./DrawingSVG";
 import { downloadDrawingPdf } from "./pdf";
 import { deriveRailing } from "@/lib/engine/geometry";
 import { evaluateSia, siaSummary, type RuleStatus } from "@/lib/engine/sia";
-import { chf, priceRailing } from "@/lib/engine/pricing";
-import { defaultConfig, newSegment, type RailingConfig } from "@/lib/engine/types";
+import { chf, defaultPriceBook, priceRailing, type PriceBook } from "@/lib/engine/pricing";
+import { defaultConfig, newSegment, normalizeForSystem, type RailingConfig } from "@/lib/engine/types";
+import { loadPriceBook, newRef, saveOrder, type Order } from "@/lib/store";
 import type { Dict } from "@/lib/i18n";
+import Link from "next/link";
 
 const Scene3D = dynamic(() => import("./Scene3D"), {
   ssr: false,
@@ -102,12 +104,97 @@ function Pills<T extends string>({
   );
 }
 
+/* ---------- checkout ---------- */
+
+function CheckoutForm({
+  t,
+  kind,
+  onSubmit,
+  onCancel,
+}: {
+  t: CfgDict;
+  kind: "order" | "quote";
+  onSubmit: (customer: Order["customer"], payment: "card" | "twint" | "invoice") => void;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [street, setStreet] = useState("");
+  const [city, setCity] = useState("");
+  const [payment, setPayment] = useState<"card" | "twint" | "invoice">("card");
+
+  const inputCls =
+    "w-full border border-hairline bg-paper px-3 py-2.5 text-sm font-light text-ink outline-none transition-colors placeholder:text-stone focus:border-graphite";
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSubmit({ name, email, street, city }, payment);
+      }}
+      className="flex flex-col gap-3 border border-ink/60 p-4"
+    >
+      <span className="text-xs font-medium uppercase tracking-[0.16em] text-ink">
+        {kind === "order" ? t.checkout.orderTitle : t.checkout.quoteTitle}
+      </span>
+      <div className="grid grid-cols-2 gap-3">
+        <input required placeholder={t.checkout.name} value={name} onChange={(e) => setName(e.target.value)} className={`${inputCls} col-span-2`} />
+        <input required type="email" placeholder={t.checkout.email} value={email} onChange={(e) => setEmail(e.target.value)} className={`${inputCls} col-span-2`} />
+        <input required placeholder={t.checkout.street} value={street} onChange={(e) => setStreet(e.target.value)} className={inputCls} />
+        <input required placeholder={t.checkout.city} value={city} onChange={(e) => setCity(e.target.value)} className={inputCls} />
+      </div>
+      {kind === "order" && (
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone">{t.checkout.payment}</span>
+          <div className="flex flex-wrap gap-2">
+            {(
+              [
+                { v: "card", l: t.checkout.payCard },
+                { v: "twint", l: t.checkout.payTwint },
+                { v: "invoice", l: t.checkout.payInvoice },
+              ] as const
+            ).map((o) => (
+              <button
+                key={o.v}
+                type="button"
+                onClick={() => setPayment(o.v)}
+                className={`border px-3.5 py-2 text-xs tracking-[0.06em] transition-colors ${
+                  payment === o.v ? "border-ink bg-ink text-paper" : "border-hairline text-graphite hover:border-graphite"
+                }`}
+              >
+                {o.l}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      <div className="flex gap-3 pt-1">
+        <button
+          type="submit"
+          className="inline-flex items-center justify-center bg-ink px-5 py-3 text-xs font-medium uppercase tracking-[0.14em] text-paper transition-colors hover:bg-graphite"
+        >
+          {kind === "order" ? t.checkout.submitOrder : t.checkout.submitQuote}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="inline-flex items-center justify-center border border-hairline px-5 py-3 text-xs font-medium uppercase tracking-[0.14em] text-graphite transition-colors hover:border-graphite"
+        >
+          {t.checkout.cancel}
+        </button>
+      </div>
+    </form>
+  );
+}
+
 /* ---------- main app ---------- */
 
-export default function ConfiguratorApp({ t }: { t: CfgDict }) {
+export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: string }) {
   const [cfg, setCfg] = useState<RailingConfig>(defaultConfig);
   const [tab, setTab] = useState<"3d" | "drawing">("3d");
+  const [checkout, setCheckout] = useState<"order" | "quote" | null>(null);
   const [panel, setPanel] = useState<{ kind: "order" | "quote"; ref: string } | null>(null);
+  const [pb, setPb] = useState<PriceBook>(defaultPriceBook);
   const [loaded, setLoaded] = useState(false);
   const svgRef = useRef<SVGSVGElement>(null);
 
@@ -120,6 +207,7 @@ export default function ConfiguratorApp({ t }: { t: CfgDict }) {
     } catch {
       /* corrupted storage — start fresh */
     }
+    setPb(loadPriceBook());
     setLoaded(true);
   }, []);
 
@@ -130,7 +218,7 @@ export default function ConfiguratorApp({ t }: { t: CfgDict }) {
   const derived = useMemo(() => deriveRailing(cfg), [cfg]);
   const sia = useMemo(() => evaluateSia(cfg, derived), [cfg, derived]);
   const overall = siaSummary(sia);
-  const price = useMemo(() => priceRailing(cfg, derived), [cfg, derived]);
+  const price = useMemo(() => priceRailing(cfg, derived, pb), [cfg, derived, pb]);
 
   const set = (patch: Partial<RailingConfig>) => setCfg((c) => ({ ...c, ...patch }));
   const setSeg = (id: string, patch: Partial<RailingConfig["segments"][number]>) =>
@@ -150,14 +238,24 @@ export default function ConfiguratorApp({ t }: { t: CfgDict }) {
             {t.stepSystem}
           </h2>
           <div className="grid grid-cols-2 gap-2">
-            <button type="button" className="flex flex-col gap-1 border border-ink bg-ink px-4 py-3 text-left text-paper">
-              <span className="text-sm">{t.systemBars}</span>
-              <span className="text-[11px] font-light text-paper/60">{t.systemBarsDesc}</span>
-            </button>
-            <div className="flex cursor-not-allowed flex-col gap-1 border border-hairline px-4 py-3 opacity-60">
-              <span className="text-sm text-graphite">{t.systemGlass}</span>
-              <span className="text-[11px] font-light text-stone">{t.systemGlassSoon}</span>
-            </div>
+            {(
+              [
+                { v: "bars", name: t.systemBars, desc: t.systemBarsDesc },
+                { v: "glass", name: t.systemGlass, desc: t.systemGlassDesc },
+              ] as const
+            ).map((s) => (
+              <button
+                key={s.v}
+                type="button"
+                onClick={() => setCfg((c) => normalizeForSystem(c, s.v))}
+                className={`flex flex-col gap-1 border px-4 py-3 text-left transition-colors ${
+                  cfg.system === s.v ? "border-ink bg-ink text-paper" : "border-hairline hover:border-graphite"
+                }`}
+              >
+                <span className={`text-sm ${cfg.system === s.v ? "" : "text-graphite"}`}>{s.name}</span>
+                <span className={`text-[11px] font-light ${cfg.system === s.v ? "text-paper/60" : "text-stone"}`}>{s.desc}</span>
+              </button>
+            ))}
           </div>
         </section>
 
@@ -231,7 +329,9 @@ export default function ConfiguratorApp({ t }: { t: CfgDict }) {
           <div className="grid grid-cols-2 gap-3 pt-1">
             <Num label={t.height} value={cfg.height} min={800} max={1400} onChange={(v) => set({ height: v })} />
             <Num label={t.bottomGap} value={cfg.bottomGap} min={20} max={200} onChange={(v) => set({ bottomGap: v })} />
-            <Num label={t.barClear} value={cfg.barClear} min={60} max={160} step={5} onChange={(v) => set({ barClear: v })} />
+            {cfg.system === "bars" && (
+              <Num label={t.barClear} value={cfg.barClear} min={60} max={160} step={5} onChange={(v) => set({ barClear: v })} />
+            )}
             <Num label={t.fallHeight} value={cfg.fallHeightM} min={1} max={30} step={1} unit="m" onChange={(v) => set({ fallHeightM: v })} />
           </div>
         </section>
@@ -254,13 +354,32 @@ export default function ConfiguratorApp({ t }: { t: CfgDict }) {
           <Pills
             label={t.handrail}
             value={cfg.handrail}
-            options={[
-              { v: "round_steel", l: t.hrRound },
-              { v: "flat_steel", l: t.hrFlat },
-              { v: "round_inox", l: t.hrInox },
-            ]}
+            options={
+              cfg.system === "bars"
+                ? [
+                    { v: "round_steel" as const, l: t.hrRound },
+                    { v: "flat_steel" as const, l: t.hrFlat },
+                    { v: "round_inox" as const, l: t.hrInox },
+                  ]
+                : [
+                    { v: "round_inox" as const, l: t.hrInox },
+                    { v: "none" as const, l: t.hrNone },
+                  ]
+            }
             onChange={(v) => set({ handrail: v })}
           />
+          {cfg.system === "glass" && (
+            <Pills
+              label={t.glassTypeL}
+              value={cfg.glassType}
+              options={[
+                { v: "clear", l: t.glassClear },
+                { v: "satin", l: t.glassSatin },
+                { v: "tinted", l: t.glassTinted },
+              ]}
+              onChange={(v) => set({ glassType: v })}
+            />
+          )}
           <Pills
             label={t.color}
             value={cfg.color}
@@ -330,14 +449,20 @@ export default function ConfiguratorApp({ t }: { t: CfgDict }) {
               <button
                 type="button"
                 disabled={overall === "fail"}
-                onClick={() => setPanel({ kind: "order", ref: refNo })}
+                onClick={() => {
+                  setPanel(null);
+                  setCheckout("order");
+                }}
                 className="inline-flex items-center justify-center bg-ink px-5 py-3.5 text-xs font-medium uppercase tracking-[0.16em] text-paper transition-colors hover:bg-graphite disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {t.buy}
               </button>
               <button
                 type="button"
-                onClick={() => setPanel({ kind: "quote", ref: refNo })}
+                onClick={() => {
+                  setPanel(null);
+                  setCheckout("quote");
+                }}
                 className="inline-flex items-center justify-center border border-ink/25 px-5 py-3.5 text-xs font-medium uppercase tracking-[0.16em] text-ink transition-colors hover:border-ink"
               >
                 {t.quote}
@@ -351,14 +476,47 @@ export default function ConfiguratorApp({ t }: { t: CfgDict }) {
               </button>
             </div>
             {overall === "fail" && <p className="text-xs font-light text-[#b04a3a]">{t.buyBlocked}</p>}
+
+            {checkout && (
+              <CheckoutForm
+                t={t}
+                kind={checkout}
+                onCancel={() => setCheckout(null)}
+                onSubmit={(customer, payment) => {
+                  const ref = newRef();
+                  const order: Order = {
+                    ref,
+                    kind: checkout,
+                    createdAt: new Date().toISOString().slice(0, 10),
+                    status: checkout === "order" ? "new" : "quote_requested",
+                    customer,
+                    payment: checkout === "order" ? payment : undefined,
+                    system: cfg.system,
+                    lengthM: Math.round(derived.totalLength / 100) / 10,
+                    gross: price.gross,
+                    config: cfg,
+                  };
+                  saveOrder(order);
+                  setCheckout(null);
+                  setPanel({ kind: checkout, ref });
+                }}
+              />
+            )}
+
             {panel && (
-              <div role="status" className="flex flex-col gap-1.5 border-l-2 border-steel bg-mist/70 p-4">
+              <div role="status" className="flex flex-col gap-2 border-l-2 border-steel bg-mist/70 p-4">
                 <span className="text-xs font-medium uppercase tracking-[0.14em] text-steel">
                   {panel.kind === "order" ? t.orderTitle : t.quoteTitle}
                 </span>
                 <p className="text-sm font-light leading-relaxed text-graphite">
                   {fmt(panel.kind === "order" ? t.orderText : t.quoteText, { ref: panel.ref })}
                 </p>
+                <Link
+                  href={`/${locale}/portal/`}
+                  className="self-start text-xs uppercase tracking-[0.14em] text-ink underline underline-offset-4"
+                >
+                  {t.checkout.toPortal} →
+                </Link>
               </div>
             )}
             <p className="text-[11px] font-light text-stone">{t.saved}</p>
@@ -408,12 +566,20 @@ export default function ConfiguratorApp({ t }: { t: CfgDict }) {
             <span className="text-[13px] font-light text-graphite">
               {t.stats.length} <span className="text-ink">{(derived.totalLength / 1000).toLocaleString("de-CH")} m</span>
             </span>
-            <span className="text-[13px] font-light text-graphite">
-              {t.stats.posts} <span className="text-ink">{derived.postCount}</span>
-            </span>
-            <span className="text-[13px] font-light text-graphite">
-              {t.stats.bars} <span className="text-ink">{derived.barCount}</span>
-            </span>
+            {cfg.system === "bars" ? (
+              <>
+                <span className="text-[13px] font-light text-graphite">
+                  {t.stats.posts} <span className="text-ink">{derived.postCount}</span>
+                </span>
+                <span className="text-[13px] font-light text-graphite">
+                  {t.stats.bars} <span className="text-ink">{derived.barCount}</span>
+                </span>
+              </>
+            ) : (
+              <span className="text-[13px] font-light text-graphite">
+                {t.statsPanels} <span className="text-ink">{derived.panelCount}</span>
+              </span>
+            )}
             <span className="text-[13px] font-light text-graphite">
               {t.stats.weight} <span className="text-ink">{derived.weightKg} kg</span>
             </span>

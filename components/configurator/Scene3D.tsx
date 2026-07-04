@@ -52,10 +52,17 @@ function Member({
   );
 }
 
+const GLASS: Record<RailingConfig["glassType"], { color: string; opacity: number }> = {
+  clear: { color: "#a9c0cc", opacity: 0.22 },
+  satin: { color: "#e9ebe9", opacity: 0.6 },
+  tinted: { color: "#4f5e66", opacity: 0.38 },
+};
+
 function Railing({ cfg, derived }: { cfg: RailingConfig; derived: DerivedRailing }) {
   const color = RAL[cfg.color];
   const hrColor = cfg.handrail === "round_inox" ? "#b9bdbf" : color;
   const slabColor = "#dddad2";
+  const glass = GLASS[cfg.glassType];
 
   return (
     <group>
@@ -100,23 +107,56 @@ function Railing({ cfg, derived }: { cfg: RailingConfig; derived: DerivedRailing
         const railBotA = start.clone().setY(start.y + (cfg.bottomGap + 20) * MM);
         const railBotB = end.clone().setY(end.y + (cfg.bottomGap + 20) * MM);
 
+        const panelH = (cfg.height - cfg.bottomGap - (cfg.handrail === "none" ? 0 : 40)) * MM;
+
         return (
           <group key={seg.input.id + i}>
             {slabs}
-            {/* handrail + bottom rail */}
-            <Member a={railTopA} b={railTopB} radius={0.021} color={hrColor} box={cfg.handrail === "flat_steel"} />
-            <Member a={railBotA} b={railBotB} radius={0.008} color={color} />
-            {/* posts */}
-            {seg.posts.map((p, k) => (
-              <mesh key={k} position={[p.base.x * MM, (p.base.y + cfg.height / 2) * MM, p.base.z * MM]}>
-                <boxGeometry args={[0.04, cfg.height * MM, 0.04]} />
-                <meshStandardMaterial color={color} metalness={0.35} roughness={0.5} />
-              </mesh>
-            ))}
-            {/* bars */}
-            {seg.bars.map((b, k) => (
-              <Member key={k} a={v(b.bottom)} b={v(b.top)} radius={0.006} color={color} />
-            ))}
+            {cfg.system === "bars" ? (
+              <>
+                {/* handrail + bottom rail */}
+                <Member a={railTopA} b={railTopB} radius={0.021} color={hrColor} box={cfg.handrail === "flat_steel"} />
+                <Member a={railBotA} b={railBotB} radius={0.008} color={color} />
+                {/* posts */}
+                {seg.posts.map((p, k) => (
+                  <mesh key={k} position={[p.base.x * MM, (p.base.y + cfg.height / 2) * MM, p.base.z * MM]}>
+                    <boxGeometry args={[0.04, cfg.height * MM, 0.04]} />
+                    <meshStandardMaterial color={color} metalness={0.35} roughness={0.5} />
+                  </mesh>
+                ))}
+                {/* bars */}
+                {seg.bars.map((b, k) => (
+                  <Member key={k} a={v(b.bottom)} b={v(b.top)} radius={0.006} color={color} />
+                ))}
+              </>
+            ) : (
+              <>
+                {/* continuous base profile */}
+                <Member
+                  a={start.clone().setY(start.y + 0.055)}
+                  b={end.clone().setY(end.y + 0.055)}
+                  radius={0.048}
+                  color={color}
+                  box
+                />
+                {/* optional handrail */}
+                {cfg.handrail !== "none" && <Member a={railTopA} b={railTopB} radius={0.021} color={hrColor} />}
+                {/* VSG panels */}
+                {seg.panels.map((p, k) => {
+                  const mid = v(p.a).add(v(p.b)).multiplyScalar(0.5);
+                  return (
+                    <mesh
+                      key={k}
+                      position={[mid.x, mid.y + panelH / 2, mid.z]}
+                      rotation={[0, (-seg.headingDeg * Math.PI) / 180, 0]}
+                    >
+                      <boxGeometry args={[p.width * MM, panelH, 0.017]} />
+                      <meshStandardMaterial color={glass.color} transparent opacity={glass.opacity} roughness={0.15} metalness={0.05} />
+                    </mesh>
+                  );
+                })}
+              </>
+            )}
           </group>
         );
       })}

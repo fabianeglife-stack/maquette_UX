@@ -29,7 +29,7 @@ export default async function Configurator({ params }: { params: Promise<{ local
       </section>
 
       <section className="mx-auto max-w-[1400px] px-6 pb-24">
-        <ConfiguratorApp t={d.cfg} />
+        <ConfiguratorApp t={d.cfg} locale={locale} />
       </section>
     </>
   );

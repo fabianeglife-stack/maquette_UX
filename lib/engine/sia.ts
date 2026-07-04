@@ -52,29 +52,48 @@ export function evaluateSia(cfg: RailingConfig, derived: DerivedRailing): RuleRe
   //     0.15 m and 0.75 m is compliant by construction for this system.
   results.push({ id: "climb", status: "pass", ref: "SIA 358, 3.1", params: {} });
 
-  // 5 — Structural loads: post spacing is derived from the SIA 261 line load
-  //     for the selected usage; report the governing values.
-  const maxSpacing = Math.max(0, ...derived.segments.map((s) => s.postSpacing));
-  const limit = MAX_POST_SPACING[cfg.usage];
-  results.push({
-    id: "loads",
-    status: maxSpacing <= limit ? "pass" : "fail",
-    ref: "SIA 261, 8.1.2",
-    params: {
-      q: cfg.usage === "public" ? "1.6" : "0.8",
-      spacing: Math.round(maxSpacing),
-      limit,
-    },
-  });
+  // 5 — Structural loads (SIA 261 line load for the selected usage).
+  const q = cfg.usage === "public" ? "1.6" : "0.8";
+  if (cfg.system === "bars") {
+    const maxSpacing = Math.max(0, ...derived.segments.map((s) => s.postSpacing));
+    const limit = MAX_POST_SPACING[cfg.usage];
+    results.push({
+      id: "loads",
+      status: maxSpacing <= limit ? "pass" : "fail",
+      ref: "SIA 261, 8.1.2",
+      params: { q, spacing: Math.round(maxSpacing), limit },
+    });
+  } else {
+    results.push({ id: "loadsGlass", status: "pass", ref: "SIA 261, 8.1.2", params: { q } });
+    // VSG laminated safety glass is mandatory for fall protection.
+    results.push({
+      id: "vsg",
+      status: "pass",
+      ref: "SIGAB 002",
+      params: { glass: cfg.handrail === "none" ? "2×10" : "2×8" },
+    });
+    if (cfg.usage === "public" && cfg.handrail === "none") {
+      results.push({ id: "freeEdgePublic", status: "warn", ref: "SIGAB 002", params: {} });
+    }
+  }
 
-  // 6 — Stair slope within the system limit.
+  // 6 — Stairs: bar system up to 37°, glass system flat only.
   const worstSlope = Math.max(0, ...cfg.segments.map((s) => (s.stair ? s.slope : 0)));
-  results.push({
-    id: "slope",
-    status: worstSlope <= SYSTEM_MAX_SLOPE ? "pass" : "fail",
-    ref: "System AxioForm Flex",
-    params: { slope: worstSlope, limit: SYSTEM_MAX_SLOPE },
-  });
+  if (cfg.system === "glass") {
+    results.push({
+      id: "glassStairs",
+      status: worstSlope > 0 ? "fail" : "pass",
+      ref: "System AxioForm Vitra",
+      params: {},
+    });
+  } else {
+    results.push({
+      id: "slope",
+      status: worstSlope <= SYSTEM_MAX_SLOPE ? "pass" : "fail",
+      ref: "System AxioForm Flex",
+      params: { slope: worstSlope, limit: SYSTEM_MAX_SLOPE },
+    });
+  }
 
   // 7 — Transportable kit segments.
   const longest = Math.max(0, ...cfg.segments.map((s) => s.length));

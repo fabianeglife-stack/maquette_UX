@@ -39,6 +39,7 @@ const DrawingSVG = forwardRef<SVGSVGElement, Props>(function DrawingSVG({ cfg, d
       top: [number, number, number, number];
       posts: [number, number, number, number][];
       bars: [number, number, number, number][];
+      panels: string[];
       label: { x: number; y: number; text: string; angle: number };
     }[] = [];
 
@@ -64,11 +65,29 @@ const DrawingSVG = forwardRef<SVGSVGElement, Props>(function DrawingSVG({ cfg, d
         return [px, py - cfg.bottomGap * s, px, py - h + 40 * s];
       });
 
+      const panels: string[] = seg.panels.map((p) => {
+        const t0 = Math.hypot(p.a.x - seg.start.x, p.a.z - seg.start.z, p.a.y - cfg.bottomGap - seg.start.y);
+        const f0 = t0 / seg.input.length;
+        const f1 = Math.min(1, (t0 + p.width) / seg.input.length);
+        const gx0 = devX + dx * f0;
+        const gy0 = devY - dy * f0;
+        const gx1 = devX + dx * f1;
+        const gy1 = devY - dy * f1;
+        const top = cfg.handrail === "none" ? h : h - 40 * s;
+        return [
+          `${gx0},${gy0 - cfg.bottomGap * s}`,
+          `${gx1},${gy1 - cfg.bottomGap * s}`,
+          `${gx1},${gy1 - top}`,
+          `${gx0},${gy0 - top}`,
+        ].join(" ");
+      });
+
       elev.push({
         base: [devX, devY, x1, y1],
         top: [devX, devY - h, x1, y1 - h],
         posts,
         bars,
+        panels,
         label: {
           x: (devX + x1) / 2,
           y: devY - dy / 2 + 22,
@@ -127,6 +146,9 @@ const DrawingSVG = forwardRef<SVGSVGElement, Props>(function DrawingSVG({ cfg, d
           <line x1={e.top[0]} y1={e.top[1]} x2={e.top[2]} y2={e.top[3]} stroke={INK} strokeWidth="2.6" />
           {e.bars.map((b, k) => (
             <line key={k} x1={b[0]} y1={b[1]} x2={b[2]} y2={b[3]} stroke={STONE} strokeWidth="0.7" />
+          ))}
+          {e.panels.map((pts, k) => (
+            <polygon key={k} points={pts} fill="#4d6172" fillOpacity="0.09" stroke="#4d6172" strokeOpacity="0.55" strokeWidth="1" />
           ))}
           {e.posts.map((p, k) => (
             <line key={k} x1={p[0]} y1={p[1]} x2={p[2]} y2={p[3]} stroke={INK} strokeWidth="2.2" />
@@ -187,7 +209,7 @@ const DrawingSVG = forwardRef<SVGSVGElement, Props>(function DrawingSVG({ cfg, d
         <text x="560" y={H - 50} fontSize="12" fill={INK}>{date}</text>
         <text x="700" y={H - 68} fontSize="11" fill={STONE}>{labels.config}</text>
         <text x="700" y={H - 50} fontSize="12" fill={INK}>
-          H {cfg.height} · {derived.postCount}P · {derived.barCount}S
+          H {cfg.height} · {cfg.system === "glass" ? `${derived.panelCount} VSG` : `${derived.postCount}P · ${derived.barCount}S`}
         </text>
         <text x="380" y={H - 30} fontSize="10" fill={STONE}>
           {labels.rules}: {SIA_RULES_VERSION} · {PRICEBOOK_VERSION}

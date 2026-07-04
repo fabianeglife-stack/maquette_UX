@@ -25,7 +25,7 @@ export default async function Login({ params }: { params: Promise<{ locale: stri
           <h1 className="text-3xl font-light tracking-tight text-ink md:text-4xl">{d.title}</h1>
           <p className="text-sm font-light leading-relaxed text-graphite">{d.lead}</p>
         </div>
-        <LoginForm dict={d} />
+        <LoginForm dict={d} locale={locale} />
         <p className="mt-8 border-t border-hairline pt-6 text-xs font-light leading-relaxed text-stone">
           {d.b2b}
         </p>
