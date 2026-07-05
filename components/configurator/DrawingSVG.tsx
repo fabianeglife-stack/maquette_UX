@@ -199,9 +199,26 @@ const DrawingSVG = forwardRef<SVGSVGElement, Props>(function DrawingSVG({ cfg, d
         </g>
       ))}
 
+      {/* non-binding watermark: diagonal across the sheet + title-block line */}
+      <text
+        x={W / 2}
+        y={310}
+        fontSize="19"
+        letterSpacing="4"
+        fill="#b04a3a"
+        fillOpacity="0.33"
+        textAnchor="middle"
+        transform={`rotate(-13 ${W / 2} 310)`}
+      >
+        {labels.watermark}
+      </text>
+
       {/* title block */}
       <g>
         <line x1="34" y1={H - 96} x2={W - 34} y2={H - 96} stroke={INK} strokeWidth="1.2" />
+        <text x="34" y={H - 20} fontSize="9.5" fill="#b04a3a">
+          {labels.watermark}
+        </text>
         <text x="34" y={H - 68} fontSize="16" letterSpacing="4" fill={INK} fontWeight="600">
           AXIO<tspan fontWeight="300">FORM</tspan>
         </text>

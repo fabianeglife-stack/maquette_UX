@@ -5,6 +5,30 @@
 
 export type System = "bars" | "glass";
 export type Mounting = "top" | "side";
+/** Which ends of the railing run meet a wall (measurements are taken to the wall). */
+export type WallEnds = "none" | "start" | "end" | "both";
+/** Substrate + fastening situation, à la metallbauXpress "Befestigung". */
+export type Substrate =
+  | "concrete_top"
+  | "concrete_side"
+  | "concrete_side_offset"
+  | "concrete_parapet"
+  | "wood_side"
+  | "stone_top";
+/** Surface finish: hot-dip galvanized base, optionally powder-coated in the chosen RAL. */
+export type Finish = "coated" | "galvanized";
+
+/** Clearance we deduct at each wall connection, mm (customer measures to the wall). */
+export const WALL_CLEARANCE = 50;
+
+export const SUBSTRATE_MOUNTING: Record<Substrate, Mounting> = {
+  concrete_top: "top",
+  concrete_side: "side",
+  concrete_side_offset: "side",
+  concrete_parapet: "side",
+  wood_side: "side",
+  stone_top: "top",
+};
 export type Handrail = "round_steel" | "flat_steel" | "round_inox" | "none";
 export type GlassType = "clear" | "satin" | "tinted";
 export type ColorOption = "ral7016" | "ral9005" | "ral9010" | "custom";
@@ -106,6 +130,12 @@ export interface RailingConfig {
   barClear: number;
   glassType: GlassType;
   mounting: Mounting;
+  /** Wall connections at the run's ends; WALL_CLEARANCE is deducted per wall. */
+  walls?: WallEnds;
+  /** Substrate/fastening situation; implies the mounting position. */
+  substrate?: Substrate;
+  /** Surface finish; "galvanized" skips powder coating (color ignored). */
+  finish?: Finish;
   handrail: Handrail;
   color: ColorOption;
   usage: Usage;
@@ -148,6 +178,9 @@ export function defaultConfig(): RailingConfig {
     barClear: 110,
     glassType: "clear",
     mounting: "top",
+    walls: "none",
+    substrate: "concrete_top",
+    finish: "coated",
     handrail: "round_steel",
     color: "ral7016",
     usage: "residential",

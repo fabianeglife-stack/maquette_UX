@@ -9,6 +9,7 @@ import {
   MAX_PANEL_WIDTH,
   MAX_POST_SPACING,
   PANEL_GAP,
+  WALL_CLEARANCE,
   type RailingConfig,
   type SegmentInput,
   type TypeProfile,
@@ -125,7 +126,18 @@ export function deriveRailing(cfg: RailingConfig, tp?: TypeProfile): DerivedRail
   const barDia = tp?.barDia ?? BAR_DIA;
   const maxPanel = tp?.maxPanelWidth ?? MAX_PANEL_WIDTH;
 
-  cfg.segments.forEach((seg, i) => {
+  // Wall connections: the customer measures to the wall; the fabricated
+  // element is shorter by the wall clearance at each connected end.
+  const walls = cfg.walls ?? "none";
+  const last = cfg.segments.length - 1;
+  const effSegments: SegmentInput[] = cfg.segments.map((s, i) => {
+    let len = s.length;
+    if ((walls === "start" || walls === "both") && i === 0) len -= WALL_CLEARANCE;
+    if ((walls === "end" || walls === "both") && i === last) len -= WALL_CLEARANCE;
+    return len === s.length ? s : { ...s, length: Math.max(250, len) };
+  });
+
+  effSegments.forEach((seg, i) => {
     if (i > 0) heading += seg.angle;
     const slope = seg.stair ? seg.slope : 0;
     const dir: Vec3 = {
@@ -344,8 +356,8 @@ export function deriveRailing(cfg: RailingConfig, tp?: TypeProfile): DerivedRail
     }
   }
 
-  const totalLength = cfg.segments.reduce((s, x) => s + x.length, 0);
-  const slopedLength = cfg.segments.reduce((s, x) => s + (x.stair ? x.length : 0), 0);
+  const totalLength = effSegments.reduce((s, x) => s + x.length, 0);
+  const slopedLength = effSegments.reduce((s, x) => s + (x.stair ? x.length : 0), 0);
   const postCount = segments.reduce((s, x) => s + x.posts.length, 0);
   const barCount = segments.reduce((s, x) => s + x.bars.length, 0);
   const railCount = segments.reduce((s, x) => s + x.rails.length, 0);

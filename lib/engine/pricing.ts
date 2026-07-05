@@ -21,6 +21,17 @@ export interface PriceBook {
   colorPerM: { ral7016: number; ral9005: number; ral9010: number; custom: number };
   stairPerM: number;
   sideMountPerM: number;
+  /** Delta for hot-dip-galvanized-only (no powder coating), CHF/m — typically negative. */
+  galvanizedPerM: number;
+  /** Substrate/fastening surcharges, CHF/m. */
+  substratePerM: {
+    concrete_top: number;
+    concrete_side: number;
+    concrete_side_offset: number;
+    concrete_parapet: number;
+    wood_side: number;
+    stone_top: number;
+  };
   publicUsagePerM: number;
   cornerEach: number;
   cornerEachGlass: number;
@@ -40,6 +51,8 @@ export const defaultPriceBook: PriceBook = {
   colorPerM: { ral7016: 0, ral9005: 0, ral9010: 0, custom: 12 },
   stairPerM: 80,
   sideMountPerM: 25,
+  galvanizedPerM: -15,
+  substratePerM: { concrete_top: 0, concrete_side: 0, concrete_side_offset: 8, concrete_parapet: 14, wood_side: 0, stone_top: 18 },
   publicUsagePerM: 15,
   cornerEach: 35,
   cornerEachGlass: 55,
@@ -102,12 +115,21 @@ export function priceRailing(
     }
   }
 
-  const col = pb.colorPerM[cfg.color];
-  if (col > 0) {
-    lines.push({ id: "color_custom", qty: r2(m), unit: "m", unitPrice: col, total: r2(m * col), params: {} });
+  // Finish: galvanized-only skips the powder coating (and any colour surcharge).
+  if (cfg.finish === "galvanized") {
+    lines.push({ id: "finish_galvanized", qty: r2(m), unit: "m", unitPrice: pb.galvanizedPerM, total: r2(m * pb.galvanizedPerM), params: {} });
+  } else {
+    const col = pb.colorPerM[cfg.color];
+    if (col > 0) {
+      lines.push({ id: "color_custom", qty: r2(m), unit: "m", unitPrice: col, total: r2(m * col), params: {} });
+    }
   }
   if (cfg.mounting === "side") {
     lines.push({ id: "side_mount", qty: r2(m), unit: "m", unitPrice: pb.sideMountPerM, total: r2(m * pb.sideMountPerM), params: {} });
+  }
+  const subPerM = pb.substratePerM[cfg.substrate ?? "concrete_top"] ?? 0;
+  if (subPerM > 0) {
+    lines.push({ id: `substrate_${cfg.substrate}`, qty: r2(m), unit: "m", unitPrice: subPerM, total: r2(m * subPerM), params: {} });
   }
   if (cfg.usage === "public") {
     lines.push({ id: "public", qty: r2(m), unit: "m", unitPrice: pb.publicUsagePerM, total: r2(m * pb.publicUsagePerM), params: {} });

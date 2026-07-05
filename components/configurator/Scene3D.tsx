@@ -146,7 +146,8 @@ const GLASS: Record<RailingConfig["glassType"], { color: string; opacity: number
 };
 
 function Railing({ cfg, derived, tp }: { cfg: RailingConfig; derived: DerivedRailing; tp?: TypeProfile }) {
-  const color = RAL[cfg.color];
+  // Galvanized-only finish renders as zinc grey regardless of the RAL choice.
+  const color = cfg.finish === "galvanized" ? "#a6abae" : RAL[cfg.color];
   const hrColor = cfg.handrail === "round_inox" ? INOX : color;
   const slabColor = "#dddad2";
   const glass = GLASS[cfg.glassType];

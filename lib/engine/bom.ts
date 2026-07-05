@@ -15,6 +15,18 @@ export interface BomLine {
 
 const r1 = (n: number) => Math.round(n * 10) / 10;
 
+/** Anchor spec depends on the substrate (wood screws, composite anchors in stone). */
+function anchorSpec(cfg: RailingConfig): string {
+  switch (cfg.substrate) {
+    case "wood_side":
+      return "10×140 mm";
+    case "stone_top":
+      return "M12 Verbund / scellement";
+    default:
+      return "M12";
+  }
+}
+
 export function buildBom(cfg: RailingConfig, derived: DerivedRailing, tp?: TypeProfile): BomLine[] {
   const lines: BomLine[] = [];
   const m = r1(derived.totalLength / 1000);
@@ -107,10 +119,10 @@ export function buildBom(cfg: RailingConfig, derived: DerivedRailing, tp?: TypeP
     if (recipe.post.profile !== "none") {
       const plateSize = Math.max(100, Math.round(recipe.post.size * 2.2 / 10) * 10);
       lines.push({ id: "basePlate", qty: plateCount, unit: "pc", detail: `${plateSize}×${plateSize}×8 mm` });
-      lines.push({ id: "anchors", qty: plateCount * (cfg.mounting === "side" ? 3 : 4), unit: "pc", detail: "M12" });
+      lines.push({ id: "anchors", qty: plateCount * (cfg.mounting === "side" ? 3 : 4), unit: "pc", detail: anchorSpec(cfg) });
     } else {
       lines.push({ id: "baseProfile", qty: m, unit: "m", detail: cfg.mounting === "side" ? "seitlich / lateral" : "aufgesetzt / top" });
-      lines.push({ id: "anchors", qty: Math.ceil(derived.totalLength / 300), unit: "pc", detail: "M12, e=300 mm" });
+      lines.push({ id: "anchors", qty: Math.ceil(derived.totalLength / 300), unit: "pc", detail: anchorSpec(cfg) + ", e=300 mm" });
     }
     if (tensionerCount > 0) lines.push({ id: "tensioner", qty: tensionerCount, unit: "pc", detail: "M8 inox" });
     if (capCount > 0) lines.push({ id: "postCap", qty: capCount, unit: "pc", detail: recipe.post.profile === "round" ? `Ø ${recipe.post.size} mm` : `${recipe.post.size}×${recipe.post.size} mm` });
@@ -131,7 +143,7 @@ export function buildBom(cfg: RailingConfig, derived: DerivedRailing, tp?: TypeP
     });
     lines.push({ id: "handrailPart", qty: m, unit: "m", detail: cfg.handrail === "flat_steel" ? "60×8 mm" : "Ø 42 mm" });
     lines.push({ id: "bottomRail", qty: m, unit: "m", detail: "30×8 mm" });
-    lines.push({ id: "anchors", qty: derived.postCount * (cfg.mounting === "side" ? 3 : 2), unit: "pc", detail: "M12" });
+    lines.push({ id: "anchors", qty: derived.postCount * (cfg.mounting === "side" ? 3 : 2), unit: "pc", detail: anchorSpec(cfg) });
   } else {
     // Group panels by rounded width for the cut list.
     const groups = new Map<number, number>();
@@ -151,7 +163,7 @@ export function buildBom(cfg: RailingConfig, derived: DerivedRailing, tp?: TypeP
     lines.push({ id: "baseProfile", qty: m, unit: "m", detail: cfg.mounting === "side" ? "seitlich / lateral" : "aufgesetzt / top" });
     if (cfg.handrail !== "none") lines.push({ id: "handrailPart", qty: m, unit: "m", detail: "Ø 42 mm inox" });
     lines.push({ id: "gaskets", qty: derived.panelCount, unit: "set", detail: `${PANEL_GAP} mm` });
-    lines.push({ id: "anchors", qty: Math.ceil(derived.totalLength / 300), unit: "pc", detail: "M12, e=300 mm" });
+    lines.push({ id: "anchors", qty: Math.ceil(derived.totalLength / 300), unit: "pc", detail: anchorSpec(cfg) + ", e=300 mm" });
   }
 
   lines.push({ id: "fixings", qty: 1, unit: "set", detail: "" });

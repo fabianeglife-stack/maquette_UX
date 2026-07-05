@@ -27,6 +27,11 @@ export async function POST(req: Request) {
   if (!body?.config || !body?.customer || !["order", "quote"].includes(body.kind)) {
     return NextResponse.json({ error: "invalid_input" }, { status: 400 });
   }
+  // Launch policy: direct orders are disabled — everything runs through a
+  // reviewed quote. Set ALLOW_DIRECT_ORDERS=1 to re-enable.
+  if (body.kind === "order" && process.env.ALLOW_DIRECT_ORDERS !== "1") {
+    return NextResponse.json({ error: "quote_only" }, { status: 403 });
+  }
   const cfg = body.config as RailingConfig;
   // Server-authoritative: the type comes from the database (builtins → stored
   // custom types → template fallback) and the price book is the published

@@ -214,6 +214,33 @@ describe("recipe engine (type designer)", () => {
   });
 });
 
+describe("situation parameters (walls, substrate, finish)", () => {
+  it("deducts the 5 cm wall clearance from connected ends", () => {
+    const cfg = { ...defaultConfig(), walls: "start" as const };
+    expect(deriveRailing(cfg, barsType).totalLength).toBe(4950);
+    const both = { ...defaultConfig(), walls: "both" as const };
+    expect(deriveRailing(both, barsType).totalLength).toBe(4900);
+    expect(deriveRailing(defaultConfig(), barsType).totalLength).toBe(5000);
+  });
+
+  it("prices galvanized-only as a deduction and skips the colour surcharge", () => {
+    const cfg = { ...defaultConfig(), finish: "galvanized" as const, color: "custom" as const };
+    const p = priceRailing(cfg, deriveRailing(cfg, barsType), defaultPriceBook, barsType);
+    expect(p.lines.find((l) => l.id === "finish_galvanized")?.total).toBeLessThan(0);
+    expect(p.lines.find((l) => l.id === "color_custom")).toBeUndefined();
+  });
+
+  it("prices substrate surcharges and adapts the anchor spec", () => {
+    const cfg = { ...defaultConfig(), substrate: "stone_top" as const };
+    const d = deriveRailing(cfg, barsType);
+    const p = priceRailing(cfg, d, defaultPriceBook, barsType);
+    expect(p.lines.some((l) => l.id === "substrate_stone_top")).toBe(true);
+    expect(buildBom(cfg, d, barsType).find((l) => l.id === "anchors")?.detail).toContain("Verbund");
+    const wood = { ...defaultConfig(), substrate: "wood_side" as const, mounting: "side" as const };
+    expect(buildBom(wood, deriveRailing(wood, barsType), barsType).find((l) => l.id === "anchors")?.detail).toContain("10×140");
+  });
+});
+
 describe("SIA 358 rules engine", () => {
   it("passes the default configuration", () => {
     const cfg = defaultConfig();

@@ -7,7 +7,17 @@ import { downloadDrawingPdf } from "./pdf";
 import { deriveRailing } from "@/lib/engine/geometry";
 import { evaluateSia, siaSummary, type RuleStatus } from "@/lib/engine/sia";
 import { chf, defaultPriceBook, priceRailing, type PriceBook } from "@/lib/engine/pricing";
-import { builtinTypes, defaultConfig, infillKindOf, newSegment, normalizeForType, type RailingConfig, type TypeProfile } from "@/lib/engine/types";
+import {
+  builtinTypes,
+  defaultConfig,
+  infillKindOf,
+  newSegment,
+  normalizeForType,
+  SUBSTRATE_MOUNTING,
+  type RailingConfig,
+  type Substrate,
+  type TypeProfile,
+} from "@/lib/engine/types";
 import {
   decodeConfig,
   encodeConfig,
@@ -31,6 +41,10 @@ const Scene3D = dynamic(() => import("./Scene3D"), {
 type CfgDict = Dict["cfg"];
 
 const STORAGE_KEY = "axioform-config-v1";
+
+// Launch mode: everything goes through a reviewed quote — no direct orders.
+// Set NEXT_PUBLIC_QUOTE_ONLY=0 to re-enable direct ordering later.
+const QUOTE_ONLY = process.env.NEXT_PUBLIC_QUOTE_ONLY !== "0";
 
 function fmt(tpl: string, params: Record<string, string | number>): string {
   return tpl.replace(/\{(\w+)\}/g, (_, k) => String(params[k] ?? ""));
@@ -290,7 +304,7 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
           href="#cta"
           className="inline-flex items-center justify-center bg-ink px-5 py-3 text-xs font-medium uppercase tracking-[0.14em] text-paper"
         >
-          {t.buy}
+          {QUOTE_ONLY ? t.quote : t.buy}
         </a>
       </div>
 
@@ -405,6 +419,23 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
             + {t.addSegment}
           </button>
 
+          <div className="flex flex-col gap-2 pt-1">
+            <Pills
+              label={t.walls}
+              value={cfg.walls ?? "none"}
+              options={[
+                { v: "none" as const, l: t.wallsNone },
+                { v: "start" as const, l: t.wallsStart },
+                { v: "end" as const, l: t.wallsEnd },
+                { v: "both" as const, l: t.wallsBoth },
+              ]}
+              onChange={(v) => set({ walls: v })}
+            />
+            {(cfg.walls ?? "none") !== "none" && (
+              <p className="text-[11px] font-light leading-relaxed text-stone">{t.wallsNote}</p>
+            )}
+          </div>
+
           <div className="grid grid-cols-2 gap-3 pt-1">
             <Num label={t.height} value={cfg.height} min={800} max={1400} onChange={(v) => set({ height: v })} />
             <Num label={t.bottomGap} value={cfg.bottomGap} min={20} max={200} onChange={(v) => set({ bottomGap: v })} />
@@ -422,13 +453,26 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
             {t.stepOptions}
           </h2>
           <Pills
-            label={t.mounting}
-            value={cfg.mounting}
+            label={t.substrate}
+            value={cfg.substrate ?? "concrete_top"}
             options={[
-              { v: "top", l: t.mountingTop },
-              { v: "side", l: t.mountingSide },
+              { v: "concrete_top" as Substrate, l: t.substrates.concrete_top },
+              { v: "concrete_side" as Substrate, l: t.substrates.concrete_side },
+              { v: "concrete_side_offset" as Substrate, l: t.substrates.concrete_side_offset },
+              { v: "concrete_parapet" as Substrate, l: t.substrates.concrete_parapet },
+              { v: "wood_side" as Substrate, l: t.substrates.wood_side },
+              { v: "stone_top" as Substrate, l: t.substrates.stone_top },
             ]}
-            onChange={(v) => set({ mounting: v })}
+            onChange={(v) => set({ substrate: v, mounting: SUBSTRATE_MOUNTING[v] })}
+          />
+          <Pills
+            label={t.finish}
+            value={cfg.finish ?? "coated"}
+            options={[
+              { v: "coated" as const, l: t.finishCoated },
+              { v: "galvanized" as const, l: t.finishGalvanized },
+            ]}
+            onChange={(v) => set({ finish: v })}
           />
           {!tp.recipe && (
             <Pills
@@ -461,17 +505,19 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
               onChange={(v) => set({ glassType: v })}
             />
           )}
-          <Pills
-            label={t.color}
-            value={cfg.color}
-            options={[
-              { v: "ral7016", l: t.colors.ral7016 },
-              { v: "ral9005", l: t.colors.ral9005 },
-              { v: "ral9010", l: t.colors.ral9010 },
-              { v: "custom", l: t.colors.custom },
-            ]}
-            onChange={(v) => set({ color: v })}
-          />
+          {(cfg.finish ?? "coated") === "coated" && (
+            <Pills
+              label={t.color}
+              value={cfg.color}
+              options={[
+                { v: "ral7016", l: t.colors.ral7016 },
+                { v: "ral9005", l: t.colors.ral9005 },
+                { v: "ral9010", l: t.colors.ral9010 },
+                { v: "custom", l: t.colors.custom },
+              ]}
+              onChange={(v) => set({ color: v })}
+            />
+          )}
           <Pills
             label={t.usage}
             value={cfg.usage}
@@ -523,28 +569,35 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
               <span className="text-sm text-ink">{t.gross}</span>
               <span className="text-xl font-light tracking-tight text-ink">{chf(price.gross)}</span>
             </div>
+            <p className="pt-1 text-[11px] font-light leading-relaxed text-stone">{t.priceNote}</p>
           </div>
 
           <div className="flex flex-col gap-3">
             <div className="flex flex-wrap gap-3">
-              <button
-                type="button"
-                disabled={overall === "fail"}
-                onClick={() => {
-                  setPanel(null);
-                  setCheckout("order");
-                }}
-                className="inline-flex items-center justify-center bg-ink px-5 py-3.5 text-xs font-medium uppercase tracking-[0.16em] text-paper transition-colors hover:bg-graphite disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {t.buy}
-              </button>
+              {!QUOTE_ONLY && (
+                <button
+                  type="button"
+                  disabled={overall === "fail"}
+                  onClick={() => {
+                    setPanel(null);
+                    setCheckout("order");
+                  }}
+                  className="inline-flex items-center justify-center bg-ink px-5 py-3.5 text-xs font-medium uppercase tracking-[0.16em] text-paper transition-colors hover:bg-graphite disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {t.buy}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => {
                   setPanel(null);
                   setCheckout("quote");
                 }}
-                className="inline-flex items-center justify-center border border-ink/25 px-5 py-3.5 text-xs font-medium uppercase tracking-[0.16em] text-ink transition-colors hover:border-ink"
+                className={
+                  QUOTE_ONLY
+                    ? "inline-flex items-center justify-center bg-ink px-5 py-3.5 text-xs font-medium uppercase tracking-[0.16em] text-paper transition-colors hover:bg-graphite"
+                    : "inline-flex items-center justify-center border border-ink/25 px-5 py-3.5 text-xs font-medium uppercase tracking-[0.16em] text-ink transition-colors hover:border-ink"
+                }
               >
                 {t.quote}
               </button>
@@ -556,7 +609,11 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
                 ↓ {t.downloadPdf}
               </button>
             </div>
-            {overall === "fail" && <p className="text-xs font-light text-[#b04a3a]">{t.buyBlocked}</p>}
+            {QUOTE_ONLY ? (
+              <p className="text-xs font-light text-stone">{t.quoteOnlyNote}</p>
+            ) : (
+              overall === "fail" && <p className="text-xs font-light text-[#b04a3a]">{t.buyBlocked}</p>
+            )}
 
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
               {saveOpen ? (
