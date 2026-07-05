@@ -273,7 +273,23 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
   const lineText: Record<string, string> = t.priceLines;
 
   return (
-    <div className="grid gap-10 lg:grid-cols-[420px_1fr]">
+    <div className="grid gap-10 pb-16 lg:grid-cols-[420px_1fr] lg:pb-0">
+      {/* ---------- mobile: sticky summary bar ---------- */}
+      <div className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-between gap-4 border-t border-hairline bg-paper/95 px-5 py-3 backdrop-blur lg:hidden">
+        <div className="flex flex-col">
+          <span className="text-lg font-light tracking-tight text-ink">{chf(price.gross)}</span>
+          <span className="text-[10px] font-medium uppercase tracking-[0.12em]" style={{ color: STATUS_COLOR[overall] }}>
+            {t.siaBadge[overall]}
+          </span>
+        </div>
+        <a
+          href="#cta"
+          className="inline-flex items-center justify-center bg-ink px-5 py-3 text-xs font-medium uppercase tracking-[0.14em] text-paper"
+        >
+          {t.buy}
+        </a>
+      </div>
+
       {/* ---------- left: steps ---------- */}
       <div className="flex flex-col gap-10">
         {/* 1 — system */}
@@ -460,7 +476,7 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
         </section>
 
         {/* 4 — SIA + price */}
-        <section className="flex flex-col gap-5">
+        <section id="cta" className="flex scroll-mt-24 flex-col gap-5">
           <h2 className="flex items-baseline gap-4 border-t border-ink/60 pt-4 text-base font-normal text-ink">
             <span className="text-xs text-stone">04</span>
             {t.stepSummary}
@@ -631,8 +647,8 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
         </section>
       </div>
 
-      {/* ---------- right: viewport ---------- */}
-      <div className="flex flex-col gap-4 self-start lg:sticky lg:top-24">
+      {/* ---------- right: viewport (first on mobile) ---------- */}
+      <div className="order-first flex flex-col gap-4 self-start lg:order-none lg:sticky lg:top-24">
         <div className="flex items-center justify-between">
           <div className="flex gap-px bg-hairline">
             {(
