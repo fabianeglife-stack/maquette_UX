@@ -8,20 +8,28 @@
     "start": "next start",
     "lint": "next lint",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "postinstall": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:seed": "node prisma/seed.mjs"
   },
   "dependencies": {
+    "@prisma/client": "^6.19.3",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.6.1",
+    "bcryptjs": "^3.0.3",
     "geist": "^1.7.2",
+    "jose": "^6.2.3",
     "jspdf": "^4.2.1",
     "next": "^15.3.4",
+    "prisma": "^6.19.3",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "three": "^0.185.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.10",
+    "@types/bcryptjs": "^2.4.6",
     "@types/node": "^22.15.0",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",

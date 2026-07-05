@@ -21,6 +21,7 @@ import {
   tierFor,
   type Order,
 } from "@/lib/store";
+import { api, hasBackend } from "@/lib/api";
 import type { Dict } from "@/lib/i18n";
 import Link from "next/link";
 
@@ -233,7 +234,11 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
     }
     setPb(loadPriceBook());
     setTypes(loadAllTypes());
-    setDiscount(TIER_DISCOUNT[tierFor(getSession()?.email)]);
+    if (hasBackend) {
+      api.me().then((u) => setDiscount(TIER_DISCOUNT[u?.tier ?? "standard"])).catch(() => {});
+    } else {
+      setDiscount(TIER_DISCOUNT[tierFor(getSession()?.email)]);
+    }
     setLoaded(true);
   }, []);
 
@@ -606,6 +611,18 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
                 kind={checkout}
                 onCancel={() => setCheckout(null)}
                 onSubmit={(customer, payment) => {
+                  if (hasBackend) {
+                    // The server recomputes geometry, SIA and price — the
+                    // client total is display-only.
+                    api
+                      .createOrder({ kind: checkout, config: cfg, typeProfile: tp, customer, payment })
+                      .then((order) => {
+                        setCheckout(null);
+                        setPanel({ kind: checkout, ref: order.ref });
+                      })
+                      .catch(() => setPanel(null));
+                    return;
+                  }
                   const ref = newRef();
                   const order: Order = {
                     ref,

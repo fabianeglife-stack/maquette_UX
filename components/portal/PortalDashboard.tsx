@@ -23,6 +23,7 @@ import {
   type SavedConfig,
 } from "@/lib/store";
 import type { Dict } from "@/lib/i18n";
+import { api, hasBackend } from "@/lib/api";
 
 function StatusSteps({
   status,
@@ -93,8 +94,12 @@ function OrderCard({
           <button
             type="button"
             onClick={() => {
-              acceptQuote(order.ref);
-              onRefresh();
+              if (hasBackend) {
+                api.patchOrder(order.ref, { accept: true }).then(onRefresh).catch(() => {});
+              } else {
+                acceptQuote(order.ref);
+                onRefresh();
+              }
             }}
             className="self-start bg-ink px-4 py-2.5 text-[11px] font-medium uppercase tracking-[0.14em] text-paper transition-colors hover:bg-graphite"
           >
@@ -149,13 +154,27 @@ export default function PortalDashboard({
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    setSess(getSession());
-    setOrders(loadOrders());
     setSaved(loadSavedConfigs());
-    setReady(true);
+    if (hasBackend) {
+      api
+        .me()
+        .then(async (u) => {
+          setSess(u ? { email: u.email } : null);
+          if (u) setOrders(await api.listOrders());
+        })
+        .catch(() => setSess(null))
+        .finally(() => setReady(true));
+    } else {
+      setSess(getSession());
+      setOrders(loadOrders());
+      setReady(true);
+    }
   }, []);
 
-  const refresh = () => setOrders(loadOrders());
+  const refresh = () => {
+    if (hasBackend) api.listOrders().then(setOrders).catch(() => {});
+    else setOrders(loadOrders());
+  };
 
   if (!ready) return null;
 
@@ -192,6 +211,7 @@ export default function PortalDashboard({
           <button
             type="button"
             onClick={() => {
+              if (hasBackend) api.logout().catch(() => {});
               clearSession();
               setSess(null);
             }}

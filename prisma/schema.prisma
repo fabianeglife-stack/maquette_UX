@@ -1,0 +1,80 @@
+// AxioForm production data model — SQLite for local/dev, switch the
+// datasource provider to "postgresql" for hosted deployments (see
+// docs/DEPLOYMENT.md).
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  role         String   @default("customer") // customer | admin
+  tier         String   @default("standard") // standard | partner | pro
+  createdAt    DateTime @default(now())
+  orders       Order[]
+  configs      SavedConfig[]
+}
+
+model Order {
+  id               String   @id @default(cuid())
+  ref              String   @unique
+  kind             String // order | quote
+  status           String
+  createdAt        DateTime @default(now())
+  customerName     String
+  email            String
+  street           String
+  city             String
+  payment          String?
+  system           String // bars | glass
+  lengthM          Float
+  gross            Float
+  quotedGross      Float?
+  configJson       String? // RailingConfig snapshot
+  priceBookVersion String?
+  rulesVersion     String?
+  user             User?    @relation(fields: [userId], references: [id])
+  userId           String?
+  events           OrderEvent[]
+}
+
+model OrderEvent {
+  id      String   @id @default(cuid())
+  order   Order    @relation(fields: [orderRef], references: [ref])
+  orderRef String
+  type    String
+  emailTo String?
+  at      DateTime @default(now())
+}
+
+model PriceBook {
+  id        String   @id @default(cuid())
+  version   String
+  json      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+model GuardrailType {
+  id        String   @id
+  json      String // TypeProfile snapshot
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+model SavedConfig {
+  id         String   @id @default(cuid())
+  name       String
+  configJson String
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id])
+  userId     String
+}

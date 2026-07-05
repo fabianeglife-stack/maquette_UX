@@ -31,9 +31,14 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
+      # The Pages demo is the static prototype: no API routes, browser-local
+      # data. The production server build keeps app/api (see docs/DEPLOYMENT.md).
+      - name: Strip server API for static export
+        run: rm -rf app/api
       - name: Build static export
         run: npm run build
         env:
+          STATIC_EXPORT: "1"
           NEXT_PUBLIC_BASE_PATH: /${{ github.event.repository.name }}
       - name: Setup Pages
         uses: actions/configure-pages@v5

@@ -32,6 +32,7 @@ import {
   type Tier,
 } from "@/lib/store";
 import type { Dict } from "@/lib/i18n";
+import { api, hasBackend, type ApiOrder } from "@/lib/api";
 import Link from "next/link";
 
 type AdminDict = Dict["admin"];
@@ -70,7 +71,10 @@ function DashboardTab({
   cfgDict: Dict["cfg"];
 }) {
   const [orders, setOrders] = useState<Order[]>([]);
-  useEffect(() => setOrders(loadOrders()), []);
+  useEffect(() => {
+    if (hasBackend) api.listOrders().then(setOrders).catch(() => setOrders([]));
+    else setOrders(loadOrders());
+  }, []);
 
   const real = orders.filter((o) => o.kind === "order");
   const quotes = orders.filter((o) => o.kind === "quote");
@@ -135,7 +139,7 @@ function DashboardTab({
 /* ---------- orders tab ---------- */
 
 function EventLog({ order, t, statusLabels }: { order: Order; t: AdminDict; statusLabels: Dict["portal"]["status"] }) {
-  const events = loadEvents(order.ref);
+  const events = hasBackend ? ((order as ApiOrder).events ?? []) : loadEvents(order.ref);
   const label = (e: OrderEvent) =>
     e.type === "created" ? t.events.created : e.type === "quote_accepted" ? t.events.quote_accepted : statusLabels[e.type];
 
@@ -216,9 +220,17 @@ function OrdersTable({ t, statusLabels, cfgDict }: { t: AdminDict; statusLabels:
   const [open, setOpen] = useState<string | null>(null);
   const [quoteDraft, setQuoteDraft] = useState<Record<string, string>>({});
 
-  useEffect(() => setOrders(loadOrders()), []);
+  const refresh = () => {
+    if (hasBackend) api.listOrders().then(setOrders).catch(() => setOrders([]));
+    else setOrders(loadOrders());
+  };
+  useEffect(refresh, []);
 
   const advance = (ref: string, status: OrderStatus) => {
+    if (hasBackend) {
+      api.patchOrder(ref, { status }).then(refresh).catch(() => {});
+      return;
+    }
     updateOrderStatus(ref, status);
     setOrders(loadOrders());
   };
@@ -226,6 +238,10 @@ function OrdersTable({ t, statusLabels, cfgDict }: { t: AdminDict; statusLabels:
   const sendQuote = (o: Order) => {
     const v = Number(quoteDraft[o.ref] ?? Math.round(o.gross));
     if (!Number.isFinite(v) || v <= 0) return;
+    if (hasBackend) {
+      api.patchOrder(o.ref, { quotedGross: v }).then(refresh).catch(() => {});
+      return;
+    }
     updateOrder(o.ref, { status: "quoted", quotedGross: v });
     logEvent(o.ref, "quoted", o.customer.email);
     setOrders(loadOrders());
@@ -339,11 +355,23 @@ function OrdersTable({ t, statusLabels, cfgDict }: { t: AdminDict; statusLabels:
 function CustomersTab({ t }: { t: AdminDict }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [tiers, setTiers] = useState<Record<string, Tier>>({});
+  const [apiCustomers, setApiCustomers] = useState<{ name: string; city: string; email: string; orders: number; quotes: number; revenue: number; tier: Tier }[]>([]);
 
-  useEffect(() => {
-    setOrders(loadOrders());
-    setTiers(loadTiers());
-  }, []);
+  const refresh = () => {
+    if (hasBackend) {
+      api
+        .listCustomers()
+        .then((cs) => {
+          setApiCustomers(cs);
+          setTiers(Object.fromEntries(cs.map((c) => [c.email.toLowerCase(), c.tier])));
+        })
+        .catch(() => setApiCustomers([]));
+    } else {
+      setOrders(loadOrders());
+      setTiers(loadTiers());
+    }
+  };
+  useEffect(refresh, []);
 
   const byEmail = new Map<string, { name: string; city: string; email: string; orders: number; quotes: number; revenue: number }>();
   orders.forEach((o) => {
@@ -357,9 +385,13 @@ function CustomersTab({ t }: { t: AdminDict }) {
     }
     byEmail.set(key, c);
   });
-  const customers = [...byEmail.values()].sort((a, b) => b.revenue - a.revenue);
+  const customers = hasBackend ? apiCustomers : [...byEmail.values()].sort((a, b) => b.revenue - a.revenue);
 
   const assign = (email: string, tier: Tier) => {
+    if (hasBackend) {
+      api.setTier(email, tier).then(refresh).catch(() => {});
+      return;
+    }
     setTier(email, tier);
     setTiers(loadTiers());
   };
