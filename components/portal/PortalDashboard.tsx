@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import DrawingSVG from "@/components/configurator/DrawingSVG";
 import { downloadDrawingPdf } from "@/components/configurator/pdf";
+import { downloadInvoicePdf } from "./invoice";
 import { deriveRailing } from "@/lib/engine/geometry";
 import { chf } from "@/lib/engine/pricing";
 import { findType } from "@/lib/store";
@@ -102,19 +103,32 @@ function OrderCard({
           <p className="text-[11px] font-light leading-relaxed text-stone">{t.acceptNote}</p>
         </div>
       )}
-      {order.config && derived && (
-        <>
+      <div className="flex flex-wrap gap-x-5 gap-y-1">
+        {order.config && derived && (
           <button
             type="button"
             onClick={() => svgRef.current && downloadDrawingPdf(svgRef.current, `axioform-${order.ref}.pdf`)}
-            className="self-start text-xs uppercase tracking-[0.12em] text-graphite underline-offset-4 hover:text-ink hover:underline"
+            className="text-xs uppercase tracking-[0.12em] text-graphite underline-offset-4 hover:text-ink hover:underline"
           >
             ↓ {t.drawingPdf}
           </button>
-          <div className="hidden">
-            <DrawingSVG ref={svgRef} cfg={order.config} derived={derived} labels={cfgDict.drawing} refNo={order.ref} />
-          </div>
-        </>
+        )}
+        {order.kind === "order" && (
+          <button
+            type="button"
+            onClick={() =>
+              downloadInvoicePdf(order, t.invoice, order.system === "glass" ? cfgDict.systemGlass : cfgDict.systemBars)
+            }
+            className="text-xs uppercase tracking-[0.12em] text-graphite underline-offset-4 hover:text-ink hover:underline"
+          >
+            ↓ {t.invoicePdf}
+          </button>
+        )}
+      </div>
+      {order.config && derived && (
+        <div className="hidden">
+          <DrawingSVG ref={svgRef} cfg={order.config} derived={derived} labels={cfgDict.drawing} refNo={order.ref} />
+        </div>
       )}
     </div>
   );

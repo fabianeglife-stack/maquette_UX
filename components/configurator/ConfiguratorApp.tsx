@@ -8,7 +8,19 @@ import { deriveRailing } from "@/lib/engine/geometry";
 import { evaluateSia, siaSummary, type RuleStatus } from "@/lib/engine/sia";
 import { chf, defaultPriceBook, priceRailing, type PriceBook } from "@/lib/engine/pricing";
 import { builtinTypes, defaultConfig, newSegment, normalizeForType, type RailingConfig, type TypeProfile } from "@/lib/engine/types";
-import { decodeConfig, encodeConfig, loadAllTypes, loadPriceBook, newRef, saveOrder, saveSavedConfig, type Order } from "@/lib/store";
+import {
+  decodeConfig,
+  encodeConfig,
+  getSession,
+  loadAllTypes,
+  loadPriceBook,
+  newRef,
+  saveOrder,
+  saveSavedConfig,
+  TIER_DISCOUNT,
+  tierFor,
+  type Order,
+} from "@/lib/store";
 import type { Dict } from "@/lib/i18n";
 import Link from "next/link";
 
@@ -199,6 +211,7 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
   const [loaded, setLoaded] = useState(false);
   const [saveOpen, setSaveOpen] = useState(false);
   const [saveName, setSaveName] = useState("");
+  const [discount, setDiscount] = useState(0);
   const [shareMsg, setShareMsg] = useState<"saved" | "copied" | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
 
@@ -220,6 +233,7 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
     }
     setPb(loadPriceBook());
     setTypes(loadAllTypes());
+    setDiscount(TIER_DISCOUNT[tierFor(getSession()?.email)]);
     setLoaded(true);
   }, []);
 
@@ -249,7 +263,7 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
   const derived = useMemo(() => deriveRailing(cfg, tp), [cfg, tp]);
   const sia = useMemo(() => evaluateSia(cfg, derived, tp), [cfg, derived, tp]);
   const overall = siaSummary(sia);
-  const price = useMemo(() => priceRailing(cfg, derived, pb, tp), [cfg, derived, pb, tp]);
+  const price = useMemo(() => priceRailing(cfg, derived, pb, tp, discount), [cfg, derived, pb, tp, discount]);
 
   const set = (patch: Partial<RailingConfig>) => setCfg((c) => ({ ...c, ...patch }));
   const setSeg = (id: string, patch: Partial<RailingConfig["segments"][number]>) =>

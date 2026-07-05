@@ -73,6 +73,8 @@ export function priceRailing(
   derived: DerivedRailing,
   pb: PriceBook = defaultPriceBook,
   tp?: TypeProfile,
+  /** B2B trade discount (0–1), applied to goods before shipping and VAT. */
+  discountRate = 0,
 ): PriceResult {
   const m = derived.totalLength / 1000;
   const stairM = derived.slopedLength / 1000;
@@ -116,7 +118,19 @@ export function priceRailing(
   }
   lines.push({ id: "setup", qty: 1, unit: "flat", unitPrice: pb.setupFee, total: pb.setupFee, params: {} });
 
-  const netBeforeShipping = lines.reduce((s, l) => s + l.total, 0);
+  let netBeforeShipping = lines.reduce((s, l) => s + l.total, 0);
+  if (discountRate > 0) {
+    const rebate = r2(-netBeforeShipping * discountRate);
+    lines.push({
+      id: "b2b_discount",
+      qty: 1,
+      unit: "flat",
+      unitPrice: rebate,
+      total: rebate,
+      params: { pct: Math.round(discountRate * 100) },
+    });
+    netBeforeShipping += rebate;
+  }
   const shipping = netBeforeShipping >= pb.freeShippingFrom ? 0 : pb.shippingFlat;
   lines.push({ id: "shipping", qty: 1, unit: "flat", unitPrice: shipping, total: shipping, params: { weight: derived.weightKg } });
 

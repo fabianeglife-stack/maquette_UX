@@ -170,6 +170,34 @@ export function deleteCustomType(id: string): void {
   localStorage.setItem(TYPES_KEY, JSON.stringify(loadCustomTypes().filter((t) => t.id !== id)));
 }
 
+/* ---------- B2B trade tiers ---------- */
+
+const TIERS_KEY = "axioform-tiers-v1";
+
+export type Tier = "standard" | "partner" | "pro";
+export const TIER_DISCOUNT: Record<Tier, number> = { standard: 0, partner: 0.05, pro: 0.1 };
+
+export function loadTiers(): Record<string, Tier> {
+  try {
+    const raw = localStorage.getItem(TIERS_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, Tier>) : {};
+  } catch {
+    return {};
+  }
+}
+
+export function setTier(email: string, tier: Tier): void {
+  const tiers = loadTiers();
+  if (tier === "standard") delete tiers[email.toLowerCase()];
+  else tiers[email.toLowerCase()] = tier;
+  localStorage.setItem(TIERS_KEY, JSON.stringify(tiers));
+}
+
+export function tierFor(email: string | undefined | null): Tier {
+  if (!email) return "standard";
+  return loadTiers()[email.toLowerCase()] ?? "standard";
+}
+
 /* ---------- saved configurations & share links ---------- */
 
 const SAVED_KEY = "axioform-saved-v1";

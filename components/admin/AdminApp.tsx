@@ -11,20 +11,23 @@ import {
   loadAllTypes,
   loadOrders,
   loadPriceBook,
+  loadTiers,
   ORDER_FLOW,
   QUOTE_FLOW,
   resetPriceBook,
   saveCustomType,
   savePriceBook,
+  setTier,
   updateOrder,
   updateOrderStatus,
   type Order,
   type OrderStatus,
+  type Tier,
 } from "@/lib/store";
 import type { Dict } from "@/lib/i18n";
 
 type AdminDict = Dict["admin"];
-type Tab = "dashboard" | "orders" | "pricing" | "products";
+type Tab = "dashboard" | "orders" | "customers" | "pricing" | "products";
 
 /* ---------- dashboard tab ---------- */
 
@@ -285,6 +288,83 @@ function OrdersTable({ t, statusLabels, cfgDict }: { t: AdminDict; statusLabels:
           })}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+/* ---------- customers tab ---------- */
+
+function CustomersTab({ t }: { t: AdminDict }) {
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [tiers, setTiers] = useState<Record<string, Tier>>({});
+
+  useEffect(() => {
+    setOrders(loadOrders());
+    setTiers(loadTiers());
+  }, []);
+
+  const byEmail = new Map<string, { name: string; city: string; email: string; orders: number; quotes: number; revenue: number }>();
+  orders.forEach((o) => {
+    const key = o.customer.email.toLowerCase();
+    const c = byEmail.get(key) ?? { name: o.customer.name, city: o.customer.city, email: o.customer.email, orders: 0, quotes: 0, revenue: 0 };
+    if (o.kind === "order") {
+      c.orders += 1;
+      c.revenue += o.gross;
+    } else {
+      c.quotes += 1;
+    }
+    byEmail.set(key, c);
+  });
+  const customers = [...byEmail.values()].sort((a, b) => b.revenue - a.revenue);
+
+  const assign = (email: string, tier: Tier) => {
+    setTier(email, tier);
+    setTiers(loadTiers());
+  };
+
+  return (
+    <div className="flex flex-col gap-6">
+      <p className="max-w-2xl text-sm font-light leading-relaxed text-graphite">{t.customers.hint}</p>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[760px] border-collapse text-left">
+          <thead>
+            <tr className="border-b border-ink/50">
+              {[t.customers.name, t.customers.contact, t.customers.orders, t.customers.quotes, t.customers.revenue, t.customers.tier].map((h, i) => (
+                <th key={i} className="py-3 pr-4 text-[11px] font-medium uppercase tracking-[0.14em] text-stone">
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {customers.map((c) => (
+              <tr key={c.email} className="border-b border-hairline align-baseline">
+                <td className="py-3 pr-4 text-sm text-ink">
+                  {c.name}
+                  <span className="block text-xs font-light text-stone">{c.city}</span>
+                </td>
+                <td className="py-3 pr-4 text-sm font-light text-graphite">{c.email}</td>
+                <td className="py-3 pr-4 text-sm font-light text-graphite">{c.orders}</td>
+                <td className="py-3 pr-4 text-sm font-light text-graphite">{c.quotes}</td>
+                <td className="py-3 pr-4 whitespace-nowrap text-sm font-light text-ink">{chf(c.revenue)}</td>
+                <td className="py-3 pr-4">
+                  <select
+                    value={tiers[c.email.toLowerCase()] ?? "standard"}
+                    onChange={(e) => assign(c.email, e.target.value as Tier)}
+                    className="border border-hairline bg-paper px-2 py-1.5 text-xs font-light text-ink outline-none focus:border-graphite"
+                  >
+                    {(["standard", "partner", "pro"] as const).map((v) => (
+                      <option key={v} value={v}>
+                        {t.customers.tiers[v]}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -586,7 +666,7 @@ export default function AdminApp({
   return (
     <div className="flex flex-col gap-8">
       <div className="flex gap-px self-start bg-hairline">
-        {(["dashboard", "orders", "pricing", "products"] as const).map((v) => (
+        {(["dashboard", "orders", "customers", "pricing", "products"] as const).map((v) => (
           <button
             key={v}
             type="button"
@@ -602,6 +682,7 @@ export default function AdminApp({
 
       {tab === "dashboard" && <DashboardTab t={t} statusLabels={statusLabels} cfgDict={cfgDict} />}
       {tab === "orders" && <OrdersTable t={t} statusLabels={statusLabels} cfgDict={cfgDict} />}
+      {tab === "customers" && <CustomersTab t={t} />}
       {tab === "pricing" && <PricingEditor t={t} />}
       {tab === "products" && <ProductsTab t={t} />}
     </div>
