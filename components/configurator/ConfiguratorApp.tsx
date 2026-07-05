@@ -30,6 +30,19 @@ import {
 } from "@/lib/store";
 import { addSavedConfig, fetchAllTypes, fetchPriceBook } from "@/lib/data";
 import { api, hasBackend } from "@/lib/api";
+import {
+  FinishIcon,
+  IconCards,
+  InfillIcon,
+  PlanSketch,
+  segColor,
+  ShapeGlyph,
+  shapeOf,
+  shapeSegments,
+  SubstrateIcon,
+  WallIcon,
+  type ShapeKind,
+} from "./visual";
 import type { Dict } from "@/lib/i18n";
 import Link from "next/link";
 
@@ -45,6 +58,13 @@ const STORAGE_KEY = "axioform-config-v1";
 // Launch mode: everything goes through a reviewed quote — no direct orders.
 // Set NEXT_PUBLIC_QUOTE_ONLY=0 to re-enable direct ordering later.
 const QUOTE_ONLY = process.env.NEXT_PUBLIC_QUOTE_ONLY !== "0";
+
+const RAL_HEX: Record<RailingConfig["color"], string> = {
+  ral7016: "#383e42",
+  ral9005: "#0e0e0e",
+  ral9010: "#efece3",
+  custom: "#4d6172",
+};
 
 function fmt(tpl: string, params: Record<string, string | number>): string {
   return tpl.replace(/\{(\w+)\}/g, (_, k) => String(params[k] ?? ""));
@@ -134,11 +154,14 @@ function Pills<T extends string>({
 function CheckoutForm({
   t,
   kind,
+  summary,
   onSubmit,
   onCancel,
 }: {
   t: CfgDict;
   kind: "order" | "quote";
+  /** One-line context: what is being requested (type · length · Richtpreis). */
+  summary: string;
   onSubmit: (customer: Order["customer"], payment: "card" | "twint" | "invoice") => void;
   onCancel: () => void;
 }) {
@@ -162,6 +185,7 @@ function CheckoutForm({
       <span className="text-xs font-medium uppercase tracking-[0.16em] text-ink">
         {kind === "order" ? t.checkout.orderTitle : t.checkout.quoteTitle}
       </span>
+      <p className="border-l-2 border-steel bg-mist/60 px-3 py-2 text-[13px] font-light text-graphite">{summary}</p>
       <div className="grid grid-cols-2 gap-3">
         <input required placeholder={t.checkout.name} value={name} onChange={(e) => setName(e.target.value)} className={`${inputCls} col-span-2`} />
         <input required type="email" placeholder={t.checkout.email} value={email} onChange={(e) => setEmail(e.target.value)} className={`${inputCls} col-span-2`} />
@@ -278,6 +302,7 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
     [types, cfg.typeId, cfg.system],
   );
   const derived = useMemo(() => deriveRailing(cfg, tp), [cfg, tp]);
+  const shape = shapeOf(cfg.segments);
   const sia = useMemo(() => evaluateSia(cfg, derived, tp), [cfg, derived, tp]);
   const overall = siaSummary(sia);
   const price = useMemo(() => priceRailing(cfg, derived, pb, tp, discount), [cfg, derived, pb, tp, discount]);
@@ -300,12 +325,20 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
             {t.siaBadge[overall]}
           </span>
         </div>
-        <a
-          href="#cta"
-          className="inline-flex items-center justify-center bg-ink px-5 py-3 text-xs font-medium uppercase tracking-[0.14em] text-paper"
-        >
-          {QUOTE_ONLY ? t.quote : t.buy}
-        </a>
+        <div className="flex items-center gap-2">
+          <a
+            href="#preview"
+            className="inline-flex items-center justify-center border border-hairline px-3 py-3 text-xs uppercase tracking-[0.14em] text-graphite"
+          >
+            3D
+          </a>
+          <a
+            href="#cta"
+            className="inline-flex items-center justify-center whitespace-nowrap bg-ink px-4 py-3 text-xs font-medium uppercase tracking-[0.14em] text-paper"
+          >
+            {QUOTE_ONLY ? t.quoteShort : t.buy}
+          </a>
+        </div>
       </div>
 
       {/* ---------- left: steps ---------- */}
@@ -316,7 +349,7 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
             <span className="text-xs text-stone">01</span>
             {t.stepSystem}
           </h2>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {types
               .filter((x) => x.active)
               .map((x) => {
@@ -340,12 +373,17 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
                     key={x.id}
                     type="button"
                     onClick={() => setCfg((c) => normalizeForType(c, x))}
-                    className={`flex flex-col gap-1 border px-4 py-3 text-left transition-colors ${
+                    className={`flex items-start gap-3 border px-3.5 py-3 text-left transition-colors ${
                       selected ? "border-ink bg-ink text-paper" : "border-hairline hover:border-graphite"
                     }`}
                   >
-                    <span className={`text-sm ${selected ? "" : "text-graphite"}`}>{name}</span>
-                    <span className={`text-[11px] font-light ${selected ? "text-paper/60" : "text-stone"}`}>{desc}</span>
+                    <span className={`shrink-0 pt-0.5 ${selected ? "text-paper/80" : "text-stone"}`}>
+                      <InfillIcon kind={infillKindOf(x)} />
+                    </span>
+                    <span className="flex min-w-0 flex-col gap-0.5">
+                      <span className={`hyphens-auto break-words text-sm leading-snug ${selected ? "" : "text-graphite"}`}>{name}</span>
+                      <span className={`text-[11px] font-light leading-snug ${selected ? "text-paper/60" : "text-stone"}`}>{desc}</span>
+                    </span>
                   </button>
                 );
               })}
@@ -359,10 +397,41 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
             {t.stepGeometry}
           </h2>
 
+          {/* base shape presets */}
+          <div className="flex flex-col gap-2">
+            <span className="text-[11px] font-medium uppercase tracking-[0.16em] text-graphite">{t.shape}</span>
+            <div className="grid grid-cols-5 gap-2">
+              {(["i", "l_in", "l_out", "u", "custom"] as ShapeKind[]).map((k) => {
+                const active = shape === k;
+                return (
+                  <button
+                    key={k}
+                    type="button"
+                    aria-pressed={active}
+                    disabled={k === "custom"}
+                    onClick={() => setCfg((c) => ({ ...c, segments: shapeSegments(k, c.segments) }))}
+                    className={`flex flex-col items-center gap-1 border px-1 py-2.5 transition-colors ${
+                      active ? "border-ink bg-mist/70 text-ink" : "border-hairline text-graphite hover:border-graphite"
+                    } ${k === "custom" && !active ? "opacity-40" : ""}`}
+                  >
+                    <ShapeGlyph kind={k} active={active} />
+                    <span className="text-[10px] font-light">{t.shapes[k]}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* live plan sketch, colour-coded to the segment inputs below */}
+          <div className="flex justify-center border border-hairline bg-mist/40 px-6 py-5">
+            <PlanSketch cfg={cfg} />
+          </div>
+
           {cfg.segments.map((seg, i) => (
-            <div key={seg.id} className="flex flex-col gap-3 border border-hairline p-4">
+            <div key={seg.id} className="flex flex-col gap-3 border border-hairline p-4" style={{ borderLeft: `3px solid ${segColor(i)}` }}>
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-medium uppercase tracking-[0.16em] text-graphite">
+                <span className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.16em] text-graphite">
+                  <span className="inline-block h-2.5 w-2.5" style={{ background: segColor(i) }} />
                   {t.segment} {i + 1}
                 </span>
                 {cfg.segments.length > 1 && (
@@ -420,14 +489,15 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
           </button>
 
           <div className="flex flex-col gap-2 pt-1">
-            <Pills
+            <IconCards
               label={t.walls}
               value={cfg.walls ?? "none"}
+              columns={4}
               options={[
-                { v: "none" as const, l: t.wallsNone },
-                { v: "start" as const, l: t.wallsStart },
-                { v: "end" as const, l: t.wallsEnd },
-                { v: "both" as const, l: t.wallsBoth },
+                { v: "none" as const, l: t.wallsNone, icon: <WallIcon kind="none" /> },
+                { v: "start" as const, l: t.wallsStart, icon: <WallIcon kind="start" /> },
+                { v: "end" as const, l: t.wallsEnd, icon: <WallIcon kind="end" /> },
+                { v: "both" as const, l: t.wallsBoth, icon: <WallIcon kind="both" /> },
               ]}
               onChange={(v) => set({ walls: v })}
             />
@@ -452,25 +522,29 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
             <span className="text-xs text-stone">03</span>
             {t.stepOptions}
           </h2>
-          <Pills
+          <IconCards
             label={t.substrate}
             value={cfg.substrate ?? "concrete_top"}
-            options={[
-              { v: "concrete_top" as Substrate, l: t.substrates.concrete_top },
-              { v: "concrete_side" as Substrate, l: t.substrates.concrete_side },
-              { v: "concrete_side_offset" as Substrate, l: t.substrates.concrete_side_offset },
-              { v: "concrete_parapet" as Substrate, l: t.substrates.concrete_parapet },
-              { v: "wood_side" as Substrate, l: t.substrates.wood_side },
-              { v: "stone_top" as Substrate, l: t.substrates.stone_top },
-            ]}
+            columns={3}
+            options={(
+              [
+                "concrete_top",
+                "concrete_side",
+                "concrete_side_offset",
+                "concrete_parapet",
+                "wood_side",
+                "stone_top",
+              ] as Substrate[]
+            ).map((v) => ({ v, l: t.substrates[v], icon: <SubstrateIcon kind={v} /> }))}
             onChange={(v) => set({ substrate: v, mounting: SUBSTRATE_MOUNTING[v] })}
           />
-          <Pills
+          <IconCards
             label={t.finish}
             value={cfg.finish ?? "coated"}
+            columns={2}
             options={[
-              { v: "coated" as const, l: t.finishCoated },
-              { v: "galvanized" as const, l: t.finishGalvanized },
+              { v: "coated" as const, l: t.finishCoated, icon: <FinishIcon kind="coated" ral={RAL_HEX[cfg.color]} /> },
+              { v: "galvanized" as const, l: t.finishGalvanized, icon: <FinishIcon kind="galvanized" ral="" /> },
             ]}
             onChange={(v) => set({ finish: v })}
           />
@@ -669,6 +743,7 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
               <CheckoutForm
                 t={t}
                 kind={checkout}
+                summary={`${cfg.system === "glass" ? t.systemGlass : t.systemBars} · ${(derived.totalLength / 1000).toLocaleString("de-CH")} m · ${chf(price.gross)}`}
                 onCancel={() => setCheckout(null)}
                 onSubmit={(customer, payment) => {
                   if (hasBackend) {
@@ -725,7 +800,7 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
       </div>
 
       {/* ---------- right: viewport (first on mobile) ---------- */}
-      <div className="order-first flex flex-col gap-4 self-start lg:order-none lg:sticky lg:top-24">
+      <div id="preview" className="order-first flex scroll-mt-20 flex-col gap-4 self-start lg:order-none lg:sticky lg:top-24">
         <div className="flex items-center justify-between">
           <div className="flex gap-px bg-hairline">
             {(
