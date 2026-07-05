@@ -79,6 +79,7 @@ export function saveOrder(order: Order): void {
   const own: Order[] = raw ? JSON.parse(raw) : [];
   own.push(order);
   localStorage.setItem(ORDERS_KEY, JSON.stringify(own));
+  logEvent(order.ref, "created", order.customer.email);
 }
 
 export function updateOrder(ref: string, patch: Partial<Order>): void {
@@ -97,7 +98,9 @@ export function updateOrder(ref: string, patch: Partial<Order>): void {
 }
 
 export function updateOrderStatus(ref: string, status: OrderStatus): void {
+  const order = loadOrders().find((o) => o.ref === ref);
   updateOrder(ref, { status });
+  logEvent(ref, status, order?.customer.email);
 }
 
 /** Customer accepts a binding quote: it converts into a confirmed order. */
@@ -105,6 +108,7 @@ export function acceptQuote(ref: string): void {
   const q = loadOrders().find((o) => o.ref === ref);
   if (!q || q.kind !== "quote") return;
   updateOrder(ref, { kind: "order", status: "confirmed", gross: q.quotedGross ?? q.gross, payment: "invoice" });
+  logEvent(ref, "quote_accepted", q.customer.email);
 }
 
 export function dedupeOrders(orders: Order[]): Order[] {
@@ -168,6 +172,79 @@ export function saveCustomType(tp: TypeProfile): void {
 
 export function deleteCustomType(id: string): void {
   localStorage.setItem(TYPES_KEY, JSON.stringify(loadCustomTypes().filter((t) => t.id !== id)));
+}
+
+/* ---------- order events & mock email outbox ---------- */
+
+const EVENTS_KEY = "axioform-events-v1";
+
+export type OrderEventType = OrderStatus | "created" | "quote_accepted";
+
+export interface OrderEvent {
+  ref: string;
+  at: string; // ISO datetime
+  type: OrderEventType;
+  /** Set when the production system would send a transactional email. */
+  emailTo?: string;
+}
+
+export function logEvent(ref: string, type: OrderEventType, emailTo?: string): void {
+  try {
+    const raw = localStorage.getItem(EVENTS_KEY);
+    const events: OrderEvent[] = raw ? JSON.parse(raw) : [];
+    events.push({ ref, at: new Date().toISOString().slice(0, 16).replace("T", " "), type, emailTo });
+    localStorage.setItem(EVENTS_KEY, JSON.stringify(events));
+  } catch {
+    /* storage unavailable — drop the event */
+  }
+}
+
+export function loadEvents(ref: string): OrderEvent[] {
+  try {
+    const raw = localStorage.getItem(EVENTS_KEY);
+    const events: OrderEvent[] = raw ? JSON.parse(raw) : [];
+    return events.filter((e) => e.ref === ref);
+  } catch {
+    return [];
+  }
+}
+
+/* ---------- CMS content overrides (references page) ---------- */
+
+const CONTENT_KEY = "axioform-content-v1";
+
+export interface RefProject {
+  name: string;
+  place: string;
+  system: string;
+  length: string;
+  mounting: string;
+  desc: string;
+}
+
+export interface ContentState {
+  /** Sparse overrides for the seeded reference projects, by index. */
+  projects: Record<number, Partial<RefProject>>;
+  /** Admin-created reference projects, appended after the seeded ones. */
+  added: RefProject[];
+}
+
+export function loadContent(): ContentState {
+  try {
+    const raw = localStorage.getItem(CONTENT_KEY);
+    return raw ? (JSON.parse(raw) as ContentState) : { projects: {}, added: [] };
+  } catch {
+    return { projects: {}, added: [] };
+  }
+}
+
+export function saveContent(c: ContentState): void {
+  localStorage.setItem(CONTENT_KEY, JSON.stringify(c));
+}
+
+export function mergedProjects(base: RefProject[]): RefProject[] {
+  const c = loadContent();
+  return [...base.map((p, i) => ({ ...p, ...(c.projects[i] ?? {}) })), ...c.added];
 }
 
 /* ---------- B2B trade tiers ---------- */

@@ -9,25 +9,33 @@ import {
   deleteCustomType,
   findType,
   loadAllTypes,
+  loadContent,
+  loadEvents,
   loadOrders,
   loadPriceBook,
   loadTiers,
+  logEvent,
   ORDER_FLOW,
   QUOTE_FLOW,
   resetPriceBook,
+  saveContent,
   saveCustomType,
   savePriceBook,
   setTier,
   updateOrder,
   updateOrderStatus,
+  type ContentState,
   type Order,
+  type OrderEvent,
   type OrderStatus,
+  type RefProject,
   type Tier,
 } from "@/lib/store";
 import type { Dict } from "@/lib/i18n";
+import Link from "next/link";
 
 type AdminDict = Dict["admin"];
-type Tab = "dashboard" | "orders" | "customers" | "pricing" | "products";
+type Tab = "dashboard" | "orders" | "customers" | "pricing" | "products" | "content";
 
 /* ---------- dashboard tab ---------- */
 
@@ -126,30 +134,62 @@ function DashboardTab({
 
 /* ---------- orders tab ---------- */
 
-function BomDetail({ order, t }: { order: Order; t: AdminDict }) {
-  if (!order.config) {
-    return <p className="py-2 text-sm font-light text-stone">{t.bom.noBom}</p>;
-  }
-  const tp = findType(order.config.typeId, order.config.system);
-  const derived = deriveRailing(order.config, tp);
-  const bom = buildBom(order.config, derived, tp);
+function EventLog({ order, t, statusLabels }: { order: Order; t: AdminDict; statusLabels: Dict["portal"]["status"] }) {
+  const events = loadEvents(order.ref);
+  const label = (e: OrderEvent) =>
+    e.type === "created" ? t.events.created : e.type === "quote_accepted" ? t.events.quote_accepted : statusLabels[e.type];
+
+  return (
+    <div>
+      <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone">{t.events.title}</span>
+      {events.length === 0 ? (
+        <p className="pt-1 text-xs font-light text-stone">{t.events.none}</p>
+      ) : (
+        <div className="flex flex-col pt-1">
+          {events.map((e, i) => (
+            <div key={i} className="border-t border-hairline/70 py-1.5 first:border-t-0">
+              <p className="text-[13px] font-light text-graphite">
+                <span className="pr-3 text-xs text-stone">{e.at}</span>
+                {label(e)}
+              </p>
+              {e.emailTo && (
+                <p className="pl-0 text-xs font-light text-steel">
+                  ✉ {t.events.emailTo} {e.emailTo}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BomDetail({ order, t, statusLabels }: { order: Order; t: AdminDict; statusLabels: Dict["portal"]["status"] }) {
+  const tp = order.config ? findType(order.config.typeId, order.config.system) : null;
+  const derived = order.config && tp ? deriveRailing(order.config, tp) : null;
+  const bom = order.config && tp && derived ? buildBom(order.config, derived, tp) : null;
   const parts: Record<string, string> = t.bom.parts;
 
   return (
     <div className="grid gap-8 py-2 md:grid-cols-[1fr_1fr]">
       <div className="flex flex-col">
         <span className="pb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-stone">{t.bom.title}</span>
-        {bom.map((l, i) => (
-          <div key={i} className="flex items-baseline justify-between gap-4 border-t border-hairline/70 py-1.5">
-            <span className="text-[13px] font-light text-graphite">
-              {parts[l.id] ?? l.id}
-              {l.detail && <span className="text-stone"> · {l.detail}</span>}
-            </span>
-            <span className="whitespace-nowrap text-[13px] font-light text-ink">
-              {l.qty.toLocaleString("de-CH")} {t.bom.units[l.unit]}
-            </span>
-          </div>
-        ))}
+        {!bom ? (
+          <p className="text-sm font-light text-stone">{t.bom.noBom}</p>
+        ) : (
+          bom.map((l, i) => (
+            <div key={i} className="flex items-baseline justify-between gap-4 border-t border-hairline/70 py-1.5">
+              <span className="text-[13px] font-light text-graphite">
+                {parts[l.id] ?? l.id}
+                {l.detail && <span className="text-stone"> · {l.detail}</span>}
+              </span>
+              <span className="whitespace-nowrap text-[13px] font-light text-ink">
+                {l.qty.toLocaleString("de-CH")} {t.bom.units[l.unit]}
+              </span>
+            </div>
+          ))
+        )}
       </div>
       <div className="flex flex-col gap-4">
         <div>
@@ -165,6 +205,7 @@ function BomDetail({ order, t }: { order: Order; t: AdminDict }) {
             <p className="pt-1 text-sm font-light uppercase text-graphite">{order.payment}</p>
           </div>
         )}
+        <EventLog order={order} t={t} statusLabels={statusLabels} />
       </div>
     </div>
   );
@@ -186,6 +227,7 @@ function OrdersTable({ t, statusLabels, cfgDict }: { t: AdminDict; statusLabels:
     const v = Number(quoteDraft[o.ref] ?? Math.round(o.gross));
     if (!Number.isFinite(v) || v <= 0) return;
     updateOrder(o.ref, { status: "quoted", quotedGross: v });
+    logEvent(o.ref, "quoted", o.customer.email);
     setOrders(loadOrders());
   };
 
@@ -279,7 +321,7 @@ function OrdersTable({ t, statusLabels, cfgDict }: { t: AdminDict; statusLabels:
                 {expanded && (
                   <tr className="border-b border-hairline bg-mist/40">
                     <td colSpan={9} className="px-4">
-                      <BomDetail order={o} t={t} />
+                      <BomDetail order={o} t={t} statusLabels={statusLabels} />
                     </td>
                   </tr>
                 )}
@@ -650,23 +692,180 @@ function ProductsTab({ t }: { t: AdminDict }) {
   );
 }
 
+/* ---------- content tab: references CMS ---------- */
+
+const emptyProject: RefProject = { name: "", place: "", system: "", length: "", mounting: "", desc: "" };
+
+function ContentTab({ t, refsDict, locale }: { t: AdminDict; refsDict: Dict["references"]; locale: string }) {
+  const c = t.content;
+  const [content, setContent] = useState<ContentState>({ projects: {}, added: [] });
+  const [editing, setEditing] = useState<number | "new" | null>(null);
+  const [draft, setDraft] = useState<RefProject>(emptyProject);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => setContent(loadContent()), []);
+
+  const base = refsDict.projects as RefProject[];
+  const combined: RefProject[] = [...base.map((p, i) => ({ ...p, ...(content.projects[i] ?? {}) })), ...content.added];
+
+  const persist = (next: ContentState) => {
+    saveContent(next);
+    setContent(loadContent());
+    setEditing(null);
+    setSaved(true);
+  };
+
+  const submit = () => {
+    if (editing === "new") {
+      persist({ ...content, added: [...content.added, draft] });
+    } else if (typeof editing === "number" && editing < base.length) {
+      persist({ ...content, projects: { ...content.projects, [editing]: draft } });
+    } else if (typeof editing === "number") {
+      const added = [...content.added];
+      added[editing - base.length] = draft;
+      persist({ ...content, added });
+    }
+  };
+
+  const inputCls =
+    "w-full border border-hairline bg-paper px-3 py-2 text-sm font-light text-ink outline-none transition-colors placeholder:text-stone focus:border-graphite";
+
+  const form = (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        submit();
+      }}
+      className="flex flex-col gap-3 border border-ink/60 p-5"
+    >
+      <div className="grid gap-3 sm:grid-cols-2">
+        <input required placeholder={c.name} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} className={inputCls} />
+        <input required placeholder={c.place} value={draft.place} onChange={(e) => setDraft({ ...draft, place: e.target.value })} className={inputCls} />
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <input required placeholder={c.system} value={draft.system} onChange={(e) => setDraft({ ...draft, system: e.target.value })} className={inputCls} />
+        <input required placeholder={c.length} value={draft.length} onChange={(e) => setDraft({ ...draft, length: e.target.value })} className={inputCls} />
+        <input required placeholder={c.mounting} value={draft.mounting} onChange={(e) => setDraft({ ...draft, mounting: e.target.value })} className={inputCls} />
+      </div>
+      <textarea
+        required
+        rows={2}
+        placeholder={c.desc}
+        value={draft.desc}
+        onChange={(e) => setDraft({ ...draft, desc: e.target.value })}
+        className={inputCls}
+      />
+      <div className="flex gap-3">
+        <button type="submit" className="inline-flex items-center justify-center bg-ink px-5 py-2.5 text-xs font-medium uppercase tracking-[0.14em] text-paper transition-colors hover:bg-graphite">
+          {c.save}
+        </button>
+        <button type="button" onClick={() => setEditing(null)} className="inline-flex items-center justify-center border border-hairline px-5 py-2.5 text-xs font-medium uppercase tracking-[0.14em] text-graphite transition-colors hover:border-graphite">
+          {c.cancel}
+        </button>
+      </div>
+    </form>
+  );
+
+  return (
+    <div className="flex max-w-4xl flex-col gap-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-3">
+        <p className="max-w-2xl text-sm font-light leading-relaxed text-graphite">{c.hint}</p>
+        <Link href={`/${locale}/references/`} className="whitespace-nowrap text-xs uppercase tracking-[0.12em] text-graphite underline-offset-4 hover:text-ink hover:underline">
+          {c.viewPage} →
+        </Link>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        {combined.map((p, i) =>
+          editing === i ? (
+            <div key={i} className="sm:col-span-2">
+              {form}
+            </div>
+          ) : (
+            <div key={i} className="flex flex-col gap-2 border border-hairline p-5">
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="text-sm text-ink">{p.name}</span>
+                {i >= base.length && (
+                  <span className="border border-steel/50 px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-steel">{c.customBadge}</span>
+                )}
+              </div>
+              <p className="text-xs font-light text-stone">
+                {p.place} · {p.system} · {p.length}
+              </p>
+              <p className="text-xs font-light leading-relaxed text-graphite">{p.desc}</p>
+              <div className="flex gap-4 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDraft(p);
+                    setEditing(i);
+                    setSaved(false);
+                  }}
+                  className="text-[11px] uppercase tracking-[0.12em] text-graphite underline-offset-2 hover:text-ink hover:underline"
+                >
+                  {c.edit}
+                </button>
+                {i >= base.length && (
+                  <button
+                    type="button"
+                    onClick={() => persist({ ...content, added: content.added.filter((_, j) => j !== i - base.length) })}
+                    className="text-[11px] uppercase tracking-[0.12em] text-[#b04a3a] underline-offset-2 hover:underline"
+                  >
+                    {c.delete}
+                  </button>
+                )}
+              </div>
+            </div>
+          ),
+        )}
+      </div>
+
+      {editing === "new" ? (
+        form
+      ) : (
+        <button
+          type="button"
+          onClick={() => {
+            setDraft(emptyProject);
+            setEditing("new");
+            setSaved(false);
+          }}
+          className="self-start border border-dashed border-hairline px-5 py-3 text-left text-sm text-graphite transition-colors hover:border-graphite"
+        >
+          + {c.addProject}
+        </button>
+      )}
+
+      {saved && (
+        <p role="status" className="border-l-2 border-steel bg-mist/70 p-3 text-sm font-light text-graphite">
+          {c.savedMsg}
+        </p>
+      )}
+    </div>
+  );
+}
+
 /* ---------- shell ---------- */
 
 export default function AdminApp({
   t,
   statusLabels,
   cfgDict,
+  refsDict,
+  locale,
 }: {
   t: AdminDict;
   statusLabels: Dict["portal"]["status"];
   cfgDict: Dict["cfg"];
+  refsDict: Dict["references"];
+  locale: string;
 }) {
   const [tab, setTab] = useState<Tab>("dashboard");
 
   return (
     <div className="flex flex-col gap-8">
-      <div className="flex gap-px self-start bg-hairline">
-        {(["dashboard", "orders", "customers", "pricing", "products"] as const).map((v) => (
+      <div className="flex flex-wrap gap-px self-start bg-hairline">
+        {(["dashboard", "orders", "customers", "pricing", "products", "content"] as const).map((v) => (
           <button
             key={v}
             type="button"
@@ -685,6 +884,7 @@ export default function AdminApp({
       {tab === "customers" && <CustomersTab t={t} />}
       {tab === "pricing" && <PricingEditor t={t} />}
       {tab === "products" && <ProductsTab t={t} />}
+      {tab === "content" && <ContentTab t={t} refsDict={refsDict} locale={locale} />}
     </div>
   );
 }
