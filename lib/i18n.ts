@@ -419,6 +419,42 @@ const de = {
       },
     },
   },
+  legalPages: {
+    imprint: {
+      title: "Impressum",
+      intro: "Angaben gemäss schweizerischem Recht. Diese Website ist ein Produkt-Prototyp.",
+      blocks: [
+        { h: "Betreiberin", p: "AxioForm AG · Werkstrasse 12 · 6300 Zug · Schweiz · hello@axioform.ch" },
+        { h: "Handelsregister", p: "Handelsregister des Kantons Zug, CHE-000.000.000 (Demo-Angabe des Prototyps)." },
+        { h: "Vertretung", p: "Vertretungsberechtigt ist die Geschäftsleitung der AxioForm AG." },
+        { h: "Haftungsausschluss", p: "Die Inhalte dieses Prototyps dienen der Demonstration. Preise, Referenzen und Firmendaten sind beispielhaft und begründen keine Ansprüche. Für Konfigurationen gilt der Prüfumfang gemäss AGB." },
+      ],
+    },
+    privacy: {
+      title: "Datenschutzerklärung",
+      intro: "Wir bearbeiten Personendaten nach dem schweizerischen Datenschutzgesetz (nDSG). Diese Erklärung beschreibt den aktuellen Prototyp-Betrieb.",
+      blocks: [
+        { h: "Verantwortliche Stelle", p: "AxioForm AG, Werkstrasse 12, 6300 Zug — hello@axioform.ch." },
+        { h: "Datenbearbeitung im Prototyp", p: "Sämtliche Daten — Konfigurationen, Bestellungen, Kundendaten, Login — werden ausschliesslich lokal in Ihrem Browser gespeichert (localStorage) und nicht an Server übermittelt. Es werden keine Cookies gesetzt und kein Tracking eingesetzt." },
+        { h: "Geteilte Konfigurationslinks", p: "Beim Teilen einer Konfiguration werden die Konfigurationsdaten im Link selbst codiert. Der Link enthält keine Personendaten; geben Sie ihn nur an Empfänger weiter, die die Konfiguration sehen dürfen." },
+        { h: "Produktivbetrieb", p: "In der Produktionsversion werden Vertrags- und Zahlungsdaten auf Servern in der Schweiz/EU gespeichert; die Zahlungsabwicklung erfolgt über zertifizierte Anbieter (z. B. Stripe, TWINT). Diese Erklärung wird vor Inbetriebnahme entsprechend erweitert." },
+        { h: "Ihre Rechte", p: "Sie haben Anspruch auf Auskunft, Berichtigung und Löschung Ihrer Daten. Im Prototyp löschen Sie alle Daten selbst, indem Sie die Website-Daten Ihres Browsers löschen." },
+      ],
+    },
+    terms: {
+      title: "Allgemeine Geschäftsbedingungen",
+      intro: "Demo-Fassung des Prototyps — ohne Rechtswirkung. Massgeblich ist die vor Vertragsschluss publizierte Fassung.",
+      blocks: [
+        { h: "1 · Geltungsbereich", p: "Diese AGB gelten für Bestellungen und Offerten über den AxioForm-Konfigurator durch private und geschäftliche Kundinnen und Kunden." },
+        { h: "2 · Angebot & Vertragsschluss", p: "Die Konfiguration mit Festpreis stellt ein verbindliches Angebot der AxioForm AG dar. Der Vertrag kommt mit der Bestellbestätigung zustande. Offerten sind 30 Tage gültig; mit der Annahme im Kundenportal wird die Offerte zur Bestellung." },
+        { h: "3 · Preise & Zahlung", p: "Alle Preise in CHF inkl. MwSt. Zahlung per Karte, TWINT oder — für Geschäftskunden — auf Rechnung (30 Tage netto). B2B-Konditionsstufen werden im Preis ausgewiesen." },
+        { h: "4 · Lieferung & Montage", p: "Geliefert wird ein vorgefertigter Bausatz inkl. Montagematerial und Werkstattzeichnung. Die Montage erfolgt bauseits nach Anleitung; Segmentlängen sind auf 6 m Transportmass begrenzt." },
+        { h: "5 · Normkonformität", p: "Der Konfigurator prüft die massgebenden Parameter der SIA 358 und SIA 261 (Schutzhöhe, Öffnungen, Holmlasten, Glasanforderungen). Die Eignung von Untergrund und Verankerung ist bauseits nachzuweisen; bei öffentlicher Nutzung wird eine Projektprüfung empfohlen." },
+        { h: "6 · Gewährleistung", p: "Es gilt die gesetzliche Gewährleistung von zwei Jahren ab Lieferung. Massgenauigkeit gilt innerhalb der in der Zeichnung ausgewiesenen Toleranzen." },
+        { h: "7 · Anwendbares Recht", p: "Es gilt schweizerisches Recht. Gerichtsstand ist Zug, zwingende Gerichtsstände bleiben vorbehalten." },
+      ],
+    },
+  },
   footer: {
     claim: "Geländersysteme, digital geplant. Schweizer Fertigung.",
     sections: "Navigation",
@@ -427,7 +463,7 @@ const de = {
     imprint: "Impressum",
     privacy: "Datenschutz",
     terms: "AGB",
-    proto: "Prototyp v0.7 — Meilenstein 7",
+    proto: "Prototyp v0.9 — Meilenstein 9",
     lang: "Sprache",
   },
 };
@@ -851,6 +887,42 @@ const fr: Dict = {
       },
     },
   },
+  legalPages: {
+    imprint: {
+      title: "Impressum",
+      intro: "Informations selon le droit suisse. Ce site est un prototype de produit.",
+      blocks: [
+        { h: "Exploitante", p: "AxioForm AG · Werkstrasse 12 · 6300 Zoug · Suisse · hello@axioform.ch" },
+        { h: "Registre du commerce", p: "Registre du commerce du canton de Zoug, CHE-000.000.000 (donnée de démonstration du prototype)." },
+        { h: "Représentation", p: "La direction d'AxioForm AG est habilitée à représenter la société." },
+        { h: "Clause de non-responsabilité", p: "Les contenus de ce prototype servent à la démonstration. Les prix, références et données d'entreprise sont des exemples et ne fondent aucune prétention. Pour les configurations, l'étendue du contrôle est définie dans les CG." },
+      ],
+    },
+    privacy: {
+      title: "Protection des données",
+      intro: "Nous traitons les données personnelles conformément à la loi suisse sur la protection des données (nLPD). Cette déclaration décrit le fonctionnement actuel du prototype.",
+      blocks: [
+        { h: "Responsable", p: "AxioForm AG, Werkstrasse 12, 6300 Zoug — hello@axioform.ch." },
+        { h: "Traitement des données dans le prototype", p: "Toutes les données — configurations, commandes, données clients, connexion — sont stockées exclusivement en local dans votre navigateur (localStorage) et ne sont transmises à aucun serveur. Aucun cookie n'est déposé, aucun traçage n'est utilisé." },
+        { h: "Liens de configuration partagés", p: "Lors du partage d'une configuration, ses données sont encodées dans le lien lui-même. Le lien ne contient pas de données personnelles ; ne le transmettez qu'aux destinataires autorisés à voir la configuration." },
+        { h: "Exploitation en production", p: "Dans la version de production, les données contractuelles et de paiement seront stockées sur des serveurs en Suisse/UE ; les paiements seront traités par des prestataires certifiés (p. ex. Stripe, TWINT). Cette déclaration sera complétée avant la mise en service." },
+        { h: "Vos droits", p: "Vous avez droit à l'accès, à la rectification et à l'effacement de vos données. Dans le prototype, vous effacez vous-même toutes les données en supprimant les données de site de votre navigateur." },
+      ],
+    },
+    terms: {
+      title: "Conditions générales",
+      intro: "Version de démonstration du prototype — sans effet juridique. La version publiée avant la conclusion du contrat fait foi.",
+      blocks: [
+        { h: "1 · Champ d'application", p: "Les présentes CG s'appliquent aux commandes et offres passées via le configurateur AxioForm par des clients privés et professionnels." },
+        { h: "2 · Offre & conclusion du contrat", p: "La configuration à prix ferme constitue une offre ferme d'AxioForm AG. Le contrat est conclu avec la confirmation de commande. Les offres sont valables 30 jours ; leur acceptation dans le portail client les transforme en commande." },
+        { h: "3 · Prix & paiement", p: "Tous les prix en CHF, TVA comprise. Paiement par carte, TWINT ou — pour les clients professionnels — sur facture (30 jours net). Les niveaux de conditions B2B sont indiqués dans le prix." },
+        { h: "4 · Livraison & montage", p: "La livraison comprend un kit préfabriqué avec matériel de montage et plan d'atelier. Le montage est réalisé par le maître d'ouvrage selon la notice ; la longueur des segments est limitée à 6 m pour le transport." },
+        { h: "5 · Conformité aux normes", p: "Le configurateur contrôle les paramètres déterminants des normes SIA 358 et SIA 261 (hauteur de protection, ouvertures, charges, exigences du verre). L'aptitude du support et de l'ancrage doit être vérifiée par le maître d'ouvrage ; pour un usage public, un contrôle de projet est recommandé." },
+        { h: "6 · Garantie", p: "La garantie légale de deux ans à compter de la livraison s'applique. La précision dimensionnelle vaut dans les tolérances indiquées sur le plan." },
+        { h: "7 · Droit applicable", p: "Le droit suisse s'applique. Le for est à Zoug, sous réserve de fors impératifs." },
+      ],
+    },
+  },
   footer: {
     claim: "Garde-corps planifiés en ligne. Fabrication suisse.",
     sections: "Navigation",
@@ -859,7 +931,7 @@ const fr: Dict = {
     imprint: "Impressum",
     privacy: "Protection des données",
     terms: "CG",
-    proto: "Prototype v0.7 — Jalon 7",
+    proto: "Prototype v0.9 — Jalon 9",
     lang: "Langue",
   },
 };
@@ -1281,6 +1353,42 @@ const en: Dict = {
       },
     },
   },
+  legalPages: {
+    imprint: {
+      title: "Imprint",
+      intro: "Information pursuant to Swiss law. This website is a product prototype.",
+      blocks: [
+        { h: "Operator", p: "AxioForm AG · Werkstrasse 12 · 6300 Zug · Switzerland · hello@axioform.ch" },
+        { h: "Commercial register", p: "Commercial register of the Canton of Zug, CHE-000.000.000 (demo entry of the prototype)." },
+        { h: "Representation", p: "The executive management of AxioForm AG is authorised to represent the company." },
+        { h: "Disclaimer", p: "The contents of this prototype are for demonstration purposes. Prices, references and company data are exemplary and do not give rise to any claims. For configurations, the scope of validation is defined in the Terms." },
+      ],
+    },
+    privacy: {
+      title: "Privacy policy",
+      intro: "We process personal data in accordance with the Swiss Data Protection Act (nFADP). This policy describes how the current prototype operates.",
+      blocks: [
+        { h: "Controller", p: "AxioForm AG, Werkstrasse 12, 6300 Zug — hello@axioform.ch." },
+        { h: "Data processing in the prototype", p: "All data — configurations, orders, customer data, login — is stored exclusively locally in your browser (localStorage) and is not transmitted to any server. No cookies are set and no tracking is used." },
+        { h: "Shared configuration links", p: "When you share a configuration, its data is encoded in the link itself. The link contains no personal data; only pass it on to recipients who may see the configuration." },
+        { h: "Production operation", p: "In the production version, contract and payment data will be stored on servers in Switzerland/EU; payments will be processed by certified providers (e.g. Stripe, TWINT). This policy will be extended before go-live." },
+        { h: "Your rights", p: "You have the right to access, rectify and erase your data. In the prototype you erase all data yourself by clearing your browser's site data." },
+      ],
+    },
+    terms: {
+      title: "Terms and conditions",
+      intro: "Demo version of the prototype — without legal effect. The version published before contract conclusion prevails.",
+      blocks: [
+        { h: "1 · Scope", p: "These terms apply to orders and quotes placed through the AxioForm configurator by private and business customers." },
+        { h: "2 · Offer & contract", p: "A configuration with a fixed price constitutes a binding offer by AxioForm AG. The contract is concluded upon order confirmation. Quotes are valid for 30 days; acceptance in the customer portal converts a quote into an order." },
+        { h: "3 · Prices & payment", p: "All prices in CHF incl. VAT. Payment by card, TWINT or — for business customers — by invoice (30 days net). B2B trade tiers are itemised in the price." },
+        { h: "4 · Delivery & installation", p: "Delivery comprises a prefabricated kit incl. mounting material and shop drawing. Installation is carried out on site following the instructions; segment lengths are limited to 6 m for transport." },
+        { h: "5 · Standards compliance", p: "The configurator validates the governing parameters of SIA 358 and SIA 261 (guard height, openings, line loads, glass requirements). Suitability of substrate and anchoring must be verified on site; for public use a project review is recommended." },
+        { h: "6 · Warranty", p: "The statutory warranty of two years from delivery applies. Dimensional accuracy applies within the tolerances stated on the drawing." },
+        { h: "7 · Applicable law", p: "Swiss law applies. Place of jurisdiction is Zug, subject to mandatory venues." },
+      ],
+    },
+  },
   footer: {
     claim: "Guardrails planned online. Swiss manufacturing.",
     sections: "Navigation",
@@ -1289,7 +1397,7 @@ const en: Dict = {
     imprint: "Imprint",
     privacy: "Privacy",
     terms: "Terms",
-    proto: "Prototype v0.7 — Milestone 7",
+    proto: "Prototype v0.9 — Milestone 9",
     lang: "Language",
   },
 };

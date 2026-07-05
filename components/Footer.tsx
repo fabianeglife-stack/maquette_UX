@@ -41,9 +41,15 @@ export default function Footer({ locale, dict }: { locale: string; dict: Dict })
 
           <div className="flex flex-col gap-3">
             <span className="label !text-paper/40">{f.legal}</span>
-            <span className="cursor-default text-sm font-light text-paper/70">{f.imprint}</span>
-            <span className="cursor-default text-sm font-light text-paper/70">{f.privacy}</span>
-            <span className="cursor-default text-sm font-light text-paper/70">{f.terms}</span>
+            <Link href={`/${locale}/imprint/`} className="text-sm font-light text-paper/70 hover:text-paper">
+              {f.imprint}
+            </Link>
+            <Link href={`/${locale}/privacy/`} className="text-sm font-light text-paper/70 hover:text-paper">
+              {f.privacy}
+            </Link>
+            <Link href={`/${locale}/terms/`} className="text-sm font-light text-paper/70 hover:text-paper">
+              {f.terms}
+            </Link>
           </div>
         </div>
 

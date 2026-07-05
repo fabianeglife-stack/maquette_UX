@@ -21,12 +21,20 @@ export async function generateMetadata({
   const { locale } = await params;
   const dict = getDict(locale);
   return {
+    metadataBase: new URL("https://fabianeglife-stack.github.io/maquette_UX"),
     title: {
       default: "AxioForm — " + dict.hero.title,
       template: "%s — AxioForm",
     },
     description: dict.hero.lead,
     icons: { icon: `${basePath}/favicon.svg` },
+    openGraph: {
+      siteName: "AxioForm",
+      type: "website",
+      locale,
+      title: "AxioForm — " + dict.hero.title,
+      description: dict.hero.lead,
+    },
   };
 }
 

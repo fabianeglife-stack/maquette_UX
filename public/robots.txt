@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /de/admin/
+Disallow: /fr/admin/
+Disallow: /en/admin/
+Disallow: /de/portal/
+Disallow: /fr/portal/
+Disallow: /en/portal/
+
+Sitemap: https://fabianeglife-stack.github.io/maquette_UX/sitemap.xml
