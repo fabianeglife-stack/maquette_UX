@@ -7,7 +7,7 @@ import { downloadDrawingPdf } from "./pdf";
 import { deriveRailing } from "@/lib/engine/geometry";
 import { evaluateSia, siaSummary, type RuleStatus } from "@/lib/engine/sia";
 import { chf, defaultPriceBook, priceRailing, type PriceBook } from "@/lib/engine/pricing";
-import { builtinTypes, defaultConfig, newSegment, normalizeForType, type RailingConfig, type TypeProfile } from "@/lib/engine/types";
+import { builtinTypes, defaultConfig, infillKindOf, newSegment, normalizeForType, type RailingConfig, type TypeProfile } from "@/lib/engine/types";
 import {
   decodeConfig,
   encodeConfig,
@@ -269,6 +269,7 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
   const sia = useMemo(() => evaluateSia(cfg, derived, tp), [cfg, derived, tp]);
   const overall = siaSummary(sia);
   const price = useMemo(() => priceRailing(cfg, derived, pb, tp, discount), [cfg, derived, pb, tp, discount]);
+  const infillKind = infillKindOf(tp);
 
   const set = (patch: Partial<RailingConfig>) => setCfg((c) => ({ ...c, ...patch }));
   const setSeg = (id: string, patch: Partial<RailingConfig["segments"][number]>) =>
@@ -316,9 +317,11 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
                   ? x.template === "bars"
                     ? t.systemBarsDesc
                     : t.systemGlassDesc
-                  : x.template === "bars"
-                    ? `Ø ${x.barDia} mm · ≤ ${x.maxSlope}°${x.basePerM ? ` · CHF ${x.basePerM}/m` : ""}`
-                    : `VSG · ≤ ${x.maxPanelWidth} mm${x.basePerM ? ` · CHF ${x.basePerM}/m` : ""}`;
+                  : x.recipe
+                    ? `${t.infillKinds[x.recipe.infill.kind]}${x.basePerM ? ` · CHF ${x.basePerM}/m` : ""}`
+                    : x.template === "bars"
+                      ? `Ø ${x.barDia} mm · ≤ ${x.maxSlope}°${x.basePerM ? ` · CHF ${x.basePerM}/m` : ""}`
+                      : `VSG · ≤ ${x.maxPanelWidth} mm${x.basePerM ? ` · CHF ${x.basePerM}/m` : ""}`;
                 const selected = tp.id === x.id;
                 return (
                   <button
@@ -407,7 +410,7 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
           <div className="grid grid-cols-2 gap-3 pt-1">
             <Num label={t.height} value={cfg.height} min={800} max={1400} onChange={(v) => set({ height: v })} />
             <Num label={t.bottomGap} value={cfg.bottomGap} min={20} max={200} onChange={(v) => set({ bottomGap: v })} />
-            {cfg.system === "bars" && (
+            {infillKind === "vertical_bars" && (
               <Num label={t.barClear} value={cfg.barClear} min={60} max={160} step={5} onChange={(v) => set({ barClear: v })} />
             )}
             <Num label={t.fallHeight} value={cfg.fallHeightM} min={1} max={30} step={1} unit="m" onChange={(v) => set({ fallHeightM: v })} />
@@ -429,24 +432,26 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
             ]}
             onChange={(v) => set({ mounting: v })}
           />
-          <Pills
-            label={t.handrail}
-            value={cfg.handrail}
-            options={
-              cfg.system === "bars"
-                ? [
-                    { v: "round_steel" as const, l: t.hrRound },
-                    { v: "flat_steel" as const, l: t.hrFlat },
-                    { v: "round_inox" as const, l: t.hrInox },
-                  ]
-                : [
-                    { v: "round_inox" as const, l: t.hrInox },
-                    { v: "none" as const, l: t.hrNone },
-                  ]
-            }
-            onChange={(v) => set({ handrail: v })}
-          />
-          {cfg.system === "glass" && (
+          {!tp.recipe && (
+            <Pills
+              label={t.handrail}
+              value={cfg.handrail}
+              options={
+                cfg.system === "bars"
+                  ? [
+                      { v: "round_steel" as const, l: t.hrRound },
+                      { v: "flat_steel" as const, l: t.hrFlat },
+                      { v: "round_inox" as const, l: t.hrInox },
+                    ]
+                  : [
+                      { v: "round_inox" as const, l: t.hrInox },
+                      { v: "none" as const, l: t.hrNone },
+                    ]
+              }
+              onChange={(v) => set({ handrail: v })}
+            />
+          )}
+          {infillKind === "glass" && (
             <Pills
               label={t.glassTypeL}
               value={cfg.glassType}
@@ -695,7 +700,7 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
         </div>
 
         <div className={`h-[380px] overflow-hidden border border-hairline md:h-[520px] ${tab === "3d" ? "" : "hidden"}`}>
-          <Scene3D cfg={cfg} derived={derived} />
+          <Scene3D cfg={cfg} derived={derived} tp={tp} />
         </div>
         <div className={`border border-hairline ${tab === "drawing" ? "" : "hidden"}`}>
           <DrawingSVG ref={svgRef} cfg={cfg} derived={derived} labels={t.drawing} refNo={refNo} />
@@ -706,16 +711,22 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
             <span className="text-[13px] font-light text-graphite">
               {t.stats.length} <span className="text-ink">{(derived.totalLength / 1000).toLocaleString("de-CH")} m</span>
             </span>
-            {cfg.system === "bars" ? (
-              <>
-                <span className="text-[13px] font-light text-graphite">
-                  {t.stats.posts} <span className="text-ink">{derived.postCount}</span>
-                </span>
-                <span className="text-[13px] font-light text-graphite">
-                  {t.stats.bars} <span className="text-ink">{derived.barCount}</span>
-                </span>
-              </>
-            ) : (
+            {derived.postCount > 0 && (
+              <span className="text-[13px] font-light text-graphite">
+                {t.stats.posts} <span className="text-ink">{derived.postCount}</span>
+              </span>
+            )}
+            {derived.barCount > 0 && (
+              <span className="text-[13px] font-light text-graphite">
+                {t.stats.bars} <span className="text-ink">{derived.barCount}</span>
+              </span>
+            )}
+            {derived.railCount > 0 && (
+              <span className="text-[13px] font-light text-graphite">
+                {t.statsRails} <span className="text-ink">{derived.railCount}</span>
+              </span>
+            )}
+            {derived.panelCount > 0 && (
               <span className="text-[13px] font-light text-graphite">
                 {t.statsPanels} <span className="text-ink">{derived.panelCount}</span>
               </span>

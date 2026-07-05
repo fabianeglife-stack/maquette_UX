@@ -5,7 +5,7 @@ import * as THREE from "three";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import type { DerivedRailing } from "@/lib/engine/geometry";
-import type { RailingConfig } from "@/lib/engine/types";
+import type { RailingConfig, TypeProfile } from "@/lib/engine/types";
 
 const MM = 0.001;
 
@@ -58,11 +58,12 @@ const GLASS: Record<RailingConfig["glassType"], { color: string; opacity: number
   tinted: { color: "#4f5e66", opacity: 0.38 },
 };
 
-function Railing({ cfg, derived }: { cfg: RailingConfig; derived: DerivedRailing }) {
+function Railing({ cfg, derived, tp }: { cfg: RailingConfig; derived: DerivedRailing; tp?: TypeProfile }) {
   const color = RAL[cfg.color];
   const hrColor = cfg.handrail === "round_inox" ? "#b9bdbf" : color;
   const slabColor = "#dddad2";
   const glass = GLASS[cfg.glassType];
+  const recipe = tp?.recipe;
 
   return (
     <group>
@@ -108,6 +109,68 @@ function Railing({ cfg, derived }: { cfg: RailingConfig; derived: DerivedRailing
         const railBotB = end.clone().setY(end.y + (cfg.bottomGap + 20) * MM);
 
         const panelH = (cfg.height - cfg.bottomGap - (cfg.handrail === "none" ? 0 : 40)) * MM;
+
+        if (recipe) {
+          const inf = recipe.infill;
+          const memberR = Math.max(0.002, (inf.memberSize / 2) * MM);
+          const infColor = inf.kind === "cables" ? "#b9bdbf" : color;
+          const panelMat =
+            inf.kind === "glass" ? (
+              <meshStandardMaterial color={glass.color} transparent opacity={glass.opacity} roughness={0.15} metalness={0.05} />
+            ) : (
+              <meshStandardMaterial color={color} metalness={0.4} roughness={0.55} />
+            );
+          const recipePanelH = (cfg.height - cfg.bottomGap - (recipe.handrail.profile === "none" ? 0 : 40)) * MM;
+
+          return (
+            <group key={seg.input.id + i}>
+              {slabs}
+              {/* handrail / bottom rail per recipe */}
+              {recipe.handrail.profile !== "none" && (
+                <Member a={railTopA} b={railTopB} radius={(recipe.handrail.size / 2) * MM} color={hrColor} box={recipe.handrail.profile === "flat"} />
+              )}
+              {recipe.bottomRail.profile !== "none" && (
+                <Member a={railBotA} b={railBotB} radius={Math.max(0.006, (recipe.bottomRail.size / 3) * MM)} color={color} box={recipe.bottomRail.profile === "flat"} />
+              )}
+              {/* base profile when the design has no posts */}
+              {recipe.post.profile === "none" && (
+                <Member a={start.clone().setY(start.y + 0.055)} b={end.clone().setY(end.y + 0.055)} radius={0.048} color={color} box />
+              )}
+              {/* posts */}
+              {seg.posts.map((p, k) =>
+                recipe.post.profile === "round" ? (
+                  <mesh key={k} position={[p.base.x * MM, (p.base.y + cfg.height / 2) * MM, p.base.z * MM]}>
+                    <cylinderGeometry args={[(recipe.post.size / 2) * MM, (recipe.post.size / 2) * MM, cfg.height * MM, 16]} />
+                    <meshStandardMaterial color={color} metalness={0.35} roughness={0.5} />
+                  </mesh>
+                ) : (
+                  <mesh key={k} position={[p.base.x * MM, (p.base.y + cfg.height / 2) * MM, p.base.z * MM]}>
+                    <boxGeometry args={[recipe.post.size * MM, cfg.height * MM, recipe.post.size * MM]} />
+                    <meshStandardMaterial color={color} metalness={0.35} roughness={0.5} />
+                  </mesh>
+                ),
+              )}
+              {/* vertical bars */}
+              {seg.bars.map((b, k) => (
+                <Member key={k} a={v(b.bottom)} b={v(b.top)} radius={memberR} color={infColor} />
+              ))}
+              {/* horizontal rails / cables */}
+              {seg.rails.map((r, k) => (
+                <Member key={`r${k}`} a={v(r.bottom)} b={v(r.top)} radius={memberR} color={infColor} />
+              ))}
+              {/* glass / sheet panels */}
+              {seg.panels.map((p, k) => {
+                const mid = v(p.a).add(v(p.b)).multiplyScalar(0.5);
+                return (
+                  <mesh key={`p${k}`} position={[mid.x, mid.y + recipePanelH / 2, mid.z]} rotation={[0, (-seg.headingDeg * Math.PI) / 180, 0]}>
+                    <boxGeometry args={[p.width * MM, recipePanelH, Math.max(0.008, inf.memberSize * MM)]} />
+                    {panelMat}
+                  </mesh>
+                );
+              })}
+            </group>
+          );
+        }
 
         return (
           <group key={seg.input.id + i}>
@@ -164,7 +227,7 @@ function Railing({ cfg, derived }: { cfg: RailingConfig; derived: DerivedRailing
   );
 }
 
-export default function Scene3D({ cfg, derived }: { cfg: RailingConfig; derived: DerivedRailing }) {
+export default function Scene3D({ cfg, derived, tp }: { cfg: RailingConfig; derived: DerivedRailing; tp?: TypeProfile }) {
   const controls = useRef(null);
   const { center, dist } = useMemo(() => {
     const b = derived.bounds;
@@ -182,7 +245,7 @@ export default function Scene3D({ cfg, derived }: { cfg: RailingConfig; derived:
       <ambientLight intensity={0.85} />
       <directionalLight position={[4, 8, 5]} intensity={1.1} />
       <directionalLight position={[-6, 4, -4]} intensity={0.35} />
-      <Railing cfg={cfg} derived={derived} />
+      <Railing cfg={cfg} derived={derived} tp={tp} />
       <gridHelper args={[40, 80, "#d6d3ca", "#e6e4dc"]} position={[0, -0.121, 0]} />
       <OrbitControls ref={controls} target={center} enablePan={false} maxPolarAngle={Math.PI / 2.05} minDistance={1.2} maxDistance={40} />
     </Canvas>

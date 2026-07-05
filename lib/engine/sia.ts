@@ -5,7 +5,7 @@
  */
 
 import type { DerivedRailing } from "./geometry";
-import { MAX_POST_SPACING, MAX_SEGMENT_LENGTH, SYSTEM_MAX_SLOPE, type RailingConfig, type TypeProfile } from "./types";
+import { infillKindOf, MAX_POST_SPACING, MAX_SEGMENT_LENGTH, SYSTEM_MAX_SLOPE, type RailingConfig, type TypeProfile } from "./types";
 
 export type RuleStatus = "pass" | "warn" | "fail";
 
@@ -22,6 +22,8 @@ export const SIA_RULES_VERSION = "SIA358-2010/rev1";
 export function evaluateSia(cfg: RailingConfig, derived: DerivedRailing, tp?: TypeProfile): RuleResult[] {
   const results: RuleResult[] = [];
   const maxSlope = tp?.maxSlope ?? (cfg.system === "glass" ? 0 : SYSTEM_MAX_SLOPE);
+  const kind = infillKindOf(tp);
+  const hasPosts = tp?.recipe ? tp.recipe.post.profile !== "none" : cfg.system === "bars";
 
   // 1 — Minimum guard height ≥ 1.00 m; 1.10 m recommended above 12 m fall height.
   if (cfg.height < 1000) {
@@ -49,13 +51,22 @@ export function evaluateSia(cfg: RailingConfig, derived: DerivedRailing, tp?: Ty
     params: { gap: cfg.bottomGap },
   });
 
-  // 4 — Climbability: vertical infill without horizontal footholds between
-  //     0.15 m and 0.75 m is compliant by construction for this system.
-  results.push({ id: "climb", status: "pass", ref: "SIA 358, 3.1", params: {} });
+  // 4 — Climbability: horizontal members between 0.15 m and 0.75 m act as a
+  //     ladder — not permitted for public use, discouraged for residential.
+  if (kind === "horizontal_rails" || kind === "cables") {
+    results.push({
+      id: "climbHoriz",
+      status: cfg.usage === "public" ? "fail" : "warn",
+      ref: "SIA 358, 3.1 / bfu",
+      params: {},
+    });
+  } else {
+    results.push({ id: "climb", status: "pass", ref: "SIA 358, 3.1", params: {} });
+  }
 
   // 5 — Structural loads (SIA 261 line load for the selected usage).
   const q = cfg.usage === "public" ? "1.6" : "0.8";
-  if (cfg.system === "bars") {
+  if (hasPosts) {
     const maxSpacing = Math.max(0, ...derived.segments.map((s) => s.postSpacing));
     const limit = MAX_POST_SPACING[cfg.usage];
     results.push({
@@ -66,6 +77,8 @@ export function evaluateSia(cfg: RailingConfig, derived: DerivedRailing, tp?: Ty
     });
   } else {
     results.push({ id: "loadsGlass", status: "pass", ref: "SIA 261, 8.1.2", params: { q } });
+  }
+  if (kind === "glass") {
     // VSG laminated safety glass is mandatory for fall protection.
     results.push({
       id: "vsg",

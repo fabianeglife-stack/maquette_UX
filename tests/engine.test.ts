@@ -8,7 +8,15 @@ import { deriveRailing } from "../lib/engine/geometry";
 import { evaluateSia, siaSummary } from "../lib/engine/sia";
 import { defaultPriceBook, priceRailing } from "../lib/engine/pricing";
 import { buildBom } from "../lib/engine/bom";
-import { builtinTypes, defaultConfig, normalizeForType, type RailingConfig, type TypeProfile } from "../lib/engine/types";
+import {
+  builtinTypes,
+  defaultConfig,
+  defaultRecipe,
+  normalizeForType,
+  type RailingConfig,
+  type TypeProfile,
+  type TypeRecipe,
+} from "../lib/engine/types";
 
 const barsType = builtinTypes[0];
 const glassType = builtinTypes[1];
@@ -44,6 +52,90 @@ describe("geometry engine", () => {
     const tp: TypeProfile = { ...glassType, id: "ct-x", maxPanelWidth: 800, builtin: false };
     const d = deriveRailing({ ...glassConfig(), typeId: "ct-x" }, tp);
     d.segments.forEach((s) => s.panels.forEach((p) => expect(p.width).toBeLessThanOrEqual(800)));
+  });
+});
+
+const recipeType = (recipe: TypeRecipe, basePerM = 240): TypeProfile => ({
+  id: "ct-recipe",
+  template: recipe.infill.kind === "glass" ? "glass" : "bars",
+  basePerM,
+  barDia: recipe.infill.memberSize,
+  maxSlope: recipe.maxSlope,
+  maxPanelWidth: recipe.infill.maxPanelWidth,
+  active: true,
+  builtin: false,
+  recipe,
+});
+
+describe("recipe engine (type designer)", () => {
+  it("derives horizontal rails stacked at ≤ maxOpening", () => {
+    const r = defaultRecipe();
+    r.infill = { kind: "horizontal_rails", memberSize: 12, maxOpening: 110, maxPanelWidth: 1200 };
+    const tp = recipeType(r);
+    const cfg = normalizeForType(defaultConfig(), tp);
+    const d = deriveRailing(cfg, tp);
+    // span = 1000 - 100 - 40 = 860 → ceil((860-110)/122) = 7 members per segment
+    expect(d.railCount).toBe(14);
+    expect(d.barCount).toBe(0);
+    d.segments.forEach((s) => expect(s.actualBarClear).toBeLessThanOrEqual(110));
+    // members follow the axis: same start/end heights offset from the base line
+    const first = d.segments[0].rails[0];
+    expect(first.top.x).toBeCloseTo(3000);
+    expect(first.top.y).toBeCloseTo(first.bottom.y);
+  });
+
+  it("flags horizontal infill as climbable (fail for public use)", () => {
+    const r = defaultRecipe();
+    r.infill = { kind: "cables", memberSize: 5, maxOpening: 80, maxPanelWidth: 1200 };
+    const tp = recipeType(r);
+    const cfg = { ...normalizeForType(defaultConfig(), tp), usage: "public" as const };
+    const results = evaluateSia(cfg, deriveRailing(cfg, tp), tp);
+    expect(results.find((x) => x.id === "climbHoriz")?.status).toBe("fail");
+    const res = { ...cfg, usage: "residential" as const };
+    const warn = evaluateSia(res, deriveRailing(res, tp), tp);
+    expect(warn.find((x) => x.id === "climbHoriz")?.status).toBe("warn");
+  });
+
+  it("respects the recipe's post spacing and profile in geometry + BOM", () => {
+    const r = defaultRecipe();
+    r.post = { profile: "round", size: 60, maxSpacing: 800 };
+    const tp = recipeType(r);
+    const cfg = normalizeForType(defaultConfig(), tp);
+    const d = deriveRailing(cfg, tp);
+    d.segments.forEach((s) => expect(s.postSpacing).toBeLessThanOrEqual(800));
+    const bom = buildBom(cfg, d, tp);
+    expect(bom.find((l) => l.id === "posts")?.detail).toContain("Ø 60");
+  });
+
+  it("derives sheet infill as panels with a sheet cut list", () => {
+    const r = defaultRecipe();
+    r.infill = { kind: "sheet", memberSize: 3, maxOpening: 110, maxPanelWidth: 900 };
+    const tp = recipeType(r);
+    const cfg = normalizeForType(defaultConfig(), tp);
+    const d = deriveRailing(cfg, tp);
+    expect(d.panelCount).toBeGreaterThan(0);
+    d.segments.forEach((s) => s.panels.forEach((p) => expect(p.width).toBeLessThanOrEqual(900)));
+    const bom = buildBom(cfg, d, tp);
+    expect(bom.some((l) => l.id === "sheetPanel" && l.detail.includes("t=3 mm"))).toBe(true);
+  });
+
+  it("prices recipe types from their base rate and fixed handrail", () => {
+    const r = defaultRecipe();
+    r.handrail = { profile: "none", size: 0 };
+    const tp = recipeType(r, 300);
+    const cfg = normalizeForType(defaultConfig(), tp);
+    expect(cfg.handrail).toBe("none");
+    const p = priceRailing(cfg, deriveRailing(cfg, tp), defaultPriceBook, tp);
+    // 5 m × 300 + corner 35 + setup 120 + shipping 89 = 1744 net
+    expect(p.net).toBe(1744);
+  });
+
+  it("keeps legacy types byte-identical (no recipe)", () => {
+    const cfg = defaultConfig();
+    const d = deriveRailing(cfg, builtinTypes[0]);
+    expect(d.railCount).toBe(0);
+    expect(d.postCount).toBe(6);
+    expect(priceRailing(cfg, d, defaultPriceBook, builtinTypes[0]).gross).toBe(1301.52);
   });
 });
 

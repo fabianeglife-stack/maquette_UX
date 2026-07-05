@@ -4,7 +4,7 @@ import { Fragment, useEffect, useState } from "react";
 import { chf, defaultPriceBook, type PriceBook } from "@/lib/engine/pricing";
 import { deriveRailing } from "@/lib/engine/geometry";
 import { buildBom } from "@/lib/engine/bom";
-import { type System, type TypeProfile } from "@/lib/engine/types";
+import { type TypeProfile } from "@/lib/engine/types";
 import {
   deleteCustomType,
   findType,
@@ -34,6 +34,7 @@ import {
 import type { Dict } from "@/lib/i18n";
 import { api, hasBackend, type ApiOrder } from "@/lib/api";
 import Link from "next/link";
+import TypeDesigner from "./TypeDesigner";
 
 type AdminDict = Dict["admin"];
 type Tab = "dashboard" | "orders" | "customers" | "pricing" | "products" | "content";
@@ -536,43 +537,30 @@ function PricingEditor({ t }: { t: AdminDict }) {
   );
 }
 
-/* ---------- products tab: guardrail type builder ---------- */
+/* ---------- products tab: parametric type designer ---------- */
 
-const emptyDraft = () => ({
-  template: "bars" as System,
-  nameDe: "",
-  nameFr: "",
-  nameEn: "",
-  basePerM: 220,
-  barDia: 14,
-  maxSlope: 30,
-  maxPanelWidth: 1100,
-});
-
-function ProductsTab({ t }: { t: AdminDict }) {
+function ProductsTab({ t, cfgDict }: { t: AdminDict; cfgDict: Dict["cfg"] }) {
   const [types, setTypes] = useState<TypeProfile[]>([]);
-  const [showForm, setShowForm] = useState(false);
-  const [draft, setDraft] = useState(emptyDraft());
+  const [designer, setDesigner] = useState<"new" | TypeProfile | null>(null);
   const [created, setCreated] = useState(false);
 
   useEffect(() => setTypes(loadAllTypes()), []);
   const refresh = () => setTypes(loadAllTypes());
-
-  const inputCls =
-    "w-full border border-hairline bg-paper px-3 py-2 text-sm font-light text-ink outline-none transition-colors placeholder:text-stone focus:border-graphite";
 
   const specFor = (x: TypeProfile) =>
     x.builtin
       ? x.template === "bars"
         ? t.productBarsSpec
         : t.productGlassSpec
-      : x.template === "bars"
-        ? `Ø ${x.barDia} mm · ≤ ${x.maxSlope}° · CHF ${x.basePerM}/m`
-        : `VSG · ≤ ${x.maxPanelWidth} mm · CHF ${x.basePerM}/m`;
+      : x.recipe
+        ? `${cfgDict.infillKinds[x.recipe.infill.kind]} · ≤ ${x.maxSlope}° · CHF ${x.basePerM}/m`
+        : x.template === "bars"
+          ? `Ø ${x.barDia} mm · ≤ ${x.maxSlope}° · CHF ${x.basePerM}/m`
+          : `VSG · ≤ ${x.maxPanelWidth} mm · CHF ${x.basePerM}/m`;
 
   return (
-    <div className="flex max-w-3xl flex-col gap-4">
-      <div className="grid gap-4 sm:grid-cols-2">
+    <div className="flex flex-col gap-4">
+      <div className="grid max-w-3xl gap-4 sm:grid-cols-2">
         {types.map((x) => (
           <div key={x.id} className={`flex flex-col gap-2 border border-hairline p-5 ${x.active ? "" : "opacity-60"}`}>
             <div className="flex items-center justify-between gap-2">
@@ -590,6 +578,16 @@ function ProductsTab({ t }: { t: AdminDict }) {
             <p className="text-xs font-light leading-relaxed text-graphite">{specFor(x)}</p>
             {!x.builtin && (
               <div className="flex gap-4 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCreated(false);
+                    setDesigner(x);
+                  }}
+                  className="text-[11px] uppercase tracking-[0.12em] text-ink underline underline-offset-2"
+                >
+                  {t.designer.edit}
+                </button>
                 <button
                   type="button"
                   onClick={() => {
@@ -616,103 +614,31 @@ function ProductsTab({ t }: { t: AdminDict }) {
         ))}
       </div>
 
-      {!showForm ? (
+      {designer ? (
+        <TypeDesigner
+          t={t}
+          cfgDict={cfgDict}
+          initial={designer === "new" ? undefined : designer}
+          onCancel={() => setDesigner(null)}
+          onSave={(tp) => {
+            saveCustomType(tp);
+            refresh();
+            setDesigner(null);
+            setCreated(true);
+          }}
+        />
+      ) : (
         <button
           type="button"
           onClick={() => {
-            setDraft(emptyDraft());
             setCreated(false);
-            setShowForm(true);
+            setDesigner("new");
           }}
-          className="flex flex-col gap-2 border border-dashed border-hairline p-5 text-left transition-colors hover:border-graphite"
+          className="flex max-w-3xl flex-col gap-2 border border-dashed border-hairline p-5 text-left transition-colors hover:border-graphite"
         >
           <span className="text-sm text-graphite">+ {t.newType}</span>
           <p className="text-xs font-light leading-relaxed text-stone">{t.newTypeNote}</p>
         </button>
-      ) : (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            saveCustomType({
-              id: "ct-" + Math.random().toString(36).slice(2, 8),
-              template: draft.template,
-              name: {
-                de: draft.nameDe,
-                fr: draft.nameFr || draft.nameDe,
-                en: draft.nameEn || draft.nameDe,
-              },
-              basePerM: draft.basePerM,
-              barDia: draft.barDia,
-              maxSlope: draft.template === "glass" ? 0 : draft.maxSlope,
-              maxPanelWidth: draft.maxPanelWidth,
-              active: true,
-              builtin: false,
-            });
-            refresh();
-            setShowForm(false);
-            setCreated(true);
-          }}
-          className="flex flex-col gap-4 border border-ink/60 p-5"
-        >
-          <span className="text-xs font-medium uppercase tracking-[0.16em] text-ink">{t.newType}</span>
-
-          <div className="flex flex-col gap-1.5">
-            <span className="text-[11px] font-medium uppercase tracking-[0.12em] text-stone">{t.typesForm.template}</span>
-            <div className="flex gap-2">
-              {(["bars", "glass"] as const).map((tmpl) => (
-                <button
-                  key={tmpl}
-                  type="button"
-                  onClick={() => setDraft({ ...draft, template: tmpl })}
-                  className={`border px-3.5 py-2 text-xs tracking-[0.06em] transition-colors ${
-                    draft.template === tmpl ? "border-ink bg-ink text-paper" : "border-hairline text-graphite hover:border-graphite"
-                  }`}
-                >
-                  {tmpl === "bars" ? t.productBars : t.productGlass}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-3">
-            <input required placeholder={t.typesForm.nameDe} value={draft.nameDe} onChange={(e) => setDraft({ ...draft, nameDe: e.target.value })} className={inputCls} />
-            <input placeholder={t.typesForm.nameFr} value={draft.nameFr} onChange={(e) => setDraft({ ...draft, nameFr: e.target.value })} className={inputCls} />
-            <input placeholder={t.typesForm.nameEn} value={draft.nameEn} onChange={(e) => setDraft({ ...draft, nameEn: e.target.value })} className={inputCls} />
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-3">
-            <label className="flex flex-col gap-1.5">
-              <span className="text-[11px] font-medium uppercase tracking-[0.12em] text-stone">{t.typesForm.basePerM}</span>
-              <input type="number" min={50} max={2000} value={draft.basePerM} onChange={(e) => setDraft({ ...draft, basePerM: Number(e.target.value) })} className={inputCls} />
-            </label>
-            {draft.template === "bars" ? (
-              <>
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-[11px] font-medium uppercase tracking-[0.12em] text-stone">{t.typesForm.barDia}</span>
-                  <input type="number" min={8} max={30} value={draft.barDia} onChange={(e) => setDraft({ ...draft, barDia: Number(e.target.value) })} className={inputCls} />
-                </label>
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-[11px] font-medium uppercase tracking-[0.12em] text-stone">{t.typesForm.maxSlope}</span>
-                  <input type="number" min={0} max={45} value={draft.maxSlope} onChange={(e) => setDraft({ ...draft, maxSlope: Number(e.target.value) })} className={inputCls} />
-                </label>
-              </>
-            ) : (
-              <label className="flex flex-col gap-1.5">
-                <span className="text-[11px] font-medium uppercase tracking-[0.12em] text-stone">{t.typesForm.maxPanelWidth}</span>
-                <input type="number" min={400} max={2000} value={draft.maxPanelWidth} onChange={(e) => setDraft({ ...draft, maxPanelWidth: Number(e.target.value) })} className={inputCls} />
-              </label>
-            )}
-          </div>
-
-          <div className="flex gap-3">
-            <button type="submit" className="inline-flex items-center justify-center bg-ink px-5 py-3 text-xs font-medium uppercase tracking-[0.14em] text-paper transition-colors hover:bg-graphite">
-              {t.typesForm.save}
-            </button>
-            <button type="button" onClick={() => setShowForm(false)} className="inline-flex items-center justify-center border border-hairline px-5 py-3 text-xs font-medium uppercase tracking-[0.14em] text-graphite transition-colors hover:border-graphite">
-              {t.typesForm.cancel}
-            </button>
-          </div>
-        </form>
       )}
 
       {created && (
@@ -915,7 +841,7 @@ export default function AdminApp({
       {tab === "orders" && <OrdersTable t={t} statusLabels={statusLabels} cfgDict={cfgDict} />}
       {tab === "customers" && <CustomersTab t={t} />}
       {tab === "pricing" && <PricingEditor t={t} />}
-      {tab === "products" && <ProductsTab t={t} />}
+      {tab === "products" && <ProductsTab t={t} cfgDict={cfgDict} />}
       {tab === "content" && <ContentTab t={t} refsDict={refsDict} locale={locale} />}
     </div>
   );

@@ -22,10 +22,54 @@ export interface SegmentInput {
   slope: number;
 }
 
+/* ---------- parametric type recipes (admin type designer) ---------- */
+
+export type PostProfile = "square" | "round" | "none";
+export type InfillKind = "vertical_bars" | "horizontal_rails" | "cables" | "glass" | "sheet";
+export type RailProfileKind = "round" | "flat" | "none";
+
+/**
+ * A guardrail described as a component recipe — the parametric master model
+ * the admin edits in the type designer. Geometry, SIA checks, pricing, BOM
+ * and drawings are all derived from it.
+ */
+export interface TypeRecipe {
+  post: { profile: PostProfile; size: number; maxSpacing: number };
+  infill: {
+    kind: InfillKind;
+    /** Member size: bar/rail/cable Ø, or panel thickness (glass/sheet), mm. */
+    memberSize: number;
+    /** Max clear opening between members (drives counts + SIA sphere rule). */
+    maxOpening: number;
+    /** Max panel width for glass/sheet infill, mm. */
+    maxPanelWidth: number;
+  };
+  handrail: { profile: RailProfileKind; size: number };
+  bottomRail: { profile: RailProfileKind; size: number };
+  maxSlope: number;
+}
+
+export function defaultRecipe(): TypeRecipe {
+  return {
+    post: { profile: "square", size: 40, maxSpacing: 1250 },
+    infill: { kind: "vertical_bars", memberSize: 12, maxOpening: 110, maxPanelWidth: 1200 },
+    handrail: { profile: "round", size: 42 },
+    bottomRail: { profile: "flat", size: 30 },
+    maxSlope: 37,
+  };
+}
+
+/** Effective infill kind of a type (legacy templates map to bars/glass). */
+export function infillKindOf(tp?: TypeProfile): InfillKind {
+  if (tp?.recipe) return tp.recipe.infill.kind;
+  return tp?.template === "glass" ? "glass" : "vertical_bars";
+}
+
 /**
  * A guardrail type: template (bars/glass geometry logic) + parameter profile.
  * Built-in types ship with the product; custom types are created in the
- * admin type builder and carry their own names and parameters.
+ * admin type builder and carry their own names and parameters. Types created
+ * in the type designer additionally carry a full component `recipe`.
  */
 export interface TypeProfile {
   id: string;
@@ -42,6 +86,8 @@ export interface TypeProfile {
   maxPanelWidth: number;
   active: boolean;
   builtin: boolean;
+  /** Parametric component recipe (type-designer types). */
+  recipe?: TypeRecipe;
 }
 
 export const builtinTypes: TypeProfile[] = [
@@ -113,7 +159,12 @@ export function defaultConfig(): RailingConfig {
 /** Keep the handrail choice valid when switching types/systems. */
 export function normalizeForType(cfg: RailingConfig, tp: TypeProfile): RailingConfig {
   let handrail = cfg.handrail;
-  if (tp.template === "glass" && (handrail === "round_steel" || handrail === "flat_steel")) handrail = "round_inox";
-  if (tp.template === "bars" && handrail === "none") handrail = "round_steel";
+  if (tp.recipe) {
+    // Recipe types fix the handrail in the design.
+    handrail = tp.recipe.handrail.profile === "none" ? "none" : tp.recipe.handrail.profile === "flat" ? "flat_steel" : "round_steel";
+  } else {
+    if (tp.template === "glass" && (handrail === "round_steel" || handrail === "flat_steel")) handrail = "round_inox";
+    if (tp.template === "bars" && handrail === "none") handrail = "round_steel";
+  }
   return { ...cfg, system: tp.template, typeId: tp.id, handrail };
 }
