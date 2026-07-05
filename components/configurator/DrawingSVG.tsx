@@ -51,26 +51,20 @@ const DrawingSVG = forwardRef<SVGSVGElement, Props>(function DrawingSVG({ cfg, d
       const y1 = devY - dy;
       const h = cfg.height * s;
 
-      const posts: [number, number, number, number][] = seg.posts.map((p) => {
-        const t = Math.hypot(p.base.x - seg.start.x, p.base.y - seg.start.y, p.base.z - seg.start.z);
-        const f = t / seg.input.length;
-        const px = devX + dx * f;
-        const py = devY - dy * f;
-        return [px, py, px, py - h];
-      });
-      const bars: [number, number, number, number][] = seg.bars.map((b) => {
-        const t = Math.hypot(b.bottom.x - seg.start.x, b.bottom.z - seg.start.z, b.bottom.y - cfg.bottomGap - seg.start.y);
+      // Map a derived 3D point into the developed elevation: plan distance
+      // along the axis → x, height offset from the (sloped) axis → y.
+      const cosS = Math.cos((seg.slopeDeg * Math.PI) / 180);
+      const mapPt = (q: { x: number; y: number; z: number }): [number, number] => {
+        const t = Math.hypot(q.x - seg.start.x, q.z - seg.start.z) / (cosS || 1);
         const f = Math.min(1, t / seg.input.length);
-        const px = devX + dx * f;
-        const py = devY - dy * f;
-        return [px, py - cfg.bottomGap * s, px, py - h + 40 * s];
-      });
+        const axisY = seg.start.y + seg.dir.y * Math.min(t, seg.input.length);
+        return [devX + dx * f, devY - dy * f - (q.y - axisY) * s];
+      };
 
-      // Horizontal members (rails/cables) run parallel to the base line.
-      const rails: [number, number, number, number][] = seg.rails.map((r) => {
-        const off = (r.bottom.y - seg.start.y) * s;
-        return [devX, devY - off, x1, y1 - off];
-      });
+      const posts: [number, number, number, number][] = seg.posts.map((p) => [...mapPt(p.base), ...mapPt(p.top)] as [number, number, number, number]);
+      const bars: [number, number, number, number][] = seg.bars.map((b) => [...mapPt(b.bottom), ...mapPt(b.top)] as [number, number, number, number]);
+      // Horizontal members (rails/cables): cut pieces framed between posts.
+      const rails: [number, number, number, number][] = seg.rails.map((r) => [...mapPt(r.bottom), ...mapPt(r.top)] as [number, number, number, number]);
 
       const panels: string[] = seg.panels.map((p) => {
         const t0 = Math.hypot(p.a.x - seg.start.x, p.a.z - seg.start.z, p.a.y - cfg.bottomGap - seg.start.y);

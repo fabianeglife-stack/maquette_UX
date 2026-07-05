@@ -700,7 +700,7 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
         </div>
 
         <div className={`h-[380px] overflow-hidden border border-hairline md:h-[520px] ${tab === "3d" ? "" : "hidden"}`}>
-          <Scene3D cfg={cfg} derived={derived} tp={tp} />
+          <Scene3D cfg={cfg} derived={derived} tp={tp} techLabel={t.scene.technical} />
         </div>
         <div className={`border border-hairline ${tab === "drawing" ? "" : "hidden"}`}>
           <DrawingSVG ref={svgRef} cfg={cfg} derived={derived} labels={t.drawing} refNo={refNo} />

@@ -37,6 +37,30 @@ export interface DerivedPanel {
   width: number;
 }
 
+/** Base plate under a post (recipe types). */
+export interface DerivedPlate {
+  at: Vec3;
+  headingDeg: number;
+}
+
+/** Cable end fitting: swaged terminal + tensioner at a terminal post. */
+export interface DerivedTensioner {
+  at: Vec3;
+  /** Point 60 mm inward along the cable, for orientation. */
+  end: Vec3;
+}
+
+/** Glass point-fixing clamp at a panel edge (recipe glass with posts). */
+export interface DerivedClamp {
+  at: Vec3;
+  headingDeg: number;
+}
+
+/** Handrail corner/slope joint (miter elbow or bend). */
+export interface DerivedJoint {
+  at: Vec3;
+}
+
 export interface DerivedSegment {
   input: SegmentInput;
   start: Vec3;
@@ -51,7 +75,17 @@ export interface DerivedSegment {
   /** Horizontal members (rails/cables) running along the axis, recipe types. */
   rails: DerivedBar[];
   panels: DerivedPanel[];
-  /** Actual clear opening between infill members or panel joint, mm. */
+  /** Base plates under posts (recipe types). */
+  plates: DerivedPlate[];
+  /** Cable end fittings at terminal posts (recipe cable types). */
+  tensioners: DerivedTensioner[];
+  /** Post caps (recipe types without a handrail). */
+  caps: Vec3[];
+  /** Glass clamps (recipe glass with posts). */
+  clamps: DerivedClamp[];
+  /** Tread grid for stair segments (nosing line = segment axis). */
+  steps: { count: number; len: number } | null;
+  /** Actual worst clear opening in the infill ladder, mm. */
   actualBarClear: number;
   /** Actual post spacing along the axis, mm. */
   postSpacing: number;
@@ -68,10 +102,17 @@ export interface DerivedRailing {
   /** Horizontal member count (rails/cables), recipe types. */
   railCount: number;
   panelCount: number;
+  /** Handrail corner/slope joints at segment junctions (recipe types). */
+  joints: DerivedJoint[];
   /** Approximate kit weight, kg. */
   weightKg: number;
   /** Plan bounding box for drawing layout. */
   bounds: { minX: number; maxX: number; minZ: number; maxZ: number; maxY: number };
+}
+
+/** Vertical extent taken by a rail profile (flat profiles are 8 mm thick). */
+export function railDepth(profile: "round" | "flat" | "none", size: number): number {
+  return profile === "none" ? 0 : profile === "flat" ? 8 : size;
 }
 
 const rad = (deg: number) => (deg * Math.PI) / 180;
@@ -102,6 +143,10 @@ export function deriveRailing(cfg: RailingConfig, tp?: TypeProfile): DerivedRail
     const bars: DerivedBar[] = [];
     const rails: DerivedBar[] = [];
     const panels: DerivedPanel[] = [];
+    const plates: DerivedPlate[] = [];
+    const tensioners: DerivedTensioner[] = [];
+    const caps: Vec3[] = [];
+    const clamps: DerivedClamp[] = [];
     let actualClear = 0;
     let spacing = seg.length;
     const recipe = tp?.recipe;
@@ -112,16 +157,35 @@ export function deriveRailing(cfg: RailingConfig, tp?: TypeProfile): DerivedRail
       z: cursor.z + dir.z * t,
     });
 
+    // Tread grid for stair segments. The segment axis is the nosing line:
+    // treads sit below it, so members offset upward never clip the steps.
+    const stepCount = seg.stair && slope > 0 ? Math.max(2, Math.round((dir.y * seg.length) / 175)) : 0;
+    const stepLen = stepCount > 0 ? seg.length / stepCount : 0;
+    const treadY = (t: number): number => {
+      if (stepCount === 0) return cursor.y + dir.y * t;
+      const s = Math.floor(t / stepLen + 1e-6);
+      return cursor.y + dir.y * Math.min(s * stepLen, seg.length);
+    };
+
     if (recipe) {
       // ---- recipe-driven derivation (type-designer types) ----
+      const postHalf = recipe.post.profile === "none" ? 0 : recipe.post.size / 2;
+      const hrDepth = railDepth(recipe.handrail.profile, recipe.handrail.size);
+      const brDepth = railDepth(recipe.bottomRail.profile, recipe.bottomRail.size);
+
       let fields = 1;
       if (recipe.post.profile !== "none") {
         const limit = Math.min(recipe.post.maxSpacing, maxSpacing);
         fields = Math.max(1, Math.ceil(seg.length / limit));
         spacing = seg.length / fields;
         for (let p = i === 0 ? 0 : 1; p <= fields; p++) {
-          const base = at(p * spacing);
-          posts.push({ base, top: { ...base, y: base.y + cfg.height } });
+          const t = p * spacing;
+          const axis = at(t);
+          // Base on the tread (stairs) or the slab; top welds to the handrail underside.
+          const base = { ...axis, y: treadY(t) };
+          posts.push({ base, top: { ...axis, y: axis.y + cfg.height - hrDepth } });
+          plates.push({ at: base, headingDeg: heading });
+          if (hrDepth === 0) caps.push({ ...axis, y: axis.y + cfg.height });
         }
       } else {
         spacing = 0;
@@ -129,34 +193,70 @@ export function deriveRailing(cfg: RailingConfig, tp?: TypeProfile): DerivedRail
 
       const inf = recipe.infill;
       if (inf.kind === "vertical_bars") {
-        const span = fields > 1 || recipe.post.profile !== "none" ? seg.length / fields : seg.length;
+        // Bars welded between bottom rail (or bottom gap) and handrail underside,
+        // framed per field between post faces.
+        const barBot = cfg.bottomGap + brDepth;
+        const barTop = cfg.height - (hrDepth > 0 ? hrDepth : 40);
+        const span = recipe.post.profile !== "none" ? spacing : seg.length;
+        const usable = span - 2 * postHalf;
         const target = Math.min(cfg.barClear, inf.maxOpening);
-        const n = Math.max(1, Math.ceil((span - target) / (inf.memberSize + target)));
-        actualClear = (span - n * inf.memberSize) / (n + 1);
+        const n = Math.max(1, Math.ceil((usable - target) / (inf.memberSize + target)));
+        actualClear = (usable - n * inf.memberSize) / (n + 1);
         for (let f = 0; f < fields; f++) {
           for (let b = 1; b <= n; b++) {
-            const t = f * span + ((actualClear + inf.memberSize) * b - inf.memberSize / 2);
-            const foot = at(t, cfg.bottomGap);
-            bars.push({ bottom: foot, top: { ...foot, y: foot.y + (cfg.height - cfg.bottomGap - 40) } });
+            const t = f * span + postHalf + ((actualClear + inf.memberSize) * b - inf.memberSize / 2);
+            const axis = at(t);
+            bars.push({
+              bottom: { ...axis, y: axis.y + barBot },
+              top: { ...axis, y: axis.y + barTop },
+            });
           }
         }
       } else if (inf.kind === "horizontal_rails" || inf.kind === "cables") {
-        // Members parallel to the axis, stacked at ≤ maxOpening clear.
-        const span = cfg.height - cfg.bottomGap - 40;
-        const n = Math.max(1, Math.ceil((span - inf.maxOpening) / (inf.memberSize + inf.maxOpening)));
-        actualClear = (span - n * inf.memberSize) / (n + 1);
+        // Closed opening ladder from the bottom rail (or floor) up to the
+        // handrail underside: every opening — including the top one — ≤ maxOpening.
+        const yLow = brDepth > 0 ? cfg.bottomGap + brDepth : 0;
+        const yHigh = cfg.height - hrDepth;
+        const ladder = yHigh - yLow;
+        const n = Math.max(1, Math.ceil((ladder - inf.maxOpening) / (inf.memberSize + inf.maxOpening)));
+        actualClear = (ladder - n * inf.memberSize) / (n + 1);
         for (let r = 1; r <= n; r++) {
-          const dy = cfg.bottomGap + (actualClear + inf.memberSize) * r - inf.memberSize / 2;
-          rails.push({ bottom: at(0, dy), top: at(seg.length, dy) });
+          const dy = yLow + (actualClear + inf.memberSize) * r - inf.memberSize / 2;
+          if (inf.kind === "cables") {
+            // Cables run continuously through drilled intermediate posts and
+            // terminate with swaged tensioners at the segment end posts.
+            const t0 = postHalf;
+            const t1 = seg.length - postHalf;
+            rails.push({ bottom: at(t0, dy), top: at(t1, dy) });
+            if (postHalf > 0) {
+              tensioners.push({ at: at(t0, dy), end: at(Math.min(t0 + 60, t1), dy) });
+              tensioners.push({ at: at(t1, dy), end: at(Math.max(t1 - 60, t0), dy) });
+            }
+          } else {
+            // Rails are cut pieces framed between post faces, one per field.
+            const span = spacing || seg.length;
+            for (let f = 0; f < fields; f++) {
+              rails.push({ bottom: at(f * span + postHalf, dy), top: at((f + 1) * span - postHalf, dy) });
+            }
+          }
         }
       } else {
         // glass / sheet panels between joints of PANEL_GAP
         const n = Math.max(1, Math.ceil((seg.length - PANEL_GAP) / (inf.maxPanelWidth + PANEL_GAP)));
         const width = (seg.length - (n + 1) * PANEL_GAP) / n;
         actualClear = PANEL_GAP;
+        const panelH = cfg.height - cfg.bottomGap - hrDepth;
         for (let p = 0; p < n; p++) {
           const t0 = PANEL_GAP + p * (width + PANEL_GAP);
           panels.push({ a: at(t0, cfg.bottomGap), b: at(t0 + width, cfg.bottomGap), width });
+          if (inf.kind === "glass" && postHalf > 0) {
+            // Point-fixing clamps on both vertical edges, at 1/4 and 3/4 height.
+            for (const te of [t0, t0 + width]) {
+              for (const frac of [0.25, 0.75]) {
+                clamps.push({ at: at(te, cfg.bottomGap + panelH * frac), headingDeg: heading });
+              }
+            }
+          }
         }
       }
     } else if (cfg.system === "bars") {
@@ -218,12 +318,31 @@ export function deriveRailing(cfg: RailingConfig, tp?: TypeProfile): DerivedRail
       bars,
       rails,
       panels,
+      plates,
+      tensioners,
+      caps,
+      clamps,
+      steps: stepCount > 0 ? { count: stepCount, len: stepLen } : null,
       actualBarClear: actualClear,
       postSpacing: spacing,
       rise: dir.y * seg.length,
     });
     cursor = end;
   });
+
+  // Handrail joints (miter elbows / stair bends) at segment junctions.
+  const joints: DerivedJoint[] = [];
+  const jointRecipe = tp?.recipe;
+  if (jointRecipe && jointRecipe.handrail.profile !== "none") {
+    const hrDepth = railDepth(jointRecipe.handrail.profile, jointRecipe.handrail.size);
+    for (let i = 1; i < segments.length; i++) {
+      const prev = segments[i - 1];
+      const s = segments[i];
+      if (s.input.angle !== 0 || s.slopeDeg !== prev.slopeDeg) {
+        joints.push({ at: { ...s.start, y: s.start.y + cfg.height - hrDepth / 2 } });
+      }
+    }
+  }
 
   const totalLength = cfg.segments.reduce((s, x) => s + x.length, 0);
   const slopedLength = cfg.segments.reduce((s, x) => s + (x.stair ? x.length : 0), 0);
@@ -240,7 +359,16 @@ export function deriveRailing(cfg: RailingConfig, tp?: TypeProfile): DerivedRail
   const weightKg = recipe
     ? postCount * (cfg.height / 1000) * 4.4 * (recipe.post.size / 40) +
       barCount * ((cfg.height - cfg.bottomGap) / 1000) * memberKgPerM +
-      segments.reduce((s, x) => s + x.rails.length * (x.input.length / 1000), 0) * memberKgPerM +
+      segments.reduce(
+        (s, x) =>
+          s +
+          x.rails.reduce(
+            (a, r) => a + Math.hypot(r.top.x - r.bottom.x, r.top.y - r.bottom.y, r.top.z - r.bottom.z) / 1000,
+            0,
+          ),
+        0,
+      ) *
+        memberKgPerM +
       (recipe.infill.kind === "glass"
         ? (totalLength / 1000) * ((cfg.height - cfg.bottomGap) / 1000) * 42
         : recipe.infill.kind === "sheet"
@@ -277,6 +405,7 @@ export function deriveRailing(cfg: RailingConfig, tp?: TypeProfile): DerivedRail
     barCount,
     railCount,
     panelCount,
+    joints,
     weightKg: Math.round(weightKg),
     bounds,
   };

@@ -3,7 +3,7 @@
  * Labels are i18n keys resolved by the UI.
  */
 
-import type { DerivedRailing } from "./geometry";
+import { railDepth, type DerivedRailing } from "./geometry";
 import { PANEL_GAP, type RailingConfig, type TypeProfile } from "./types";
 
 export interface BomLine {
@@ -23,27 +23,58 @@ export function buildBom(cfg: RailingConfig, derived: DerivedRailing, tp?: TypeP
   if (recipe) {
     // ---- recipe-driven parts list (type-designer types) ----
     const inf = recipe.infill;
+    const hrDepth = railDepth(recipe.handrail.profile, recipe.handrail.size);
+    const brDepth = railDepth(recipe.bottomRail.profile, recipe.bottomRail.size);
+    const pieceLen = (x: { bottom: { x: number; y: number; z: number }; top: { x: number; y: number; z: number } }) =>
+      Math.hypot(x.top.x - x.bottom.x, x.top.y - x.bottom.y, x.top.z - x.bottom.z);
     if (recipe.post.profile !== "none") {
       const p = recipe.post;
-      lines.push({
-        id: "posts",
-        qty: derived.postCount,
-        unit: "pc",
-        detail: p.profile === "round" ? `Ø ${p.size} × ${cfg.height} mm` : `${p.size}×${p.size}×${cfg.height} mm`,
-      });
+      // Cut list grouped by post length (stair posts run longer, down to the tread).
+      const groups = new Map<number, number>();
+      derived.segments.forEach((s) =>
+        s.posts.forEach((po) => {
+          const l = Math.round((po.top.y - po.base.y) / 5) * 5;
+          groups.set(l, (groups.get(l) ?? 0) + 1);
+        }),
+      );
+      [...groups.entries()]
+        .sort((a, b) => b[0] - a[0])
+        .forEach(([l, n]) =>
+          lines.push({
+            id: "posts",
+            qty: n,
+            unit: "pc",
+            detail: p.profile === "round" ? `Ø ${p.size} × ${l} mm` : `${p.size}×${p.size}×${l} mm`,
+          }),
+        );
     }
     if (inf.kind === "vertical_bars") {
-      lines.push({ id: "bars", qty: derived.barCount, unit: "pc", detail: `Ø ${inf.memberSize} × ${cfg.height - cfg.bottomGap - 40} mm` });
-    } else if (inf.kind === "horizontal_rails" || inf.kind === "cables") {
-      const railM = r1(derived.segments.reduce((s, x) => s + x.rails.length * (x.input.length / 1000), 0));
-      lines.push({ id: inf.kind === "cables" ? "cables" : "railsPart", qty: railM, unit: "m", detail: `Ø ${inf.memberSize} mm` });
+      const barLen = cfg.height - (hrDepth > 0 ? hrDepth : 40) - cfg.bottomGap - brDepth;
+      lines.push({ id: "bars", qty: derived.barCount, unit: "pc", detail: `Ø ${inf.memberSize} × ${barLen} mm` });
+    } else if (inf.kind === "cables") {
+      const cableM = r1(derived.segments.reduce((s, x) => s + x.rails.reduce((a, r) => a + pieceLen(r) / 1000, 0), 0));
+      lines.push({ id: "cables", qty: cableM, unit: "m", detail: `Ø ${inf.memberSize} mm` });
+    } else if (inf.kind === "horizontal_rails") {
+      // Cut list of per-field rail pieces, grouped by length.
+      const groups = new Map<number, number>();
+      derived.segments.forEach((s) =>
+        s.rails.forEach((r) => {
+          const l = Math.round(pieceLen(r));
+          groups.set(l, (groups.get(l) ?? 0) + 1);
+        }),
+      );
+      [...groups.entries()]
+        .sort((a, b) => b[0] - a[0])
+        .forEach(([l, n]) =>
+          lines.push({ id: "railsPart", qty: n, unit: "pc", detail: `Ø ${inf.memberSize} × ${l} mm` }),
+        );
     } else {
       // glass / sheet cut list, grouped by rounded width
       const groups = new Map<number, number>();
       derived.segments.forEach((s) =>
         s.panels.forEach((p) => groups.set(Math.round(p.width), (groups.get(Math.round(p.width)) ?? 0) + 1)),
       );
-      const panelH = cfg.height - cfg.bottomGap - (recipe.handrail.profile === "none" ? 0 : 40);
+      const panelH = cfg.height - cfg.bottomGap - hrDepth;
       const spec = inf.kind === "glass" ? (recipe.handrail.profile === "none" ? "VSG 2×10" : "VSG 2×8") : `t=${inf.memberSize} mm`;
       [...groups.entries()]
         .sort((a, b) => b[0] - a[0])
@@ -68,12 +99,23 @@ export function buildBom(cfg: RailingConfig, derived: DerivedRailing, tp?: TypeP
         detail: recipe.bottomRail.profile === "flat" ? `${recipe.bottomRail.size}×8 mm` : `Ø ${recipe.bottomRail.size} mm`,
       });
     }
+    // ---- connection hardware derived from the assembly ----
+    const plateCount = derived.segments.reduce((s, x) => s + x.plates.length, 0);
+    const tensionerCount = derived.segments.reduce((s, x) => s + x.tensioners.length, 0);
+    const capCount = derived.segments.reduce((s, x) => s + x.caps.length, 0);
+    const clampCount = derived.segments.reduce((s, x) => s + x.clamps.length, 0);
     if (recipe.post.profile !== "none") {
-      lines.push({ id: "anchors", qty: derived.postCount * (cfg.mounting === "side" ? 3 : 2), unit: "pc", detail: "M12" });
+      const plateSize = Math.max(100, Math.round(recipe.post.size * 2.2 / 10) * 10);
+      lines.push({ id: "basePlate", qty: plateCount, unit: "pc", detail: `${plateSize}×${plateSize}×8 mm` });
+      lines.push({ id: "anchors", qty: plateCount * (cfg.mounting === "side" ? 3 : 4), unit: "pc", detail: "M12" });
     } else {
       lines.push({ id: "baseProfile", qty: m, unit: "m", detail: cfg.mounting === "side" ? "seitlich / lateral" : "aufgesetzt / top" });
       lines.push({ id: "anchors", qty: Math.ceil(derived.totalLength / 300), unit: "pc", detail: "M12, e=300 mm" });
     }
+    if (tensionerCount > 0) lines.push({ id: "tensioner", qty: tensionerCount, unit: "pc", detail: "M8 inox" });
+    if (capCount > 0) lines.push({ id: "postCap", qty: capCount, unit: "pc", detail: recipe.post.profile === "round" ? `Ø ${recipe.post.size} mm` : `${recipe.post.size}×${recipe.post.size} mm` });
+    if (derived.joints.length > 0) lines.push({ id: "elbow", qty: derived.joints.length, unit: "pc", detail: recipe.handrail.profile === "flat" ? `${recipe.handrail.size}×8 mm` : `Ø ${recipe.handrail.size} mm` });
+    if (clampCount > 0) lines.push({ id: "clamp", qty: clampCount, unit: "pc", detail: "Inox" });
     lines.push({ id: "fixings", qty: 1, unit: "set", detail: "" });
     return lines;
   }

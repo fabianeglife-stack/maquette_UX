@@ -68,20 +68,95 @@ const recipeType = (recipe: TypeRecipe, basePerM = 240): TypeProfile => ({
 });
 
 describe("recipe engine (type designer)", () => {
-  it("derives horizontal rails stacked at ≤ maxOpening", () => {
+  it("frames horizontal rails per field, stacked at ≤ maxOpening", () => {
     const r = defaultRecipe();
     r.infill = { kind: "horizontal_rails", memberSize: 12, maxOpening: 110, maxPanelWidth: 1200 };
     const tp = recipeType(r);
     const cfg = normalizeForType(defaultConfig(), tp);
     const d = deriveRailing(cfg, tp);
-    // span = 1000 - 100 - 40 = 860 → ceil((860-110)/122) = 7 members per segment
-    expect(d.railCount).toBe(14);
+    // ladder = (1000 - 42) - (100 + 8) = 850 → ceil((850-110)/122) = 7 levels;
+    // 3 m → 3 fields, 2 m → 2 fields → 7 × (3 + 2) = 35 cut pieces
+    expect(d.railCount).toBe(35);
     expect(d.barCount).toBe(0);
     d.segments.forEach((s) => expect(s.actualBarClear).toBeLessThanOrEqual(110));
-    // members follow the axis: same start/end heights offset from the base line
+    // pieces are level and end at the post faces (post 40 → half 20)
     const first = d.segments[0].rails[0];
-    expect(first.top.x).toBeCloseTo(3000);
+    expect(first.bottom.x).toBeCloseTo(20);
+    expect(first.top.x).toBeCloseTo(980);
     expect(first.top.y).toBeCloseTo(first.bottom.y);
+  });
+
+  it("closes the ladder: the gap under the handrail also respects maxOpening", () => {
+    const r = defaultRecipe();
+    r.infill = { kind: "horizontal_rails", memberSize: 12, maxOpening: 110, maxPanelWidth: 1200 };
+    const tp = recipeType(r);
+    const cfg = normalizeForType(defaultConfig(), tp);
+    const d = deriveRailing(cfg, tp);
+    const seg = d.segments[0];
+    const hrUnderside = cfg.height - 42; // round Ø42 handrail
+    const topmost = Math.max(...seg.rails.map((x) => x.bottom.y));
+    expect(hrUnderside - (topmost + 6)).toBeLessThanOrEqual(110);
+    // and the gap above the bottom rail matches the solved opening
+    const lowest = Math.min(...seg.rails.map((x) => x.bottom.y));
+    expect(lowest - 6 - (cfg.bottomGap + 8)).toBeCloseTo(seg.actualBarClear, 5);
+  });
+
+  it("runs cables through posts with tensioners at both segment ends", () => {
+    const r = defaultRecipe();
+    r.infill = { kind: "cables", memberSize: 5, maxOpening: 80, maxPanelWidth: 1200 };
+    r.bottomRail = { profile: "none", size: 0 };
+    const tp = recipeType(r);
+    const cfg = normalizeForType(defaultConfig(), tp);
+    const d = deriveRailing(cfg, tp);
+    // ladder = 958 from the floor → ceil((958-80)/85) = 11 cables per segment
+    expect(d.railCount).toBe(22);
+    d.segments.forEach((s) => {
+      expect(s.tensioners.length).toBe(2 * s.rails.length);
+      // cables span the whole segment, terminating at the end post faces
+      s.rails.forEach((c) => {
+        const len = Math.hypot(c.top.x - c.bottom.x, c.top.y - c.bottom.y, c.top.z - c.bottom.z);
+        expect(len).toBeCloseTo(s.input.length - 40, 5);
+      });
+    });
+  });
+
+  it("stands stair posts on the treads and stretches them to the raked handrail", () => {
+    const r = defaultRecipe();
+    r.infill = { kind: "horizontal_rails", memberSize: 12, maxOpening: 110, maxPanelWidth: 1200 };
+    const tp = recipeType(r);
+    const cfg = normalizeForType(defaultConfig(), tp);
+    cfg.segments[1] = { ...cfg.segments[1], stair: true, slope: 30 };
+    const d = deriveRailing(cfg, tp);
+    const stair = d.segments[1];
+    expect(stair.steps).not.toBeNull();
+    stair.posts.forEach((p) => {
+      const t = Math.hypot(p.base.x - stair.start.x, p.base.z - stair.start.z) / Math.cos((30 * Math.PI) / 180);
+      const axisY = stair.start.y + stair.dir.y * t;
+      // base sits on (or below) the nosing line, never floating above a tread
+      expect(p.base.y).toBeLessThanOrEqual(axisY + 1e-6);
+      // post reaches the handrail underside above the axis
+      expect(p.top.y - axisY).toBeCloseTo(cfg.height - 42, 5);
+      expect(p.top.y - p.base.y).toBeGreaterThanOrEqual(cfg.height - 42 - 1e-6);
+    });
+    // the corner + slope change produces a handrail joint
+    expect(d.joints.length).toBe(1);
+  });
+
+  it("derives connection hardware: base plates, joints and BOM lines", () => {
+    const r = defaultRecipe();
+    r.infill = { kind: "cables", memberSize: 5, maxOpening: 80, maxPanelWidth: 1200 };
+    r.bottomRail = { profile: "none", size: 0 };
+    const tp = recipeType(r);
+    const cfg = normalizeForType(defaultConfig(), tp);
+    const d = deriveRailing(cfg, tp);
+    const plates = d.segments.reduce((s, x) => s + x.plates.length, 0);
+    expect(plates).toBe(d.postCount);
+    expect(d.joints.length).toBe(1); // 90° corner elbow
+    const bom = buildBom(cfg, d, tp);
+    expect(bom.find((l) => l.id === "basePlate")?.qty).toBe(d.postCount);
+    expect(bom.find((l) => l.id === "tensioner")?.qty).toBe(d.segments.reduce((s, x) => s + x.tensioners.length, 0));
+    expect(bom.find((l) => l.id === "elbow")?.qty).toBe(1);
+    expect(bom.find((l) => l.id === "anchors")?.qty).toBe(d.postCount * 4);
   });
 
   it("flags horizontal infill as climbable (fail for public use)", () => {
