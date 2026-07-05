@@ -6,21 +6,12 @@ import { deriveRailing } from "@/lib/engine/geometry";
 import { buildBom } from "@/lib/engine/bom";
 import { type TypeProfile } from "@/lib/engine/types";
 import {
-  deleteCustomType,
-  findType,
-  loadAllTypes,
-  loadContent,
   loadEvents,
   loadOrders,
-  loadPriceBook,
   loadTiers,
   logEvent,
   ORDER_FLOW,
   QUOTE_FLOW,
-  resetPriceBook,
-  saveContent,
-  saveCustomType,
-  savePriceBook,
   setTier,
   updateOrder,
   updateOrderStatus,
@@ -31,6 +22,17 @@ import {
   type RefProject,
   type Tier,
 } from "@/lib/store";
+import {
+  fetchAllTypes,
+  fetchContent,
+  fetchPriceBook,
+  publishPriceBook,
+  putContent,
+  removeType,
+  resetPriceBookAll,
+  resolveType,
+  saveType,
+} from "@/lib/data";
 import type { Dict } from "@/lib/i18n";
 import { api, hasBackend, type ApiOrder } from "@/lib/api";
 import Link from "next/link";
@@ -171,7 +173,11 @@ function EventLog({ order, t, statusLabels }: { order: Order; t: AdminDict; stat
 }
 
 function BomDetail({ order, t, statusLabels }: { order: Order; t: AdminDict; statusLabels: Dict["portal"]["status"] }) {
-  const tp = order.config ? findType(order.config.typeId, order.config.system) : null;
+  const [types, setTypes] = useState<TypeProfile[]>([]);
+  useEffect(() => {
+    fetchAllTypes().then(setTypes);
+  }, []);
+  const tp = order.config && types.length > 0 ? resolveType(types, order.config.typeId, order.config.system) : null;
   const derived = order.config && tp ? deriveRailing(order.config, tp) : null;
   const bom = order.config && tp && derived ? buildBom(order.config, derived, tp) : null;
   const parts: Record<string, string> = t.bom.parts;
@@ -450,7 +456,9 @@ function PricingEditor({ t }: { t: AdminDict }) {
   const [pb, setPb] = useState<PriceBook>(defaultPriceBook);
   const [saved, setSaved] = useState(false);
 
-  useEffect(() => setPb(loadPriceBook()), []);
+  useEffect(() => {
+    fetchPriceBook().then(setPb);
+  }, []);
 
   const fields: { key: string; label: string; get: () => number; set: (v: number) => void }[] = [
     { key: "basePerM", label: t.fields.basePerM, get: () => pb.basePerM, set: (v) => setPb({ ...pb, basePerM: v }) },
@@ -508,9 +516,12 @@ function PricingEditor({ t }: { t: AdminDict }) {
         <button
           type="button"
           onClick={() => {
-            savePriceBook(pb);
-            setPb(loadPriceBook());
-            setSaved(true);
+            publishPriceBook(pb)
+              .then((next) => {
+                setPb(next);
+                setSaved(true);
+              })
+              .catch(() => {});
           }}
           className="inline-flex items-center justify-center bg-ink px-6 py-3 text-xs font-medium uppercase tracking-[0.16em] text-paper transition-colors hover:bg-graphite"
         >
@@ -519,9 +530,12 @@ function PricingEditor({ t }: { t: AdminDict }) {
         <button
           type="button"
           onClick={() => {
-            resetPriceBook();
-            setPb(loadPriceBook());
-            setSaved(false);
+            resetPriceBookAll()
+              .then((next) => {
+                setPb(next);
+                setSaved(false);
+              })
+              .catch(() => {});
           }}
           className="inline-flex items-center justify-center border border-ink/25 px-6 py-3 text-xs font-medium uppercase tracking-[0.16em] text-ink transition-colors hover:border-ink"
         >
@@ -544,8 +558,10 @@ function ProductsTab({ t, cfgDict }: { t: AdminDict; cfgDict: Dict["cfg"] }) {
   const [designer, setDesigner] = useState<"new" | TypeProfile | null>(null);
   const [created, setCreated] = useState(false);
 
-  useEffect(() => setTypes(loadAllTypes()), []);
-  const refresh = () => setTypes(loadAllTypes());
+  useEffect(() => {
+    fetchAllTypes().then(setTypes);
+  }, []);
+  const refresh = () => fetchAllTypes().then(setTypes);
 
   const specFor = (x: TypeProfile) =>
     x.builtin
@@ -591,8 +607,7 @@ function ProductsTab({ t, cfgDict }: { t: AdminDict; cfgDict: Dict["cfg"] }) {
                 <button
                   type="button"
                   onClick={() => {
-                    saveCustomType({ ...x, active: !x.active });
-                    refresh();
+                    saveType({ ...x, active: !x.active }).then(refresh).catch(() => {});
                   }}
                   className="text-[11px] uppercase tracking-[0.12em] text-graphite underline-offset-2 hover:text-ink hover:underline"
                 >
@@ -601,8 +616,7 @@ function ProductsTab({ t, cfgDict }: { t: AdminDict; cfgDict: Dict["cfg"] }) {
                 <button
                   type="button"
                   onClick={() => {
-                    deleteCustomType(x.id);
-                    refresh();
+                    removeType(x.id).then(refresh).catch(() => {});
                   }}
                   className="text-[11px] uppercase tracking-[0.12em] text-[#b04a3a] underline-offset-2 hover:underline"
                 >
@@ -621,10 +635,13 @@ function ProductsTab({ t, cfgDict }: { t: AdminDict; cfgDict: Dict["cfg"] }) {
           initial={designer === "new" ? undefined : designer}
           onCancel={() => setDesigner(null)}
           onSave={(tp) => {
-            saveCustomType(tp);
-            refresh();
-            setDesigner(null);
-            setCreated(true);
+            saveType(tp)
+              .then(() => {
+                refresh();
+                setDesigner(null);
+                setCreated(true);
+              })
+              .catch(() => {});
           }}
         />
       ) : (
@@ -661,16 +678,22 @@ function ContentTab({ t, refsDict, locale }: { t: AdminDict; refsDict: Dict["ref
   const [draft, setDraft] = useState<RefProject>(emptyProject);
   const [saved, setSaved] = useState(false);
 
-  useEffect(() => setContent(loadContent()), []);
+  useEffect(() => {
+    fetchContent().then(setContent);
+  }, []);
 
   const base = refsDict.projects as RefProject[];
   const combined: RefProject[] = [...base.map((p, i) => ({ ...p, ...(content.projects[i] ?? {}) })), ...content.added];
 
   const persist = (next: ContentState) => {
-    saveContent(next);
-    setContent(loadContent());
-    setEditing(null);
-    setSaved(true);
+    putContent(next)
+      .then(() => fetchContent())
+      .then((c) => {
+        setContent(c);
+        setEditing(null);
+        setSaved(true);
+      })
+      .catch(() => {});
   };
 
   const submit = () => {

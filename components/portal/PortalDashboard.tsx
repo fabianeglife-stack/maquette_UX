@@ -7,21 +7,20 @@ import { downloadDrawingPdf } from "@/components/configurator/pdf";
 import { downloadInvoicePdf } from "./invoice";
 import { deriveRailing } from "@/lib/engine/geometry";
 import { chf } from "@/lib/engine/pricing";
-import { findType } from "@/lib/store";
 import {
   acceptQuote,
   clearSession,
-  deleteSavedConfig,
   encodeConfig,
   getSession,
   loadOrders,
-  loadSavedConfigs,
   ORDER_FLOW,
   QUOTE_FLOW,
   type Order,
   type OrderStatus,
   type SavedConfig,
 } from "@/lib/store";
+import { fetchAllTypes, fetchSavedConfigs, removeSavedConfig, resolveType } from "@/lib/data";
+import type { TypeProfile } from "@/lib/engine/types";
 import type { Dict } from "@/lib/i18n";
 import { api, hasBackend } from "@/lib/api";
 
@@ -64,10 +63,14 @@ function OrderCard({
 }) {
   const flow = order.kind === "order" ? ORDER_FLOW : QUOTE_FLOW;
   const svgRef = useRef<SVGSVGElement>(null);
+  const [types, setTypes] = useState<TypeProfile[]>([]);
+  useEffect(() => {
+    fetchAllTypes().then(setTypes);
+  }, []);
   const derived = useMemo(() => {
-    if (!order.config) return null;
-    return deriveRailing(order.config, findType(order.config.typeId, order.config.system));
-  }, [order.config]);
+    if (!order.config || types.length === 0) return null;
+    return deriveRailing(order.config, resolveType(types, order.config.typeId, order.config.system));
+  }, [order.config, types]);
 
   return (
     <div className="flex flex-col gap-3 border border-hairline bg-paper p-5">
@@ -154,7 +157,7 @@ export default function PortalDashboard({
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    setSaved(loadSavedConfigs());
+    fetchSavedConfigs().then(setSaved);
     if (hasBackend) {
       api
         .me()
@@ -251,8 +254,10 @@ export default function PortalDashboard({
                     <button
                       type="button"
                       onClick={() => {
-                        deleteSavedConfig(s.id);
-                        setSaved(loadSavedConfigs());
+                        removeSavedConfig(s.id)
+                          .then(() => fetchSavedConfigs())
+                          .then(setSaved)
+                          .catch(() => {});
                       }}
                       className="text-xs uppercase tracking-[0.12em] text-stone underline-offset-4 hover:text-ink hover:underline"
                     >

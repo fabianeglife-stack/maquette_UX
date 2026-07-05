@@ -12,15 +12,13 @@ import {
   decodeConfig,
   encodeConfig,
   getSession,
-  loadAllTypes,
-  loadPriceBook,
   newRef,
   saveOrder,
-  saveSavedConfig,
   TIER_DISCOUNT,
   tierFor,
   type Order,
 } from "@/lib/store";
+import { addSavedConfig, fetchAllTypes, fetchPriceBook } from "@/lib/data";
 import { api, hasBackend } from "@/lib/api";
 import type { Dict } from "@/lib/i18n";
 import Link from "next/link";
@@ -232,8 +230,8 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
         /* corrupted storage — start fresh */
       }
     }
-    setPb(loadPriceBook());
-    setTypes(loadAllTypes());
+    fetchPriceBook().then(setPb);
+    fetchAllTypes().then(setTypes);
     if (hasBackend) {
       api.me().then((u) => setDiscount(TIER_DISCOUNT[u?.tier ?? "standard"])).catch(() => {});
     } else {
@@ -565,7 +563,7 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
                 <form
                   onSubmit={(e) => {
                     e.preventDefault();
-                    saveSavedConfig(saveName.trim(), cfg);
+                    addSavedConfig(saveName.trim(), cfg).catch(() => {});
                     setSaveOpen(false);
                     setSaveName("");
                     setShareMsg("saved");
@@ -620,7 +618,7 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
                     // The server recomputes geometry, SIA and price — the
                     // client total is display-only.
                     api
-                      .createOrder({ kind: checkout, config: cfg, typeProfile: tp, customer, payment })
+                      .createOrder({ kind: checkout, config: cfg, customer, payment })
                       .then((order) => {
                         setCheckout(null);
                         setPanel({ kind: checkout, ref: order.ref });

@@ -4,7 +4,8 @@ import { sessionUser } from "@/lib/server/auth";
 import { toClientOrder } from "@/lib/server/serialize";
 import { deriveRailing } from "@/lib/engine/geometry";
 import { evaluateSia, siaSummary, SIA_RULES_VERSION } from "@/lib/engine/sia";
-import { defaultPriceBook, priceRailing } from "@/lib/engine/pricing";
+import { priceRailing } from "@/lib/engine/pricing";
+import { activePriceBook, typeById } from "@/lib/server/catalog";
 import { builtinTypes, type RailingConfig, type TypeProfile } from "@/lib/engine/types";
 
 const TIER_DISCOUNT: Record<string, number> = { standard: 0, partner: 0.05, pro: 0.1 };
@@ -27,20 +28,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "invalid_input" }, { status: 400 });
   }
   const cfg = body.config as RailingConfig;
-  const tp: TypeProfile =
-    (body.typeProfile as TypeProfile | undefined) ??
-    builtinTypes.find((t) => t.id === cfg.system) ??
-    builtinTypes[0];
-
-  // Server-authoritative: geometry, SIA and price are recomputed here — the
-  // client total is display-only and never trusted.
+  // Server-authoritative: the type comes from the database (builtins → stored
+  // custom types → template fallback) and the price book is the published
+  // version — client-sent profiles and totals are display-only, never trusted.
+  const tp: TypeProfile = (await typeById(cfg.typeId, cfg.system)) ?? builtinTypes[0];
   const derived = deriveRailing(cfg, tp);
   const sia = evaluateSia(cfg, derived, tp);
   if (body.kind === "order" && siaSummary(sia) === "fail") {
     return NextResponse.json({ error: "sia_failed" }, { status: 422 });
   }
   const tier = user?.tier ?? "standard";
-  const price = priceRailing(cfg, derived, defaultPriceBook, tp, TIER_DISCOUNT[tier] ?? 0);
+  const price = priceRailing(cfg, derived, await activePriceBook(), tp, TIER_DISCOUNT[tier] ?? 0);
 
   const ref = "AX-" + Math.random().toString(36).slice(2, 8).toUpperCase();
   const order = await db.order.create({

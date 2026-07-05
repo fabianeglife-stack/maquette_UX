@@ -3,16 +3,17 @@
 import { useEffect, useState } from "react";
 import Reveal from "@/components/Reveal";
 import { ReferenceScene } from "@/components/illustrations";
-import { mergedProjects, type RefProject } from "@/lib/store";
+import type { RefProject } from "@/lib/store";
+import { fetchMergedProjects } from "@/lib/data";
 import type { Dict } from "@/lib/i18n";
 
 export default function ReferencesGrid({ d }: { d: Dict["references"] }) {
   // Server-rendered with the seeded projects; admin CMS overrides are merged
-  // in after mount (they live in this browser's storage).
+  // in after mount (from the API in server mode, this browser otherwise).
   const [projects, setProjects] = useState<RefProject[]>(d.projects);
 
   useEffect(() => {
-    setProjects(mergedProjects(d.projects));
+    fetchMergedProjects(d.projects).then(setProjects);
   }, [d.projects]);
 
   return (

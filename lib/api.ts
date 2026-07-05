@@ -4,8 +4,9 @@
  * store in lib/store.ts (static prototype on GitHub Pages).
  */
 
-import type { Order, OrderEvent, Tier } from "./store";
+import type { ContentState, Order, OrderEvent, SavedConfig, Tier } from "./store";
 import type { RailingConfig, TypeProfile } from "./engine/types";
+import type { PriceBook } from "./engine/pricing";
 
 export const hasBackend = process.env.NEXT_PUBLIC_BACKEND === "1";
 
@@ -50,7 +51,6 @@ export const api = {
   createOrder: (payload: {
     kind: "order" | "quote";
     config: RailingConfig;
-    typeProfile?: TypeProfile;
     customer: Order["customer"];
     payment?: string;
   }) => call<{ order: ApiOrder }>("POST", "/api/orders/", payload).then((r) => r.order),
@@ -59,4 +59,21 @@ export const api = {
 
   listCustomers: () => call<{ customers: CustomerRow[] }>("GET", "/api/customers/").then((r) => r.customers),
   setTier: (email: string, tier: Tier) => call<{ ok: true }>("PATCH", "/api/customers/", { email, tier }),
+
+  listTypes: () => call<{ types: TypeProfile[] }>("GET", "/api/types/").then((r) => r.types),
+  putType: (type: TypeProfile) => call<{ ok: true }>("PUT", "/api/types/", { type }),
+  deleteType: (id: string) => call<{ ok: true }>("DELETE", `/api/types/${encodeURIComponent(id)}/`),
+
+  getPriceBook: () => call<{ priceBook: PriceBook }>("GET", "/api/pricebook/").then((r) => r.priceBook),
+  putPriceBook: (priceBook: PriceBook) =>
+    call<{ priceBook: PriceBook }>("PUT", "/api/pricebook/", { priceBook }).then((r) => r.priceBook),
+  resetPriceBook: () => call<{ priceBook: PriceBook }>("DELETE", "/api/pricebook/").then((r) => r.priceBook),
+
+  getContent: () => call<{ content: ContentState }>("GET", "/api/content/").then((r) => r.content),
+  putContent: (content: ContentState) => call<{ ok: true }>("PUT", "/api/content/", { content }),
+
+  listConfigs: () => call<{ configs: SavedConfig[] }>("GET", "/api/configs/").then((r) => r.configs),
+  createConfig: (name: string, config: RailingConfig) =>
+    call<{ config: SavedConfig }>("POST", "/api/configs/", { name, config }).then((r) => r.config),
+  deleteConfig: (id: string) => call<{ ok: true }>("DELETE", `/api/configs/${encodeURIComponent(id)}/`),
 };

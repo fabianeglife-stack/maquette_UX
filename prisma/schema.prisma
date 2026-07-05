@@ -78,3 +78,9 @@ model SavedConfig {
   user       User     @relation(fields: [userId], references: [id])
   userId     String
 }
+
+model SiteContent {
+  id        String   @id
+  json      String
+  updatedAt DateTime @updatedAt
+}

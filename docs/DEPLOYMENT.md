@@ -29,10 +29,12 @@ Seeded accounts (change these before any public deployment):
 - **Order lifecycle**: status changes, binding quotes and quote acceptance via `PATCH /api/orders/:ref`, with role checks (customers only see and accept their own).
 - **Event log**: every lifecycle step is stored in `OrderEvent` with the email recipient — the hook point for transactional email.
 - **Customers & tiers**: `GET/PATCH /api/customers` (admin only); tiers live on the user account and drive configurator pricing.
+- **Guardrail types**: `GET /api/types` (public), `PUT /api/types` + `DELETE /api/types/:id` (admin). The type-designer recipes live in the database; the order endpoint resolves types server-side and ignores client-sent profiles.
+- **Price book**: `GET /api/pricebook` (public), `PUT` publishes a new version (older versions stay for audit), `DELETE` reverts to defaults (admin). Orders are priced with the published version.
+- **References CMS**: `GET/PUT /api/content` — the admin content tab and the references page share one server-stored override set.
+- **Saved configurations**: `GET/POST /api/configs`, `DELETE /api/configs/:id` — per-account; unauthenticated saves fall back to the browser.
 
-Still browser-local (next backend iteration): price-book publishing, custom
-guardrail types, references CMS, saved configurations. Payments are recorded
-but not charged — Stripe comes with hosting.
+Payments are recorded but not charged — Stripe comes with hosting.
 
 ## Deploying to Vercel (recommended path)
 
