@@ -20,9 +20,14 @@ export default function ReferencesGrid({ d }: { d: Dict["references"] }) {
     <div className="grid gap-14 md:grid-cols-2 md:gap-x-10 md:gap-y-20">
       {projects.map((p, i) => (
         <Reveal key={`${i}-${p.name}`} delay={(i % 2) * 120} className="flex flex-col gap-5">
-          <div className="bg-mist/60 p-5">
-            <ReferenceScene index={i % 6} />
-          </div>
+          {p.image ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={p.image} alt={p.name} className="aspect-[4/3] w-full object-cover" />
+          ) : (
+            <div className="bg-mist/60 p-5">
+              <ReferenceScene index={i % 6} />
+            </div>
+          )}
           <div className="flex flex-col gap-1">
             <h2 className="text-xl font-normal tracking-tight text-ink">{p.name}</h2>
             <span className="text-sm font-light text-stone">{p.place}</span>

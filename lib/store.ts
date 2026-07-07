@@ -220,6 +220,8 @@ export interface RefProject {
   length: string;
   mounting: string;
   desc: string;
+  /** Project photo as a compressed JPEG data URL (admin upload); falls back to an illustration. */
+  image?: string;
 }
 
 export interface ContentState {

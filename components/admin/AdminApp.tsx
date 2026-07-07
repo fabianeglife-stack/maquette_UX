@@ -671,6 +671,28 @@ function ProductsTab({ t, cfgDict }: { t: AdminDict; cfgDict: Dict["cfg"] }) {
 
 const emptyProject: RefProject = { name: "", place: "", system: "", length: "", mounting: "", desc: "" };
 
+/** Read a photo and downscale it to a compact JPEG data URL (≤1280 px). */
+function readProjectImage(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const scale = Math.min(1, 1280 / Math.max(img.width, img.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(img.width * scale));
+      canvas.height = Math.max(1, Math.round(img.height * scale));
+      canvas.getContext("2d")?.drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL("image/jpeg", 0.82));
+    };
+    img.onerror = (e) => {
+      URL.revokeObjectURL(url);
+      reject(e);
+    };
+    img.src = url;
+  });
+}
+
 function ContentTab({ t, refsDict, locale }: { t: AdminDict; refsDict: Dict["references"]; locale: string }) {
   const c = t.content;
   const [content, setContent] = useState<ContentState>({ projects: {}, added: [] });
@@ -736,6 +758,37 @@ function ContentTab({ t, refsDict, locale }: { t: AdminDict; refsDict: Dict["ref
         onChange={(e) => setDraft({ ...draft, desc: e.target.value })}
         className={inputCls}
       />
+      <div className="flex flex-col gap-1.5">
+        <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone">{c.image}</span>
+        <div className="flex flex-wrap items-center gap-3">
+          {draft.image && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={draft.image} alt="" className="h-20 w-28 border border-hairline object-cover" />
+          )}
+          <label className="cursor-pointer border border-hairline px-4 py-2.5 text-xs uppercase tracking-[0.12em] text-graphite transition-colors hover:border-graphite">
+            {c.imagePick}
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) readProjectImage(f).then((image) => setDraft((d) => ({ ...d, image }))).catch(() => {});
+                e.target.value = "";
+              }}
+            />
+          </label>
+          {draft.image && (
+            <button
+              type="button"
+              onClick={() => setDraft((d) => ({ ...d, image: undefined }))}
+              className="text-[11px] uppercase tracking-[0.12em] text-stone underline-offset-2 hover:text-ink hover:underline"
+            >
+              {c.imageRemove}
+            </button>
+          )}
+        </div>
+      </div>
       <div className="flex gap-3">
         <button type="submit" className="inline-flex items-center justify-center bg-ink px-5 py-2.5 text-xs font-medium uppercase tracking-[0.14em] text-paper transition-colors hover:bg-graphite">
           {c.save}
@@ -764,6 +817,10 @@ function ContentTab({ t, refsDict, locale }: { t: AdminDict; refsDict: Dict["ref
             </div>
           ) : (
             <div key={i} className="flex flex-col gap-2 border border-hairline p-5">
+              {p.image && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={p.image} alt={p.name} className="aspect-[16/9] w-full border border-hairline object-cover" />
+              )}
               <div className="flex items-baseline justify-between gap-2">
                 <span className="text-sm text-ink">{p.name}</span>
                 {i >= base.length && (
