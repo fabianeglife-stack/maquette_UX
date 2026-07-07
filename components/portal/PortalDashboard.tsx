@@ -16,39 +16,13 @@ import {
   ORDER_FLOW,
   QUOTE_FLOW,
   type Order,
-  type OrderStatus,
   type SavedConfig,
 } from "@/lib/store";
 import { fetchAllTypes, fetchSavedConfigs, removeSavedConfig, resolveType } from "@/lib/data";
 import type { TypeProfile } from "@/lib/engine/types";
 import type { Dict } from "@/lib/i18n";
 import { api, hasBackend } from "@/lib/api";
-
-function StatusSteps({
-  status,
-  flow,
-  labels,
-}: {
-  status: OrderStatus;
-  flow: OrderStatus[];
-  labels: Dict["portal"]["status"];
-}) {
-  const idx = flow.indexOf(status);
-  return (
-    <div className="flex items-center gap-1.5">
-      {flow.map((s, i) => (
-        <div key={s} className="flex items-center gap-1.5">
-          <span
-            title={labels[s]}
-            className={`h-2 w-2 rounded-full ${i <= idx ? "bg-ink" : "bg-hairline"}`}
-          />
-          {i < flow.length - 1 && <span className={`h-px w-5 ${i < idx ? "bg-ink" : "bg-hairline"}`} />}
-        </div>
-      ))}
-      <span className="pl-2 text-xs font-light text-graphite">{labels[status]}</span>
-    </div>
-  );
-}
+import StatusSteps from "@/components/StatusSteps";
 
 function OrderCard({
   order,

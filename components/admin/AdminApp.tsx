@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { chf, defaultPriceBook, type PriceBook } from "@/lib/engine/pricing";
 import { deriveRailing } from "@/lib/engine/geometry";
 import { buildBom } from "@/lib/engine/bom";
@@ -11,6 +11,7 @@ import {
   loadTiers,
   logEvent,
   ORDER_FLOW,
+  projectImages,
   QUOTE_FLOW,
   setTier,
   updateOrder,
@@ -36,10 +37,16 @@ import {
 import type { Dict } from "@/lib/i18n";
 import { api, hasBackend, type ApiOrder } from "@/lib/api";
 import Link from "next/link";
+import StatusSteps from "@/components/StatusSteps";
 import TypeDesigner from "./TypeDesigner";
 
 type AdminDict = Dict["admin"];
 type Tab = "dashboard" | "orders" | "customers" | "pricing" | "products" | "content";
+
+/** Fill {placeholders} in an i18n template. */
+function fmt(tpl: string, params: Record<string, string | number>): string {
+  return tpl.replace(/\{(\w+)\}/g, (_, k) => String(params[k] ?? ""));
+}
 
 /* ---------- dashboard tab ---------- */
 
@@ -141,38 +148,44 @@ function DashboardTab({
 
 /* ---------- orders tab ---------- */
 
-function EventLog({ order, t, statusLabels }: { order: Order; t: AdminDict; statusLabels: Dict["portal"]["status"] }) {
+/** Vertical event timeline (order lifecycle + transactional-email hooks). */
+function EventTimeline({ order, t, statusLabels }: { order: Order; t: AdminDict; statusLabels: Dict["portal"]["status"] }) {
   const events = hasBackend ? ((order as ApiOrder).events ?? []) : loadEvents(order.ref);
   const label = (e: OrderEvent) =>
     e.type === "created" ? t.events.created : e.type === "quote_accepted" ? t.events.quote_accepted : statusLabels[e.type];
 
   return (
-    <div>
+    <div className="flex flex-col gap-2">
       <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone">{t.events.title}</span>
       {events.length === 0 ? (
-        <p className="pt-1 text-xs font-light text-stone">{t.events.none}</p>
+        <p className="text-xs font-light text-stone">{t.events.none}</p>
       ) : (
-        <div className="flex flex-col pt-1">
+        <ol className="flex flex-col">
           {events.map((e, i) => (
-            <div key={i} className="border-t border-hairline/70 py-1.5 first:border-t-0">
-              <p className="text-[13px] font-light text-graphite">
-                <span className="pr-3 text-xs text-stone">{e.at}</span>
-                {label(e)}
-              </p>
-              {e.emailTo && (
-                <p className="pl-0 text-xs font-light text-steel">
-                  ✉ {t.events.emailTo} {e.emailTo}
-                </p>
-              )}
-            </div>
+            <li key={i} className="flex gap-3">
+              <div className="flex flex-col items-center">
+                <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${i === events.length - 1 ? "bg-ink" : "bg-stone"}`} />
+                {i < events.length - 1 && <span className="w-px flex-1 bg-hairline" />}
+              </div>
+              <div className="pb-4">
+                <p className="text-[13px] font-light text-graphite">{label(e)}</p>
+                <p className="text-xs text-stone">{e.at}</p>
+                {e.emailTo && (
+                  <p className="text-xs font-light text-steel">
+                    ✉ {t.events.emailTo} {e.emailTo}
+                  </p>
+                )}
+              </div>
+            </li>
           ))}
-        </div>
+        </ol>
       )}
     </div>
   );
 }
 
-function BomDetail({ order, t, statusLabels }: { order: Order; t: AdminDict; statusLabels: Dict["portal"]["status"] }) {
+/** BOM list for the order drawer (server-resolved type → geometry → parts). */
+function OrderBom({ order, t }: { order: Order; t: AdminDict }) {
   const [types, setTypes] = useState<TypeProfile[]>([]);
   useEffect(() => {
     fetchAllTypes().then(setTypes);
@@ -183,49 +196,171 @@ function BomDetail({ order, t, statusLabels }: { order: Order; t: AdminDict; sta
   const parts: Record<string, string> = t.bom.parts;
 
   return (
-    <div className="grid gap-8 py-2 md:grid-cols-[1fr_1fr]">
-      <div className="flex flex-col">
-        <span className="pb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-stone">{t.bom.title}</span>
-        {!bom ? (
-          <p className="text-sm font-light text-stone">{t.bom.noBom}</p>
-        ) : (
-          bom.map((l, i) => (
-            <div key={i} className="flex items-baseline justify-between gap-4 border-t border-hairline/70 py-1.5">
-              <span className="text-[13px] font-light text-graphite">
-                {parts[l.id] ?? l.id}
-                {l.detail && <span className="text-stone"> · {l.detail}</span>}
-              </span>
-              <span className="whitespace-nowrap text-[13px] font-light text-ink">
-                {l.qty.toLocaleString("de-CH")} {t.bom.units[l.unit]}
+    <div className="flex flex-col gap-2">
+      <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone">{t.bom.title}</span>
+      {!bom ? (
+        <p className="text-sm font-light text-stone">{t.bom.noBom}</p>
+      ) : (
+        bom.map((l, i) => (
+          <div key={i} className="flex items-baseline justify-between gap-4 border-t border-hairline/70 py-1.5">
+            <span className="text-[13px] font-light text-graphite">
+              {parts[l.id] ?? l.id}
+              {l.detail && <span className="text-stone"> · {l.detail}</span>}
+            </span>
+            <span className="whitespace-nowrap text-[13px] font-light text-ink">
+              {l.qty.toLocaleString("de-CH")} {t.bom.units[l.unit]}
+            </span>
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+
+/** Slide-over order/quote detail: status pipeline + actions, customer, BOM, timeline. */
+function OrderDrawer({
+  order,
+  t,
+  statusLabels,
+  cfgDict,
+  onClose,
+  advance,
+  sendQuote,
+}: {
+  order: Order;
+  t: AdminDict;
+  statusLabels: Dict["portal"]["status"];
+  cfgDict: Dict["cfg"];
+  onClose: () => void;
+  advance: (ref: string, status: OrderStatus) => void;
+  sendQuote: (o: Order, value: number) => void;
+}) {
+  const [quote, setQuote] = useState(String(Math.round(order.quotedGross ?? order.gross)));
+  const flow = order.kind === "order" ? ORDER_FLOW : QUOTE_FLOW;
+  const idx = flow.indexOf(order.status);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-[90] flex justify-end" role="dialog" aria-modal="true">
+      <div className="absolute inset-0 bg-ink/40" onClick={onClose} />
+      <div className="relative flex h-full w-full max-w-md flex-col gap-6 overflow-y-auto border-l border-hairline bg-paper p-6 shadow-2xl">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <span className="text-lg tracking-[0.04em] text-ink">{order.ref}</span>
+              <span
+                className={`border px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] ${
+                  order.kind === "order" ? "border-ink/40 text-ink" : "border-steel/50 text-steel"
+                }`}
+              >
+                {t.kind[order.kind]}
               </span>
             </div>
-          ))
-        )}
-      </div>
-      <div className="flex flex-col gap-4">
+            <span className="text-xs font-light text-stone">{order.createdAt}</span>
+          </div>
+          <button
+            type="button"
+            aria-label={t.orders.close}
+            onClick={onClose}
+            className="flex h-8 w-8 items-center justify-center text-xl font-light text-stone transition-colors hover:text-ink"
+          >
+            ×
+          </button>
+        </div>
+
+        {/* status pipeline + action */}
+        <div className="flex flex-col gap-3 border border-hairline p-4">
+          <StatusSteps status={order.status} flow={flow} labels={statusLabels} />
+          {order.kind === "order" ? (
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={idx <= 0}
+                onClick={() => advance(order.ref, flow[idx - 1])}
+                className="border border-hairline px-3 py-1.5 text-[11px] uppercase tracking-[0.12em] text-graphite transition-colors hover:border-graphite disabled:opacity-30"
+              >
+                ‹ {t.orders.stepBack}
+              </button>
+              <button
+                type="button"
+                disabled={idx >= flow.length - 1}
+                onClick={() => advance(order.ref, flow[idx + 1])}
+                className="flex-1 bg-ink px-3 py-1.5 text-[11px] uppercase tracking-[0.12em] text-paper transition-colors hover:bg-graphite disabled:opacity-30"
+              >
+                {t.orders.advance} ›
+              </button>
+            </div>
+          ) : order.status === "quote_requested" ? (
+            <div className="flex items-end gap-2">
+              <label className="flex flex-1 flex-col gap-1">
+                <span className="text-[10px] uppercase tracking-[0.12em] text-stone">{t.quotedPriceLabel}</span>
+                <input
+                  type="number"
+                  min={1}
+                  value={quote}
+                  onChange={(e) => setQuote(e.target.value)}
+                  className="w-full border border-hairline bg-paper px-2 py-1.5 text-sm font-light text-ink outline-none focus:border-graphite"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => sendQuote(order, Number(quote))}
+                className="bg-ink px-3 py-2 text-[11px] uppercase tracking-[0.12em] text-paper transition-colors hover:bg-graphite"
+              >
+                {t.sendQuote}
+              </button>
+            </div>
+          ) : (
+            <p className="text-sm font-light text-graphite">
+              {statusLabels[order.status]} · <span className="text-ink">{chf(order.quotedGross ?? order.gross)}</span>
+            </p>
+          )}
+        </div>
+
+        {/* summary line */}
+        <div className="grid grid-cols-2 gap-3 text-sm">
+          <div>
+            <span className="block text-[10px] uppercase tracking-[0.12em] text-stone">{t.table.system}</span>
+            <span className="font-light text-graphite">{order.system === "glass" ? cfgDict.systemGlass : cfgDict.systemBars} · {order.lengthM.toLocaleString("de-CH")} m</span>
+          </div>
+          <div>
+            <span className="block text-[10px] uppercase tracking-[0.12em] text-stone">{t.table.total}</span>
+            <span className="text-ink">{chf(order.gross)}</span>
+          </div>
+        </div>
+
+        {/* customer */}
         <div>
           <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone">{t.bom.address}</span>
           <p className="pt-1 text-sm font-light text-graphite">
             {order.customer.name} · {order.customer.street}, {order.customer.city}
             <span className="block text-xs text-stone">{order.customer.email}</span>
           </p>
+          {order.payment && <p className="pt-1 text-xs font-light uppercase text-stone">{t.bom.payment}: {order.payment}</p>}
         </div>
-        {order.payment && (
-          <div>
-            <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone">{t.bom.payment}</span>
-            <p className="pt-1 text-sm font-light uppercase text-graphite">{order.payment}</p>
-          </div>
-        )}
-        <EventLog order={order} t={t} statusLabels={statusLabels} />
+
+        <OrderBom order={order} t={t} />
+        <EventTimeline order={order} t={t} statusLabels={statusLabels} />
       </div>
     </div>
   );
 }
 
+type KindFilter = "all" | "order" | "quote";
+type SortKey = "newest" | "value";
+
 function OrdersTable({ t, statusLabels, cfgDict }: { t: AdminDict; statusLabels: Dict["portal"]["status"]; cfgDict: Dict["cfg"] }) {
   const [orders, setOrders] = useState<Order[]>([]);
-  const [open, setOpen] = useState<string | null>(null);
-  const [quoteDraft, setQuoteDraft] = useState<Record<string, string>>({});
+  const [openRef, setOpenRef] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [kindF, setKindF] = useState<KindFilter>("all");
+  const [statusF, setStatusF] = useState<OrderStatus | "all">("all");
+  const [sort, setSort] = useState<SortKey>("newest");
 
   const refresh = () => {
     if (hasBackend) api.listOrders().then(setOrders).catch(() => setOrders([]));
@@ -242,117 +377,151 @@ function OrdersTable({ t, statusLabels, cfgDict }: { t: AdminDict; statusLabels:
     setOrders(loadOrders());
   };
 
-  const sendQuote = (o: Order) => {
-    const v = Number(quoteDraft[o.ref] ?? Math.round(o.gross));
-    if (!Number.isFinite(v) || v <= 0) return;
+  const sendQuote = (o: Order, value: number) => {
+    if (!Number.isFinite(value) || value <= 0) return;
     if (hasBackend) {
-      api.patchOrder(o.ref, { quotedGross: v }).then(refresh).catch(() => {});
+      api.patchOrder(o.ref, { quotedGross: value }).then(refresh).catch(() => {});
       return;
     }
-    updateOrder(o.ref, { status: "quoted", quotedGross: v });
+    updateOrder(o.ref, { status: "quoted", quotedGross: value });
     logEvent(o.ref, "quoted", o.customer.email);
     setOrders(loadOrders());
   };
 
+  // summary metrics over all orders (independent of the active filter)
+  const orderList = orders.filter((o) => o.kind === "order");
+  const quoteList = orders.filter((o) => o.kind === "quote");
+  const stats = {
+    open: orderList.filter((o) => o.status !== "shipped").length,
+    production: orderList.filter((o) => o.status === "production").length,
+    shipped: orderList.filter((o) => o.status === "shipped").length,
+    quotes: quoteList.length,
+    pipeline:
+      orderList.filter((o) => o.status !== "shipped").reduce((s, o) => s + o.gross, 0) +
+      quoteList.reduce((s, o) => s + (o.quotedGross ?? o.gross), 0),
+  };
+
+  const q = search.trim().toLowerCase();
+  const filtered = orders
+    .filter((o) => (kindF === "all" ? true : o.kind === kindF))
+    .filter((o) => (statusF === "all" ? true : o.status === statusF))
+    .filter((o) =>
+      q === "" ? true : `${o.ref} ${o.customer.name} ${o.customer.city}`.toLowerCase().includes(q),
+    )
+    .sort((a, b) => (sort === "value" ? b.gross - a.gross : a.createdAt < b.createdAt ? 1 : -1));
+
+  const allStatuses = [...ORDER_FLOW, ...QUOTE_FLOW];
+  const selected = orders.find((o) => o.ref === openRef) ?? null;
+
+  const inputCls =
+    "border border-hairline bg-paper px-3 py-2 text-sm font-light text-ink outline-none transition-colors placeholder:text-stone focus:border-graphite";
+
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[900px] border-collapse text-left">
-        <thead>
-          <tr className="border-b border-ink/50">
-            {[t.table.ref, t.table.date, t.table.customer, t.table.system, t.table.length, t.table.total, t.table.kind, t.table.status, ""].map((h, i) => (
-              <th key={i} className="py-3 pr-4 text-[11px] font-medium uppercase tracking-[0.14em] text-stone">
-                {h}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {orders.map((o) => {
+    <div className="flex flex-col gap-6">
+      {/* summary strip */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <Kpi label={t.orders.openOrders} value={String(stats.open)} />
+        <Kpi label={t.orders.inProduction} value={String(stats.production)} />
+        <Kpi label={t.orders.shipped} value={String(stats.shipped)} />
+        <Kpi label={t.orders.openQuotes} value={String(stats.quotes)} />
+        <Kpi label={t.orders.pipelineValue} value={chf(stats.pipeline)} />
+      </div>
+
+      {/* toolbar */}
+      <div className="flex flex-wrap items-center gap-3">
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder={t.orders.search}
+          className={`${inputCls} min-w-[200px] flex-1`}
+        />
+        <div className="flex gap-px bg-hairline">
+          {(
+            [
+              { v: "all", l: t.orders.filterAll },
+              { v: "order", l: t.orders.filterOrders },
+              { v: "quote", l: t.orders.filterQuotes },
+            ] as const
+          ).map((o) => (
+            <button
+              key={o.v}
+              type="button"
+              onClick={() => setKindF(o.v)}
+              className={`px-3 py-2 text-[11px] uppercase tracking-[0.12em] transition-colors ${
+                kindF === o.v ? "bg-ink text-paper" : "bg-paper text-graphite hover:text-ink"
+              }`}
+            >
+              {o.l}
+            </button>
+          ))}
+        </div>
+        <select value={statusF} onChange={(e) => setStatusF(e.target.value as OrderStatus | "all")} className={inputCls}>
+          <option value="all">{t.orders.allStatuses}</option>
+          {allStatuses.map((s) => (
+            <option key={s} value={s}>
+              {statusLabels[s]}
+            </option>
+          ))}
+        </select>
+        <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} className={inputCls}>
+          <option value="newest">{t.orders.sortNewest}</option>
+          <option value="value">{t.orders.sortValue}</option>
+        </select>
+      </div>
+
+      {/* rows */}
+      {filtered.length === 0 ? (
+        <p className="border border-dashed border-hairline p-8 text-center text-sm font-light text-stone">{t.orders.empty}</p>
+      ) : (
+        <div className="flex flex-col border-t border-hairline">
+          {filtered.map((o) => {
             const flow = o.kind === "order" ? ORDER_FLOW : QUOTE_FLOW;
-            const expanded = open === o.ref;
             return (
-              <Fragment key={o.ref}>
-                <tr className={`align-baseline ${expanded ? "" : "border-b border-hairline"}`}>
-                  <td className="py-3 pr-4 text-sm text-ink">{o.ref}</td>
-                  <td className="py-3 pr-4 text-sm font-light text-graphite">{o.createdAt}</td>
-                  <td className="py-3 pr-4 text-sm font-light text-graphite">
-                    {o.customer.name}
-                    <span className="block text-xs text-stone">{o.customer.city}</span>
-                  </td>
-                  <td className="py-3 pr-4 text-sm font-light text-graphite">
-                    {o.system === "glass" ? cfgDict.systemGlass : cfgDict.systemBars}
-                  </td>
-                  <td className="py-3 pr-4 text-sm font-light text-graphite">{o.lengthM.toLocaleString("de-CH")} m</td>
-                  <td className="py-3 pr-4 whitespace-nowrap text-sm font-light text-ink">{chf(o.gross)}</td>
-                  <td className="py-3 pr-4">
-                    <span
-                      className={`inline-block border px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] ${
-                        o.kind === "order" ? "border-ink/40 text-ink" : "border-steel/50 text-steel"
-                      }`}
-                    >
-                      {t.kind[o.kind]}
-                    </span>
-                  </td>
-                  <td className="py-3 pr-4">
-                    {o.kind === "quote" ? (
-                      o.status === "quote_requested" ? (
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="number"
-                            min={1}
-                            value={quoteDraft[o.ref] ?? String(Math.round(o.gross))}
-                            onChange={(e) => setQuoteDraft({ ...quoteDraft, [o.ref]: e.target.value })}
-                            className="w-24 border border-hairline bg-paper px-2 py-1.5 text-xs font-light text-ink outline-none focus:border-graphite"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => sendQuote(o)}
-                            className="whitespace-nowrap border border-ink/40 px-2.5 py-1.5 text-[10px] uppercase tracking-[0.12em] text-ink transition-colors hover:border-ink"
-                          >
-                            {t.sendQuote}
-                          </button>
-                        </div>
-                      ) : (
-                        <span className="whitespace-nowrap text-xs font-light text-graphite">
-                          {statusLabels[o.status]} · {chf(o.quotedGross ?? o.gross)}
-                        </span>
-                      )
-                    ) : (
-                      <select
-                        value={o.status}
-                        onChange={(e) => advance(o.ref, e.target.value as OrderStatus)}
-                        className="border border-hairline bg-paper px-2 py-1.5 text-xs font-light text-ink outline-none focus:border-graphite"
-                      >
-                        {flow.map((s) => (
-                          <option key={s} value={s}>
-                            {statusLabels[s]}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                  </td>
-                  <td className="py-3">
-                    <button
-                      type="button"
-                      onClick={() => setOpen(expanded ? null : o.ref)}
-                      className="text-xs uppercase tracking-[0.12em] text-graphite underline-offset-4 hover:text-ink hover:underline"
-                    >
-                      {expanded ? t.bom.hide : t.bom.show}
-                    </button>
-                  </td>
-                </tr>
-                {expanded && (
-                  <tr className="border-b border-hairline bg-mist/40">
-                    <td colSpan={9} className="px-4">
-                      <BomDetail order={o} t={t} statusLabels={statusLabels} />
-                    </td>
-                  </tr>
-                )}
-              </Fragment>
+              <button
+                key={o.ref}
+                type="button"
+                onClick={() => setOpenRef(o.ref)}
+                className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-hairline py-3.5 pr-2 text-left transition-colors hover:bg-mist/50"
+              >
+                <span className="flex w-[112px] shrink-0 flex-col gap-1">
+                  <span className="whitespace-nowrap text-sm text-ink">{o.ref}</span>
+                  <span
+                    className={`w-fit border px-1.5 py-0.5 text-[9px] uppercase tracking-[0.1em] ${
+                      o.kind === "order" ? "border-ink/40 text-ink" : "border-steel/50 text-steel"
+                    }`}
+                  >
+                    {t.kind[o.kind]}
+                  </span>
+                </span>
+                <span className="min-w-[130px] flex-1 text-sm font-light text-graphite">
+                  {o.customer.name}
+                  <span className="block text-xs text-stone">{o.customer.city}</span>
+                </span>
+                <span className="hidden w-[170px] text-sm font-light text-graphite lg:block">
+                  {o.system === "glass" ? cfgDict.systemGlass : cfgDict.systemBars} · {o.lengthM.toLocaleString("de-CH")} m
+                </span>
+                <span className="w-[100px] whitespace-nowrap text-sm text-ink">{chf(o.gross)}</span>
+                <span className="ml-auto shrink-0">
+                  <StatusSteps status={o.status} flow={flow} labels={statusLabels} showLabel={false} />
+                </span>
+              </button>
             );
           })}
-        </tbody>
-      </table>
+        </div>
+      )}
+
+      {selected && (
+        <OrderDrawer
+          order={selected}
+          t={t}
+          statusLabels={statusLabels}
+          cfgDict={cfgDict}
+          onClose={() => setOpenRef(null)}
+          advance={advance}
+          sendQuote={sendQuote}
+        />
+      )}
     </div>
   );
 }
@@ -693,6 +862,103 @@ function readProjectImage(file: File): Promise<string> {
   });
 }
 
+const MAX_GALLERY = 8;
+
+/** Multi-photo gallery editor: append, remove, reorder; first image is the cover. */
+function GalleryEditor({
+  c,
+  images,
+  onChange,
+}: {
+  c: AdminDict["content"];
+  images: string[];
+  onChange: (images: string[]) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone">
+        {c.image}
+        {images.length > 0 && <span className="ml-2 text-stone/70">· {fmt(c.photoCount, { n: images.length })}</span>}
+      </span>
+      {images.length > 0 && (
+        <div className="flex flex-wrap gap-3">
+          {images.map((src, i) => (
+            <div key={i} className="relative">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={src} alt="" className="h-20 w-28 border border-hairline object-cover" />
+              {i === 0 && (
+                <span className="absolute left-0 top-0 bg-ink/85 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.1em] text-paper">
+                  {c.cover}
+                </span>
+              )}
+              <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-ink/70 px-1 py-0.5 text-paper">
+                <button
+                  type="button"
+                  aria-label={c.moveLeft}
+                  disabled={i === 0}
+                  onClick={() => {
+                    const n = [...images];
+                    [n[i - 1], n[i]] = [n[i], n[i - 1]];
+                    onChange(n);
+                  }}
+                  className="px-1 text-sm leading-none disabled:opacity-30"
+                >
+                  ‹
+                </button>
+                <button
+                  type="button"
+                  aria-label={c.imageRemove}
+                  onClick={() => onChange(images.filter((_, j) => j !== i))}
+                  className="px-1 text-sm leading-none hover:text-[#e08a7a]"
+                >
+                  ×
+                </button>
+                <button
+                  type="button"
+                  aria-label={c.moveRight}
+                  disabled={i === images.length - 1}
+                  onClick={() => {
+                    const n = [...images];
+                    [n[i + 1], n[i]] = [n[i], n[i + 1]];
+                    onChange(n);
+                  }}
+                  className="px-1 text-sm leading-none disabled:opacity-30"
+                >
+                  ›
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {images.length < MAX_GALLERY && (
+        <label className="cursor-pointer self-start border border-hairline px-4 py-2.5 text-xs uppercase tracking-[0.12em] text-graphite transition-colors hover:border-graphite">
+          {images.length === 0 ? c.imagePick : c.imagesAdd}
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={async (e) => {
+              const files = Array.from(e.target.files ?? []).slice(0, MAX_GALLERY - images.length);
+              e.target.value = "";
+              const added: string[] = [];
+              for (const f of files) {
+                try {
+                  added.push(await readProjectImage(f));
+                } catch {
+                  /* skip unreadable file */
+                }
+              }
+              if (added.length) onChange([...images, ...added]);
+            }}
+          />
+        </label>
+      )}
+    </div>
+  );
+}
+
 function ContentTab({ t, refsDict, locale }: { t: AdminDict; refsDict: Dict["references"]; locale: string }) {
   const c = t.content;
   const [content, setContent] = useState<ContentState>({ projects: {}, added: [] });
@@ -758,37 +1024,7 @@ function ContentTab({ t, refsDict, locale }: { t: AdminDict; refsDict: Dict["ref
         onChange={(e) => setDraft({ ...draft, desc: e.target.value })}
         className={inputCls}
       />
-      <div className="flex flex-col gap-1.5">
-        <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone">{c.image}</span>
-        <div className="flex flex-wrap items-center gap-3">
-          {draft.image && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={draft.image} alt="" className="h-20 w-28 border border-hairline object-cover" />
-          )}
-          <label className="cursor-pointer border border-hairline px-4 py-2.5 text-xs uppercase tracking-[0.12em] text-graphite transition-colors hover:border-graphite">
-            {c.imagePick}
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) readProjectImage(f).then((image) => setDraft((d) => ({ ...d, image }))).catch(() => {});
-                e.target.value = "";
-              }}
-            />
-          </label>
-          {draft.image && (
-            <button
-              type="button"
-              onClick={() => setDraft((d) => ({ ...d, image: undefined }))}
-              className="text-[11px] uppercase tracking-[0.12em] text-stone underline-offset-2 hover:text-ink hover:underline"
-            >
-              {c.imageRemove}
-            </button>
-          )}
-        </div>
-      </div>
+      <GalleryEditor c={c} images={projectImages(draft)} onChange={(images) => setDraft((d) => ({ ...d, images, image: undefined }))} />
       <div className="flex gap-3">
         <button type="submit" className="inline-flex items-center justify-center bg-ink px-5 py-2.5 text-xs font-medium uppercase tracking-[0.14em] text-paper transition-colors hover:bg-graphite">
           {c.save}
@@ -817,9 +1053,16 @@ function ContentTab({ t, refsDict, locale }: { t: AdminDict; refsDict: Dict["ref
             </div>
           ) : (
             <div key={i} className="flex flex-col gap-2 border border-hairline p-5">
-              {p.image && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={p.image} alt={p.name} className="aspect-[16/9] w-full border border-hairline object-cover" />
+              {projectImages(p).length > 0 && (
+                <div className="relative">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={projectImages(p)[0]} alt={p.name} className="aspect-[16/9] w-full border border-hairline object-cover" />
+                  {projectImages(p).length > 1 && (
+                    <span className="absolute bottom-2 right-2 bg-ink/80 px-2 py-0.5 text-[10px] font-light text-paper">
+                      {fmt(c.photoCount, { n: projectImages(p).length })}
+                    </span>
+                  )}
+                </div>
               )}
               <div className="flex items-baseline justify-between gap-2">
                 <span className="text-sm text-ink">{p.name}</span>

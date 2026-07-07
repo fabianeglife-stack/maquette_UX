@@ -220,8 +220,16 @@ export interface RefProject {
   length: string;
   mounting: string;
   desc: string;
-  /** Project photo as a compressed JPEG data URL (admin upload); falls back to an illustration. */
+  /** Legacy single project photo (compressed JPEG data URL). Superseded by `images`. */
   image?: string;
+  /** Project gallery: compressed JPEG data URLs, first = cover. Falls back to an illustration. */
+  images?: string[];
+}
+
+/** Normalised gallery for a project: `images` if present, else the legacy `image`, else []. */
+export function projectImages(p: RefProject): string[] {
+  if (p.images && p.images.length > 0) return p.images;
+  return p.image ? [p.image] : [];
 }
 
 export interface ContentState {
