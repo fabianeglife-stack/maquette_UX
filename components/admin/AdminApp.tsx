@@ -10,13 +10,16 @@ import {
   loadOrders,
   loadTiers,
   logEvent,
+  mergedAbout,
   ORDER_FLOW,
   projectImages,
   QUOTE_FLOW,
   setTier,
   updateOrder,
   updateOrderStatus,
+  type AboutContent,
   type ContentState,
+  type HomeContent,
   type Order,
   type OrderEvent,
   type OrderStatus,
@@ -26,9 +29,11 @@ import {
 import {
   fetchAllTypes,
   fetchContent,
+  fetchPageContent,
   fetchPriceBook,
   publishPriceBook,
   putContent,
+  putPageContent,
   removeType,
   resetPriceBookAll,
   resolveType,
@@ -869,15 +874,19 @@ function GalleryEditor({
   c,
   images,
   onChange,
+  max = MAX_GALLERY,
+  label,
 }: {
   c: AdminDict["content"];
   images: string[];
   onChange: (images: string[]) => void;
+  max?: number;
+  label?: string;
 }) {
   return (
     <div className="flex flex-col gap-2">
       <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone">
-        {c.image}
+        {label ?? c.image}
         {images.length > 0 && <span className="ml-2 text-stone/70">· {fmt(c.photoCount, { n: images.length })}</span>}
       </span>
       {images.length > 0 && (
@@ -931,7 +940,7 @@ function GalleryEditor({
           ))}
         </div>
       )}
-      {images.length < MAX_GALLERY && (
+      {images.length < max && (
         <label className="cursor-pointer self-start border border-hairline px-4 py-2.5 text-xs uppercase tracking-[0.12em] text-graphite transition-colors hover:border-graphite">
           {images.length === 0 ? c.imagePick : c.imagesAdd}
           <input
@@ -940,7 +949,7 @@ function GalleryEditor({
             multiple
             className="hidden"
             onChange={async (e) => {
-              const files = Array.from(e.target.files ?? []).slice(0, MAX_GALLERY - images.length);
+              const files = Array.from(e.target.files ?? []).slice(0, max - images.length);
               e.target.value = "";
               const added: string[] = [];
               for (const f of files) {
@@ -954,6 +963,235 @@ function GalleryEditor({
             }}
           />
         </label>
+      )}
+    </div>
+  );
+}
+
+/** Inhalte tab: section switcher over the three CMS-editable pages. */
+function ContentSection({
+  t,
+  refsDict,
+  aboutDict,
+  locale,
+}: {
+  t: AdminDict;
+  refsDict: Dict["references"];
+  aboutDict: Dict["about"];
+  locale: string;
+}) {
+  const [section, setSection] = useState<"references" | "about" | "home">("references");
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-wrap gap-px self-start bg-hairline">
+        {(["references", "about", "home"] as const).map((v) => (
+          <button
+            key={v}
+            type="button"
+            onClick={() => setSection(v)}
+            className={`px-4 py-2 text-[11px] uppercase tracking-[0.12em] transition-colors ${
+              section === v ? "bg-ink text-paper" : "bg-paper text-graphite hover:text-ink"
+            }`}
+          >
+            {t.content.sections[v]}
+          </button>
+        ))}
+      </div>
+      {section === "references" && <ContentTab t={t} refsDict={refsDict} locale={locale} />}
+      {section === "about" && <AboutEditor t={t} aboutDict={aboutDict} />}
+      {section === "home" && <HomeEditor t={t} />}
+    </div>
+  );
+}
+
+/** About page editor: every text field + the photo gallery, dict values as placeholders. */
+function AboutEditor({ t, aboutDict }: { t: AdminDict; aboutDict: Dict["about"] }) {
+  const c = t.content;
+  const [o, setO] = useState<AboutContent>({});
+  const [saved, setSaved] = useState(false);
+  useEffect(() => {
+    fetchPageContent<AboutContent>("about", {}).then(setO);
+  }, []);
+
+  const merged = mergedAbout(aboutDict, o);
+  const inputCls =
+    "w-full border border-hairline bg-paper px-3 py-2 text-sm font-light text-ink outline-none transition-colors placeholder:text-stone focus:border-graphite";
+  const lbl = "text-[11px] font-medium uppercase tracking-[0.14em] text-stone";
+
+  const persist = (next: AboutContent) => {
+    putPageContent("about", next)
+      .then(() => {
+        setO(next);
+        setSaved(true);
+      })
+      .catch(() => {});
+  };
+
+  return (
+    <div className="flex max-w-3xl flex-col gap-5">
+      <p className="text-sm font-light leading-relaxed text-graphite">{c.aboutHint}</p>
+
+      <label className="flex flex-col gap-1.5">
+        <span className={lbl}>{c.fKicker}</span>
+        <input value={o.kicker ?? ""} placeholder={aboutDict.kicker} onChange={(e) => setO({ ...o, kicker: e.target.value })} className={inputCls} />
+      </label>
+      <label className="flex flex-col gap-1.5">
+        <span className={lbl}>{c.fTitle}</span>
+        <input value={o.title ?? ""} placeholder={aboutDict.title} onChange={(e) => setO({ ...o, title: e.target.value })} className={inputCls} />
+      </label>
+      <label className="flex flex-col gap-1.5">
+        <span className={lbl}>{c.fLead}</span>
+        <textarea rows={2} value={o.lead ?? ""} placeholder={aboutDict.lead} onChange={(e) => setO({ ...o, lead: e.target.value })} className={inputCls} />
+      </label>
+
+      {aboutDict.story.map((def, i) => (
+        <label key={i} className="flex flex-col gap-1.5">
+          <span className={lbl}>{fmt(c.fStory, { n: i + 1 })}</span>
+          <textarea
+            rows={3}
+            value={merged.story[i] ?? ""}
+            onChange={(e) => {
+              const story = [...merged.story];
+              story[i] = e.target.value;
+              setO({ ...o, story });
+            }}
+            className={inputCls}
+          />
+        </label>
+      ))}
+
+      <div className="flex flex-col gap-3">
+        <span className={lbl}>{c.fValues}</span>
+        {merged.values.map((v, i) => (
+          <div key={i} className="grid gap-2 sm:grid-cols-[1fr_2fr]">
+            <input
+              value={v.t}
+              onChange={(e) => {
+                const values = merged.values.map((x, j) => (j === i ? { ...x, t: e.target.value } : x));
+                setO({ ...o, values });
+              }}
+              className={inputCls}
+            />
+            <input
+              value={v.d}
+              onChange={(e) => {
+                const values = merged.values.map((x, j) => (j === i ? { ...x, d: e.target.value } : x));
+                setO({ ...o, values });
+              }}
+              className={inputCls}
+            />
+          </div>
+        ))}
+      </div>
+
+      <div className="flex flex-col gap-3">
+        <span className={lbl}>{c.fNumbers}</span>
+        {merged.numbers.map((n, i) => (
+          <div key={i} className="grid gap-2 sm:grid-cols-[1fr_2fr]">
+            <input
+              value={n.v}
+              onChange={(e) => {
+                const numbers = merged.numbers.map((x, j) => (j === i ? { ...x, v: e.target.value } : x));
+                setO({ ...o, numbers });
+              }}
+              className={inputCls}
+            />
+            <input
+              value={n.d}
+              onChange={(e) => {
+                const numbers = merged.numbers.map((x, j) => (j === i ? { ...x, d: e.target.value } : x));
+                setO({ ...o, numbers });
+              }}
+              className={inputCls}
+            />
+          </div>
+        ))}
+      </div>
+
+      <label className="flex flex-col gap-1.5">
+        <span className={lbl}>{c.fQuote}</span>
+        <textarea rows={2} value={o.quote ?? ""} placeholder={aboutDict.quote} onChange={(e) => setO({ ...o, quote: e.target.value })} className={inputCls} />
+      </label>
+      <label className="flex flex-col gap-1.5">
+        <span className={lbl}>{c.fQuoteAuthor}</span>
+        <input value={o.quoteAuthor ?? ""} placeholder={aboutDict.quoteAuthor} onChange={(e) => setO({ ...o, quoteAuthor: e.target.value })} className={inputCls} />
+      </label>
+
+      <GalleryEditor c={c} label={c.fGallery} images={o.images ?? []} onChange={(images) => setO({ ...o, images })} />
+
+      <div className="flex flex-wrap gap-3 pt-1">
+        <button
+          type="button"
+          onClick={() => persist(o)}
+          className="inline-flex items-center justify-center bg-ink px-5 py-2.5 text-xs font-medium uppercase tracking-[0.14em] text-paper transition-colors hover:bg-graphite"
+        >
+          {t.save}
+        </button>
+        <button
+          type="button"
+          onClick={() => persist({})}
+          className="inline-flex items-center justify-center border border-hairline px-5 py-2.5 text-xs font-medium uppercase tracking-[0.14em] text-graphite transition-colors hover:border-graphite"
+        >
+          {c.resetPage}
+        </button>
+      </div>
+      {saved && (
+        <p role="status" className="border-l-2 border-steel bg-mist/70 p-3 text-sm font-light text-graphite">
+          {c.savedMsg}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** Home page editor: hero photo (references photos flow to the teaser automatically). */
+function HomeEditor({ t }: { t: AdminDict }) {
+  const c = t.content;
+  const [o, setO] = useState<HomeContent>({});
+  const [saved, setSaved] = useState(false);
+  useEffect(() => {
+    fetchPageContent<HomeContent>("home", {}).then(setO);
+  }, []);
+
+  const persist = (next: HomeContent) => {
+    putPageContent("home", next)
+      .then(() => {
+        setO(next);
+        setSaved(true);
+      })
+      .catch(() => {});
+  };
+
+  return (
+    <div className="flex max-w-3xl flex-col gap-5">
+      <p className="text-sm font-light leading-relaxed text-graphite">{c.homeHint}</p>
+      <GalleryEditor
+        c={c}
+        label={c.heroImage}
+        max={1}
+        images={o.heroImage ? [o.heroImage] : []}
+        onChange={(images) => setO({ ...o, heroImage: images[0] })}
+      />
+      <div className="flex flex-wrap gap-3 pt-1">
+        <button
+          type="button"
+          onClick={() => persist(o)}
+          className="inline-flex items-center justify-center bg-ink px-5 py-2.5 text-xs font-medium uppercase tracking-[0.14em] text-paper transition-colors hover:bg-graphite"
+        >
+          {t.save}
+        </button>
+        <button
+          type="button"
+          onClick={() => persist({})}
+          className="inline-flex items-center justify-center border border-hairline px-5 py-2.5 text-xs font-medium uppercase tracking-[0.14em] text-graphite transition-colors hover:border-graphite"
+        >
+          {c.resetPage}
+        </button>
+      </div>
+      {saved && (
+        <p role="status" className="border-l-2 border-steel bg-mist/70 p-3 text-sm font-light text-graphite">
+          {c.savedMsg}
+        </p>
       )}
     </div>
   );
@@ -1133,12 +1371,14 @@ export default function AdminApp({
   statusLabels,
   cfgDict,
   refsDict,
+  aboutDict,
   locale,
 }: {
   t: AdminDict;
   statusLabels: Dict["portal"]["status"];
   cfgDict: Dict["cfg"];
   refsDict: Dict["references"];
+  aboutDict: Dict["about"];
   locale: string;
 }) {
   const [tab, setTab] = useState<Tab>("dashboard");
@@ -1165,7 +1405,7 @@ export default function AdminApp({
       {tab === "customers" && <CustomersTab t={t} />}
       {tab === "pricing" && <PricingEditor t={t} />}
       {tab === "products" && <ProductsTab t={t} cfgDict={cfgDict} />}
-      {tab === "content" && <ContentTab t={t} refsDict={refsDict} locale={locale} />}
+      {tab === "content" && <ContentSection t={t} refsDict={refsDict} aboutDict={aboutDict} locale={locale} />}
     </div>
   );
 }

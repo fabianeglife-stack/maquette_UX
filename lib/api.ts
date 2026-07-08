@@ -70,7 +70,10 @@ export const api = {
   resetPriceBook: () => call<{ priceBook: PriceBook }>("DELETE", "/api/pricebook/").then((r) => r.priceBook),
 
   getContent: () => call<{ content: ContentState }>("GET", "/api/content/").then((r) => r.content),
-  putContent: (content: ContentState) => call<{ ok: true }>("PUT", "/api/content/", { content }),
+  putContent: (content: ContentState) => call<{ ok: true }>("PUT", "/api/content/", { id: "references", content }),
+  getPageContent: <T,>(id: string) =>
+    call<{ content: T }>("GET", `/api/content/?id=${encodeURIComponent(id)}`).then((r) => r.content),
+  putPageContent: <T,>(id: string, content: T) => call<{ ok: true }>("PUT", "/api/content/", { id, content }),
 
   listConfigs: () => call<{ configs: SavedConfig[] }>("GET", "/api/configs/").then((r) => r.configs),
   createConfig: (name: string, config: RailingConfig) =>

@@ -27,7 +27,7 @@ export default async function Admin({ params }: { params: Promise<{ locale: stri
         </Reveal>
       </section>
       <section className="mx-auto max-w-6xl px-6 pb-24">
-        <AdminApp t={d.admin} statusLabels={d.portal.status} cfgDict={d.cfg} refsDict={d.references} locale={locale} />
+        <AdminApp t={d.admin} statusLabels={d.portal.status} cfgDict={d.cfg} refsDict={d.references} aboutDict={d.about} locale={locale} />
       </section>
     </>
   );

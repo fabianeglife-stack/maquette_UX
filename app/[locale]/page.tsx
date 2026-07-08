@@ -1,12 +1,9 @@
 import Link from "next/link";
 import Reveal from "@/components/Reveal";
 import { SectionHeader, ButtonLink } from "@/components/ui";
-import {
-  HeroScene,
-  BarRailingElevation,
-  GlassRailingElevation,
-  ReferenceScene,
-} from "@/components/illustrations";
+import { BarRailingElevation, GlassRailingElevation } from "@/components/illustrations";
+import HomeHeroVisual from "@/components/HomeHeroVisual";
+import HomeRefsTeaser from "@/components/HomeRefsTeaser";
 import { getDict } from "@/lib/i18n";
 
 export default async function Home({ params }: { params: Promise<{ locale: string }> }) {
@@ -31,7 +28,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
           </div>
         </Reveal>
         <Reveal delay={150}>
-          <HeroScene />
+          <HomeHeroVisual />
         </Reveal>
       </section>
 
@@ -119,23 +116,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
               </Link>
             </Reveal>
           </div>
-          <div className="mt-14 grid gap-8 md:grid-cols-3">
-            {d.references.projects.slice(0, 3).map((p, i) => (
-              <Reveal key={p.name} delay={i * 120} className="group flex flex-col gap-4">
-                <Link href={`/${locale}/references/`} className="flex flex-col gap-4">
-                  <div className="bg-mist/60 p-4 transition-colors group-hover:bg-mist">
-                    <ReferenceScene index={i} />
-                  </div>
-                  <div>
-                    <h3 className="text-base font-normal text-ink">{p.name}</h3>
-                    <p className="text-sm font-light text-stone">
-                      {p.place} · {p.system}
-                    </p>
-                  </div>
-                </Link>
-              </Reveal>
-            ))}
-          </div>
+          <HomeRefsTeaser base={d.references.projects} locale={locale} />
         </div>
       </section>
 

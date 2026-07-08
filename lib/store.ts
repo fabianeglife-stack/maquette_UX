@@ -232,6 +232,68 @@ export function projectImages(p: RefProject): string[] {
   return p.image ? [p.image] : [];
 }
 
+/* ---------- per-page CMS content (about, home) ---------- */
+
+/** Sparse overrides for the About page; empty fields fall back to the i18n dict. */
+export interface AboutContent {
+  kicker?: string;
+  title?: string;
+  lead?: string;
+  story?: string[];
+  values?: { t: string; d: string }[];
+  numbers?: { v: string; d: string }[];
+  quote?: string;
+  quoteAuthor?: string;
+  /** Workshop/team photo gallery shown on the About page. */
+  images?: string[];
+}
+
+/** Home page overrides. */
+export interface HomeContent {
+  /** Hero photo replacing the hero illustration when set (JPEG data URL). */
+  heroImage?: string;
+}
+
+export function loadPageContent<T>(id: string, empty: T): T {
+  try {
+    const raw = localStorage.getItem(`axioform-content-${id}-v1`);
+    return raw ? { ...empty, ...(JSON.parse(raw) as T) } : empty;
+  } catch {
+    return empty;
+  }
+}
+
+export function savePageContent<T>(id: string, c: T): void {
+  localStorage.setItem(`axioform-content-${id}-v1`, JSON.stringify(c));
+}
+
+interface AboutBase {
+  kicker: string;
+  title: string;
+  lead: string;
+  story: string[];
+  values: { t: string; d: string }[];
+  numbers: { v: string; d: string }[];
+  quote: string;
+  quoteAuthor: string;
+}
+
+/** Overlay About overrides on the i18n defaults: non-empty scalars win, arrays replace wholesale. */
+export function mergedAbout(base: AboutBase, o: AboutContent): AboutBase & { images: string[] } {
+  const pick = (ov: string | undefined, def: string) => (ov && ov.trim() !== "" ? ov : def);
+  return {
+    kicker: pick(o.kicker, base.kicker),
+    title: pick(o.title, base.title),
+    lead: pick(o.lead, base.lead),
+    story: o.story && o.story.length > 0 ? o.story : base.story,
+    values: o.values && o.values.length > 0 ? o.values : base.values,
+    numbers: o.numbers && o.numbers.length > 0 ? o.numbers : base.numbers,
+    quote: pick(o.quote, base.quote),
+    quoteAuthor: pick(o.quoteAuthor, base.quoteAuthor),
+    images: o.images ?? [],
+  };
+}
+
 export interface ContentState {
   /** Sparse overrides for the seeded reference projects, by index. */
   projects: Record<number, Partial<RefProject>>;

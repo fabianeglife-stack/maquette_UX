@@ -12,12 +12,14 @@ import {
   deleteSavedConfig,
   loadAllTypes,
   loadContent,
+  loadPageContent,
   loadPriceBook,
   loadSavedConfigs,
   mergedProjects,
   resetPriceBook,
   saveContent,
   saveCustomType,
+  savePageContent,
   savePriceBook,
   saveSavedConfig,
   type ContentState,
@@ -88,6 +90,23 @@ export async function resetPriceBookAll(): Promise<PriceBook> {
 export function fetchContent(): Promise<ContentState> {
   if (!hasBackend) return Promise.resolve(loadContent());
   return api.getContent().catch(() => ({ projects: {}, added: [] }));
+}
+
+/** Generic per-page CMS content (about, home). */
+export function fetchPageContent<T>(id: string, empty: T): Promise<T> {
+  if (!hasBackend) return Promise.resolve(loadPageContent(id, empty));
+  return api
+    .getPageContent<T>(id)
+    .then((c) => ({ ...empty, ...c }))
+    .catch(() => empty);
+}
+
+export async function putPageContent<T>(id: string, content: T): Promise<void> {
+  if (hasBackend) {
+    await api.putPageContent(id, content);
+  } else {
+    savePageContent(id, content);
+  }
 }
 
 export async function putContent(c: ContentState): Promise<void> {
