@@ -48,8 +48,8 @@ export function ButtonLink({
         ? "bg-paper text-ink hover:bg-mist"
         : "bg-ink text-paper hover:bg-graphite"
       : dark
-        ? "border border-paper/30 text-paper hover:border-paper"
-        : "border border-ink/25 text-ink hover:border-ink";
+        ? "border border-paper/30 text-paper hover:border-paper hover:bg-paper hover:text-ink"
+        : "border border-ink/25 text-ink hover:border-ink hover:bg-ink hover:text-paper";
   return (
     <Link
       href={href}

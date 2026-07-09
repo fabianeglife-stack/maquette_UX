@@ -15,7 +15,11 @@ export default function StatusSteps({
 }) {
   const idx = flow.indexOf(status);
   return (
-    <div className="flex items-center gap-1.5">
+    <div
+      className="flex items-center gap-1.5"
+      role="img"
+      aria-label={`${labels[status]} (${idx + 1}/${flow.length})`}
+    >
       {flow.map((s, i) => (
         <div key={s} className="flex items-center gap-1.5">
           <span title={labels[s]} className={`h-2 w-2 rounded-full ${i <= idx ? "bg-ink" : "bg-hairline"}`} />

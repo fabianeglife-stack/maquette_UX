@@ -13,7 +13,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
   return (
     <>
       {/* Hero */}
-      <section className="mx-auto grid min-h-[92vh] max-w-6xl items-center gap-10 px-6 pb-16 pt-28 md:grid-cols-[5fr_6fr] md:pt-20">
+      <section className="mx-auto grid min-h-[60svh] md:min-h-[92svh] max-w-6xl items-center gap-10 px-6 pb-16 pt-28 md:grid-cols-[5fr_6fr] md:pt-20">
         <Reveal className="flex flex-col gap-7">
           <span className="label">{d.hero.kicker}</span>
           <h1 className="text-4xl font-light leading-[1.1] tracking-tight text-ink md:text-6xl">
@@ -49,7 +49,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
                 </div>
                 <div className="flex items-baseline justify-between gap-4">
                   <h3 className="text-2xl font-light tracking-tight text-ink">{p.name}</h3>
-                  <span className="whitespace-nowrap text-sm text-stone">{p.price}</span>
+                  <span className="whitespace-nowrap text-sm text-graphite">{p.price}</span>
                 </div>
                 <p className="text-sm font-light leading-relaxed text-graphite">{p.desc}</p>
                 <ul className="flex flex-col gap-2">
@@ -78,7 +78,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
           <div className="mt-14 grid gap-10 md:grid-cols-4 md:gap-8">
             {d.how.steps.map((s, i) => (
               <Reveal key={s.t} delay={i * 100} className="flex flex-col gap-4 border-t border-ink/60 pt-5">
-                <span className="text-xs text-stone">0{i + 1}</span>
+                <span className="text-xs text-graphite">0{i + 1}</span>
                 <h3 className="text-lg font-normal text-ink">{s.t}</h3>
                 <p className="text-sm font-light leading-relaxed text-graphite">{s.d}</p>
               </Reveal>

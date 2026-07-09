@@ -792,7 +792,7 @@ function ProductsTab({ t, cfgDict }: { t: AdminDict; cfgDict: Dict["cfg"] }) {
                   onClick={() => {
                     removeType(x.id).then(refresh).catch(() => {});
                   }}
-                  className="text-[11px] uppercase tracking-[0.12em] text-[#b04a3a] underline-offset-2 hover:underline"
+                  className="text-[11px] uppercase tracking-[0.12em] text-alert underline-offset-2 hover:underline"
                 >
                   {t.typesForm.delete}
                 </button>
@@ -918,7 +918,7 @@ function GalleryEditor({
                   type="button"
                   aria-label={c.imageRemove}
                   onClick={() => onChange(images.filter((_, j) => j !== i))}
-                  className="px-1 text-sm leading-none hover:text-[#e08a7a]"
+                  className="px-1 text-sm leading-none hover:text-alert"
                 >
                   ×
                 </button>
@@ -1328,7 +1328,7 @@ function ContentTab({ t, refsDict, locale }: { t: AdminDict; refsDict: Dict["ref
                   <button
                     type="button"
                     onClick={() => persist({ ...content, added: content.added.filter((_, j) => j !== i - base.length) })}
-                    className="text-[11px] uppercase tracking-[0.12em] text-[#b04a3a] underline-offset-2 hover:underline"
+                    className="text-[11px] uppercase tracking-[0.12em] text-alert underline-offset-2 hover:underline"
                   >
                     {c.delete}
                   </button>

@@ -27,13 +27,26 @@ export async function generateMetadata({
       template: "%s — AxioForm",
     },
     description: dict.hero.lead,
-    icons: { icon: `${basePath}/favicon.svg` },
+    icons: {
+      icon: [
+        { url: `${basePath}/favicon.svg`, type: "image/svg+xml" },
+        { url: `${basePath}/icon-192.png`, type: "image/png", sizes: "192x192" },
+      ],
+      apple: `${basePath}/apple-touch-icon.png`,
+    },
     openGraph: {
       siteName: "AxioForm",
       type: "website",
       locale,
       title: "AxioForm — " + dict.hero.title,
       description: dict.hero.lead,
+      images: [{ url: `${basePath}/og.png`, width: 1200, height: 630 }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: "AxioForm — " + dict.hero.title,
+      description: dict.hero.lead,
+      images: [`${basePath}/og.png`],
     },
   };
 }
@@ -51,8 +64,11 @@ export default async function LocaleLayout({
   return (
     <html lang={locale} className={GeistSans.variable}>
       <body className="font-sans">
+        <a href="#main" className="skip-link">
+          {dict.nav.skip}
+        </a>
         <Header locale={locale} nav={dict.nav} />
-        <main>{children}</main>
+        <main id="main">{children}</main>
         <Footer locale={locale} dict={dict} />
       </body>
     </html>

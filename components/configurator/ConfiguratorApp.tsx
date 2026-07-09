@@ -303,9 +303,39 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
   );
   const derived = useMemo(() => deriveRailing(cfg, tp), [cfg, tp]);
   const shape = shapeOf(cfg.segments);
+
+
+  // Desktop step rail: highlight the section in view.
+  const [activeStep, setActiveStep] = useState(1);
+  useEffect(() => {
+    const obs = new IntersectionObserver(
+      (es) => es.forEach((e) => e.isIntersecting && setActiveStep(Number((e.target as HTMLElement).dataset.step))),
+      { rootMargin: "-25% 0px -65% 0px" },
+    );
+    ["step-1", "step-2", "step-3", "cta"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) obs.observe(el);
+    });
+    return () => obs.disconnect();
+  }, []);
   const sia = useMemo(() => evaluateSia(cfg, derived, tp), [cfg, derived, tp]);
   const overall = siaSummary(sia);
   const price = useMemo(() => priceRailing(cfg, derived, pb, tp, discount), [cfg, derived, pb, tp, discount]);
+
+  // Brief highlight on the Richtpreis whenever the total changes.
+  const [pulse, setPulse] = useState(false);
+  const firstPrice = useRef(true);
+  useEffect(() => {
+    if (firstPrice.current) {
+      firstPrice.current = false;
+      return;
+    }
+    setPulse(true);
+    const id = setTimeout(() => setPulse(false), 700);
+    return () => clearTimeout(id);
+  }, [price.gross]);
+  const pulseCls = pulse ? "bg-mist" : "bg-transparent";
+
   const infillKind = infillKindOf(tp);
 
   const set = (patch: Partial<RailingConfig>) => setCfg((c) => ({ ...c, ...patch }));
@@ -343,8 +373,28 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
 
       {/* ---------- left: steps ---------- */}
       <div className="flex flex-col gap-10">
+        {/* step rail (desktop): scrollspy over the four sections */}
+        <nav className="sticky top-16 z-30 hidden gap-px self-start bg-hairline lg:flex" aria-label="Schritte">
+          {[
+            { id: "step-1", n: 1, l: t.stepSystem },
+            { id: "step-2", n: 2, l: t.stepGeometry },
+            { id: "step-3", n: 3, l: t.stepOptions },
+            { id: "cta", n: 4, l: t.stepSummary },
+          ].map((sStep) => (
+            <a
+              key={sStep.id}
+              href={`#${sStep.id}`}
+              className={`px-3 py-2 text-[10px] uppercase tracking-[0.12em] transition-colors ${
+                activeStep === sStep.n ? "bg-ink text-paper" : "bg-paper text-graphite hover:text-ink"
+              }`}
+            >
+              0{sStep.n} {sStep.l}
+            </a>
+          ))}
+        </nav>
+
         {/* 1 — system */}
-        <section className="flex flex-col gap-4">
+        <section id="step-1" data-step="1" className="flex scroll-mt-28 flex-col gap-4">
           <h2 className="flex items-baseline gap-4 border-t border-ink/60 pt-4 text-base font-normal text-ink">
             <span className="text-xs text-stone">01</span>
             {t.stepSystem}
@@ -391,7 +441,7 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
         </section>
 
         {/* 2 — geometry */}
-        <section className="flex flex-col gap-4">
+        <section id="step-2" data-step="2" className="flex scroll-mt-28 flex-col gap-4">
           <h2 className="flex items-baseline gap-4 border-t border-ink/60 pt-4 text-base font-normal text-ink">
             <span className="text-xs text-stone">02</span>
             {t.stepGeometry}
@@ -517,7 +567,7 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
         </section>
 
         {/* 3 — options */}
-        <section className="flex flex-col gap-5">
+        <section id="step-3" data-step="3" className="flex scroll-mt-28 flex-col gap-5">
           <h2 className="flex items-baseline gap-4 border-t border-ink/60 pt-4 text-base font-normal text-ink">
             <span className="text-xs text-stone">03</span>
             {t.stepOptions}
@@ -604,7 +654,7 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
         </section>
 
         {/* 4 — SIA + price */}
-        <section id="cta" className="flex scroll-mt-24 flex-col gap-5">
+        <section id="cta" data-step="4" className="flex scroll-mt-28 flex-col gap-5">
           <h2 className="flex items-baseline gap-4 border-t border-ink/60 pt-4 text-base font-normal text-ink">
             <span className="text-xs text-stone">04</span>
             {t.stepSummary}
@@ -641,7 +691,7 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
             </div>
             <div className="flex items-baseline justify-between pt-1.5">
               <span className="text-sm text-ink">{t.gross}</span>
-              <span className="text-xl font-light tracking-tight text-ink">{chf(price.gross)}</span>
+              <span className={`text-xl font-light tracking-tight text-ink transition-colors duration-500 ${pulseCls}`}>{chf(price.gross)}</span>
             </div>
             <p className="pt-1 text-[11px] font-light leading-relaxed text-stone">{t.priceNote}</p>
           </div>
@@ -686,7 +736,7 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
             {QUOTE_ONLY ? (
               <p className="text-xs font-light text-stone">{t.quoteOnlyNote}</p>
             ) : (
-              overall === "fail" && <p className="text-xs font-light text-[#b04a3a]">{t.buyBlocked}</p>
+              overall === "fail" && <p className="text-xs font-light text-alert">{t.buyBlocked}</p>
             )}
 
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
@@ -865,7 +915,7 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
               {t.stats.weight} <span className="text-ink">{derived.weightKg} kg</span>
             </span>
           </div>
-          <span className="text-2xl font-light tracking-tight text-ink">{chf(price.gross)}</span>
+          <span className={`text-2xl font-light tracking-tight text-ink transition-colors duration-500 ${pulseCls}`}>{chf(price.gross)}</span>
         </div>
       </div>
     </div>

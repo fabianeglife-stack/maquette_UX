@@ -8,6 +8,7 @@
   --color-graphite: #45453f;
   --color-ink: #171716;
   --color-steel: #4d6172;
+  --color-alert: #b04a3a;
 
   --font-sans: var(--font-geist-sans), "Helvetica Neue", Helvetica, Arial,
     sans-serif;
@@ -30,6 +31,43 @@
 
 html {
   scroll-behavior: smooth;
+}
+
+/* Keyboard focus: brand ring on every interactive element. */
+:focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Skip-to-content link: visually hidden until focused. */
+.skip-link {
+  position: absolute;
+  left: 1rem;
+  top: -3rem;
+  z-index: 100;
+  background: var(--color-ink);
+  color: var(--color-paper);
+  padding: 0.5rem 1rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  transition: top 0.15s;
+}
+.skip-link:focus-visible {
+  top: 1rem;
 }
 
 body {

@@ -81,7 +81,7 @@ export default function LoginForm({ dict, locale }: { dict: Dict["login"]; local
       </label>
 
       {error && (
-        <p role="alert" className="border-l-2 border-[#b04a3a] bg-mist/70 p-3 text-sm font-light text-[#b04a3a]">
+        <p role="alert" className="border-l-2 border-alert bg-mist/70 p-3 text-sm font-light text-alert">
           {errorText(error)}
         </p>
       )}
@@ -91,7 +91,7 @@ export default function LoginForm({ dict, locale }: { dict: Dict["login"]; local
         disabled={busy}
         className="mt-2 inline-flex items-center justify-center bg-ink px-7 py-3.5 text-xs font-medium uppercase tracking-[0.16em] text-paper transition-colors hover:bg-graphite disabled:opacity-50"
       >
-        {mode === "signup" ? dict.registerCta : dict.submit}
+        {busy ? "…" : mode === "signup" ? dict.registerCta : dict.submit}
       </button>
       {!hasBackend && (
         <button
@@ -108,7 +108,7 @@ export default function LoginForm({ dict, locale }: { dict: Dict["login"]; local
         <p className="text-sm font-light leading-relaxed text-graphite">{hasBackend ? dict.demoTextBackend : dict.demoText}</p>
       </div>
 
-      <p className="pt-2 text-xs font-light text-stone">
+      <p className="pt-2 text-xs font-light text-graphite">
         {mode === "login" ? dict.noAccount : dict.haveAccount}{" "}
         <button
           type="button"

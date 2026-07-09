@@ -17,6 +17,18 @@ export default function Header({ locale, nav }: { locale: string; nav: Dict["nav
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  // Mobile menu: Escape closes, body scroll locked while open.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    window.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [open]);
+
   const links = [
     { href: `/${locale}/about/`, label: nav.about },
     { href: `/${locale}/references/`, label: nav.references },
@@ -60,21 +72,20 @@ export default function Header({ locale, nav }: { locale: string; nav: Dict["nav
 
         {/* Mobile menu button */}
         <button
-          aria-label="Menu"
+          aria-label={nav.menu}
+          aria-expanded={open}
+          aria-controls="mobile-menu"
           onClick={() => setOpen(!open)}
-          className="flex h-10 w-10 flex-col items-center justify-center gap-1.5 md:hidden"
+          className="flex h-10 w-10 flex-col items-center justify-center gap-[5px] md:hidden"
         >
-          <span
-            className={`h-px w-6 bg-ink transition-transform ${open ? "translate-y-[3.5px] rotate-45" : ""}`}
-          />
-          <span
-            className={`h-px w-6 bg-ink transition-transform ${open ? "-translate-y-[3.5px] -rotate-45" : ""}`}
-          />
+          <span className={`h-px w-6 bg-ink transition-transform ${open ? "translate-y-[6px] rotate-45" : ""}`} />
+          <span className={`h-px w-6 bg-ink transition-opacity ${open ? "opacity-0" : ""}`} />
+          <span className={`h-px w-6 bg-ink transition-transform ${open ? "-translate-y-[6px] -rotate-45" : ""}`} />
         </button>
       </div>
 
       {open && (
-        <div className="border-t border-hairline bg-paper px-6 pb-8 pt-4 md:hidden">
+        <div id="mobile-menu" className="border-t border-hairline bg-paper px-6 pb-8 pt-4 md:hidden">
           <nav className="flex flex-col gap-5">
             {links.map((l) => (
               <Link
@@ -89,7 +100,7 @@ export default function Header({ locale, nav }: { locale: string; nav: Dict["nav
             <Link
               href={`/${locale}/login/`}
               onClick={() => setOpen(false)}
-              className="text-sm uppercase tracking-[0.16em] text-graphite"
+              className="inline-flex w-fit items-center justify-center border border-ink/25 px-5 py-2.5 text-sm uppercase tracking-[0.16em] text-ink transition-colors hover:border-ink hover:bg-ink hover:text-paper"
             >
               {nav.portal}
             </Link>

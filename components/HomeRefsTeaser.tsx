@@ -31,7 +31,7 @@ export default function HomeRefsTeaser({ base, locale }: { base: Dict["reference
                   className="aspect-[4/3] w-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
                 />
               ) : (
-                <div className="bg-mist/60 p-4 transition-colors group-hover:bg-mist">
+                <div className="flex aspect-[4/3] w-full items-center justify-center bg-mist/60 p-5 transition-colors group-hover:bg-mist">
                   <ReferenceScene index={i} />
                 </div>
               )}

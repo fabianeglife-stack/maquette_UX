@@ -22,7 +22,7 @@ export default function LangSwitcher({
 
   const base =
     variant === "dark"
-      ? { active: "text-paper", idle: "text-paper/40 hover:text-paper/80" }
+      ? { active: "text-paper", idle: "text-paper/60 hover:text-paper/80" }
       : { active: "text-ink", idle: "text-stone hover:text-graphite" };
 
   return (

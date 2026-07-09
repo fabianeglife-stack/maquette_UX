@@ -45,20 +45,20 @@ export default function ReferencesGrid({ d }: { d: Dict["references"] }) {
                   )}
                 </button>
               ) : (
-                <div className="bg-mist/60 p-5">
+                <div className="flex aspect-[4/3] w-full items-center justify-center bg-mist/60 p-6">
                   <ReferenceScene index={i % 6} />
                 </div>
               )}
               <div className="flex flex-col gap-1">
                 <h2 className="text-xl font-normal tracking-tight text-ink">{p.name}</h2>
-                <span className="text-sm font-light text-stone">{p.place}</span>
+                <span className="text-sm font-light text-graphite">{p.place}</span>
               </div>
               <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1.5 border-t border-hairline pt-4">
-                <dt className="text-xs uppercase tracking-[0.14em] text-stone">{d.labels.system}</dt>
+                <dt className="text-xs uppercase tracking-[0.14em] text-graphite">{d.labels.system}</dt>
                 <dd className="text-sm font-light text-graphite">{p.system}</dd>
-                <dt className="text-xs uppercase tracking-[0.14em] text-stone">{d.labels.length}</dt>
+                <dt className="text-xs uppercase tracking-[0.14em] text-graphite">{d.labels.length}</dt>
                 <dd className="text-sm font-light text-graphite">{p.length}</dd>
-                <dt className="text-xs uppercase tracking-[0.14em] text-stone">{d.labels.mounting}</dt>
+                <dt className="text-xs uppercase tracking-[0.14em] text-graphite">{d.labels.mounting}</dt>
                 <dd className="text-sm font-light text-graphite">{p.mounting}</dd>
               </dl>
               <p className="text-sm font-light leading-relaxed text-graphite">{p.desc}</p>

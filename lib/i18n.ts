@@ -8,6 +8,8 @@ const de = {
     references: "Referenzen",
     configurator: "Konfigurator",
     portal: "Portal",
+    skip: "Zum Inhalt springen",
+    menu: "Menü",
     cta: "Jetzt konfigurieren",
   },
   hero: {
@@ -586,6 +588,8 @@ const fr: Dict = {
     references: "Références",
     configurator: "Configurateur",
     portal: "Portail",
+    skip: "Aller au contenu",
+    menu: "Menu",
     cta: "Configurer",
   },
   hero: {
@@ -1162,6 +1166,8 @@ const en: Dict = {
     references: "References",
     configurator: "Configurator",
     portal: "Portal",
+    skip: "Skip to content",
+    menu: "Menu",
     cta: "Configure now",
   },
   hero: {

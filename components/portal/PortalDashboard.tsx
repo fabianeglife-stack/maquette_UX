@@ -23,6 +23,7 @@ import type { TypeProfile } from "@/lib/engine/types";
 import type { Dict } from "@/lib/i18n";
 import { api, hasBackend } from "@/lib/api";
 import StatusSteps from "@/components/StatusSteps";
+import { PlanSketch } from "@/components/configurator/visual";
 
 function OrderCard({
   order,
@@ -47,7 +48,7 @@ function OrderCard({
   }, [order.config, types]);
 
   return (
-    <div className="flex flex-col gap-3 border border-hairline bg-paper p-5">
+    <div className="flex flex-col gap-3 border border-hairline bg-paper p-5 transition-colors hover:border-graphite">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <span className="text-sm font-medium tracking-[0.06em] text-ink">{order.ref}</span>
         <span className="text-xs font-light text-stone">
@@ -153,7 +154,15 @@ export default function PortalDashboard({
     else setOrders(loadOrders());
   };
 
-  if (!ready) return null;
+  if (!ready) {
+    return (
+      <div className="flex flex-col gap-4" aria-busy="true">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="h-24 animate-pulse border border-hairline bg-mist/50" />
+        ))}
+      </div>
+    );
+  }
 
   if (!session) {
     return (
@@ -202,13 +211,23 @@ export default function PortalDashboard({
       <section className="flex flex-col gap-5">
         <h2 className="border-t border-ink/60 pt-4 text-lg font-normal text-ink">{t.savedTitle}</h2>
         {saved.length === 0 ? (
-          <p className="text-sm font-light text-stone">{t.noSaved}</p>
+          <p className="text-sm font-light text-graphite">
+            {t.noSaved}{" "}
+            <Link href={`/${locale}/configurator/`} className="text-ink underline underline-offset-4">
+              {t.newCfg} →
+            </Link>
+          </p>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {saved.map((s) => {
               const lengthM = s.config.segments.reduce((sum, x) => sum + x.length, 0) / 1000;
               return (
-                <div key={s.id} className="flex flex-col gap-3 border border-hairline bg-paper p-5">
+                <div key={s.id} className="flex flex-col gap-3 border border-hairline bg-paper p-5 transition-colors hover:border-graphite">
+                  <div className="flex justify-center bg-mist/40 px-5 py-4">
+                    <div className="w-full max-w-[220px]">
+                      <PlanSketch cfg={s.config} />
+                    </div>
+                  </div>
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
                     <span className="text-sm font-medium tracking-[0.02em] text-ink">{s.name}</span>
                     <span className="text-xs font-light text-stone">
@@ -248,7 +267,12 @@ export default function PortalDashboard({
       <section className="flex flex-col gap-5">
         <h2 className="border-t border-ink/60 pt-4 text-lg font-normal text-ink">{t.ordersTitle}</h2>
         {myOrders.length === 0 ? (
-          <p className="text-sm font-light text-stone">{t.empty}</p>
+          <p className="text-sm font-light text-graphite">
+            {t.empty}{" "}
+            <Link href={`/${locale}/configurator/`} className="text-ink underline underline-offset-4">
+              {t.newCfg} →
+            </Link>
+          </p>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {myOrders.map((o) => (
@@ -261,7 +285,12 @@ export default function PortalDashboard({
       <section className="flex flex-col gap-5">
         <h2 className="border-t border-ink/60 pt-4 text-lg font-normal text-ink">{t.quotesTitle}</h2>
         {myQuotes.length === 0 ? (
-          <p className="text-sm font-light text-stone">{t.empty}</p>
+          <p className="text-sm font-light text-graphite">
+            {t.empty}{" "}
+            <Link href={`/${locale}/configurator/`} className="text-ink underline underline-offset-4">
+              {t.newCfg} →
+            </Link>
+          </p>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {myQuotes.map((o) => (

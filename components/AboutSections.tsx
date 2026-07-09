@@ -53,7 +53,7 @@ export default function AboutSections({ d, gallery }: { d: Dict["about"]; galler
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={src}
-                    alt=""
+                    alt={`${c.title} — ${i + 1}`}
                     className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
                   />
                 </button>
@@ -68,7 +68,7 @@ export default function AboutSections({ d, gallery }: { d: Dict["about"]; galler
           <div className="grid gap-px bg-hairline md:grid-cols-2">
             {c.values.map((v, i) => (
               <Reveal key={`${i}-${v.t}`} delay={i * 80} className="flex flex-col gap-3 bg-paper p-8 md:p-12">
-                <span className="text-xs text-stone">0{i + 1}</span>
+                <span className="text-xs text-graphite">0{i + 1}</span>
                 <h2 className="text-xl font-normal tracking-tight text-ink">{v.t}</h2>
                 <p className="text-sm font-light leading-relaxed text-graphite">{v.d}</p>
               </Reveal>
