@@ -373,6 +373,8 @@ export function InfillIcon({ kind }: { kind: InfillKind }) {
       {frame}
       {kind === "vertical_bars" &&
         [17, 24, 31, 38, 47].map((x) => <line key={x} x1={x} y1={12} x2={x} y2={38} stroke="currentColor" strokeWidth="1.4" />)}
+      {kind === "vertical_flats" &&
+        [18, 27, 36, 45].map((x) => <line key={x} x1={x} y1={12} x2={x} y2={38} stroke="currentColor" strokeWidth="3.2" />)}
       {kind === "horizontal_rails" &&
         [15, 21, 27, 33].map((y) => <line key={y} x1={10} y1={y} x2={54} y2={y} stroke="currentColor" strokeWidth="1.4" />)}
       {kind === "cables" &&

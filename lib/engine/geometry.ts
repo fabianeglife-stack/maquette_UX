@@ -112,7 +112,7 @@ export interface DerivedRailing {
 }
 
 /** Vertical extent taken by a rail profile (flat profiles are 8 mm thick). */
-export function railDepth(profile: "round" | "flat" | "none", size: number): number {
+export function railDepth(profile: "round" | "flat" | "rect" | "none", size: number): number {
   return profile === "none" ? 0 : profile === "flat" ? 8 : size;
 }
 
@@ -196,7 +196,24 @@ export function deriveRailing(cfg: RailingConfig, tp?: TypeProfile): DerivedRail
           // Base on the tread (stairs) or the slab; top welds to the handrail underside.
           const base = { ...axis, y: treadY(t) };
           posts.push({ base, top: { ...axis, y: axis.y + cfg.height - hrDepth } });
-          plates.push({ at: base, headingDeg: heading });
+          // As-built plates (fixing detail): terminal plates sit flush with the
+          // element end (plan: plates hors tout 3025 vs module 3020 → 2.5 mm
+          // lip), so they shift inward relative to the end post axis.
+          let plateAt = base;
+          if (recipe.plate) {
+            const isFirst = i === 0 && p === 0;
+            const isLast = i === effSegments.length - 1 && p === fields;
+            const sgn = isFirst ? 1 : isLast ? -1 : 0;
+            const off = Math.max(0, recipe.plate.w / 2 - postHalf - 2.5);
+            if (sgn !== 0 && off > 0) {
+              plateAt = {
+                x: base.x + Math.cos(rad(heading)) * off * sgn,
+                y: base.y,
+                z: base.z + Math.sin(rad(heading)) * off * sgn,
+              };
+            }
+          }
+          plates.push({ at: plateAt, headingDeg: heading });
           if (hrDepth === 0) caps.push({ ...axis, y: axis.y + cfg.height });
         }
       } else {
@@ -217,6 +234,31 @@ export function deriveRailing(cfg: RailingConfig, tp?: TypeProfile): DerivedRail
         for (let f = 0; f < fields; f++) {
           for (let b = 1; b <= n; b++) {
             const t = f * span + postHalf + ((actualClear + inf.memberSize) * b - inf.memberSize / 2);
+            const axis = at(t);
+            bars.push({
+              bottom: { ...axis, y: axis.y + barBot },
+              top: { ...axis, y: axis.y + barTop },
+            });
+          }
+        }
+      } else if (inf.kind === "vertical_flats") {
+        // Flat bars set at 45°, welded between bottom rail and handrail
+        // underside at a fixed pitch, the group centred in each field
+        // (as-built principle plan: PLAT 40×5, pitch 144.5).
+        const barBot = cfg.bottomGap + brDepth;
+        const barTop = cfg.height - (hrDepth > 0 ? hrDepth : 40);
+        const flatW = inf.flatW ?? 40;
+        const flatT = inf.flatT ?? inf.memberSize;
+        const pitch = inf.pitch ?? inf.maxOpening + flatW;
+        const span = recipe.post.profile !== "none" ? spacing : seg.length;
+        const usable = span - 2 * postHalf;
+        const n = Math.max(1, Math.floor(usable / pitch));
+        const offset = (usable - (n - 1) * pitch) / 2;
+        // Clear opening measured perpendicular between the 45° faces.
+        actualClear = pitch - (flatW + flatT) * Math.SQRT1_2;
+        for (let f = 0; f < fields; f++) {
+          for (let b = 0; b < n; b++) {
+            const t = f * span + postHalf + offset + b * pitch;
             const axis = at(t);
             bars.push({
               bottom: { ...axis, y: axis.y + barBot },
@@ -367,7 +409,11 @@ export function deriveRailing(cfg: RailingConfig, tp?: TypeProfile): DerivedRail
   // handrail ≈ 2.5 kg/m. Glass: VSG ≈ 42 kg/m² + base profile ≈ 6 kg/m.
   // Recipe members scale with the square of the member size (solid steel).
   const recipe = tp?.recipe;
-  const memberKgPerM = recipe ? recipe.infill.memberSize ** 2 * 0.0062 : 0.9;
+  const memberKgPerM = recipe
+    ? recipe.infill.kind === "vertical_flats"
+      ? (recipe.infill.flatW ?? 40) * (recipe.infill.flatT ?? recipe.infill.memberSize) * 0.00785
+      : recipe.infill.memberSize ** 2 * 0.0062
+    : 0.9;
   const weightKg = recipe
     ? postCount * (cfg.height / 1000) * 4.4 * (recipe.post.size / 40) +
       barCount * ((cfg.height - cfg.bottomGap) / 1000) * memberKgPerM +

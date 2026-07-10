@@ -787,12 +787,12 @@ function ProductsTab({ t, cfgDict }: { t: AdminDict; cfgDict: Dict["cfg"] }) {
   const refresh = () => fetchAllTypes().then(setTypes);
 
   const specFor = (x: TypeProfile) =>
-    x.builtin
-      ? x.template === "bars"
-        ? t.productBarsSpec
-        : t.productGlassSpec
-      : x.recipe
-        ? `${cfgDict.infillKinds[x.recipe.infill.kind]} · ≤ ${x.maxSlope}° · CHF ${x.basePerM}/m`
+    x.recipe
+      ? `${cfgDict.infillKinds[x.recipe.infill.kind]} · ≤ ${x.maxSlope}° · CHF ${x.basePerM}/m`
+      : x.builtin
+        ? x.template === "bars"
+          ? t.productBarsSpec
+          : t.productGlassSpec
         : x.template === "bars"
           ? `Ø ${x.barDia} mm · ≤ ${x.maxSlope}° · CHF ${x.basePerM}/m`
           : `VSG · ≤ ${x.maxPanelWidth} mm · CHF ${x.basePerM}/m`;
@@ -804,7 +804,7 @@ function ProductsTab({ t, cfgDict }: { t: AdminDict; cfgDict: Dict["cfg"] }) {
           <div key={x.id} className={`flex flex-col gap-2 border border-hairline p-5 ${x.active ? "" : "opacity-60"}`}>
             <div className="flex items-center justify-between gap-2">
               <span className="text-sm text-ink">
-                {x.builtin ? (x.template === "bars" ? t.productBars : t.productGlass) : (x.name?.de ?? x.id)}
+                {x.name?.de ?? (x.builtin ? (x.template === "bars" ? t.productBars : t.productGlass) : x.id)}
               </span>
               <span
                 className={`border px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] ${

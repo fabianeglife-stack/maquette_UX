@@ -214,6 +214,85 @@ describe("recipe engine (type designer)", () => {
   });
 });
 
+describe("as-built barreaudage 45° (flat45 vs plan 000001-1-140.000 + STEP)", () => {
+  const flat45 = builtinTypes.find((x) => x.id === "flat45")!;
+  /** The client's 3.02 m module: post axes 3000 mm apart → one 3 m segment. */
+  const moduleCfg = (): RailingConfig => {
+    const cfg = normalizeForType(defaultConfig(), flat45);
+    return { ...cfg, segments: [{ id: "s1", length: 3000, angle: 0, stair: false, slope: 0 }] };
+  };
+
+  it("applies the as-built defaults when the type is selected", () => {
+    const cfg = moduleCfg();
+    expect(cfg.height).toBe(1154);
+    expect(cfg.bottomGap).toBe(97);
+  });
+
+  it("reproduces the STEP nomenclature: 4 posts, 18 flats in 3 fields", () => {
+    const cfg = moduleCfg();
+    const d = deriveRailing(cfg, flat45);
+    expect(d.postCount).toBe(4); // 2 end + 2 intermediate (fields of 1 m)
+    expect(d.barCount).toBe(18); // 6 × PLAT 40×5 per field
+    expect(d.segments[0].postSpacing).toBe(1000);
+    // terminal plates flush with the element end (STEP: centres at 40 mm
+    // inside the post axes), intermediate plates centred under their posts
+    const px = d.segments[0].plates.map((p) => p.at.x).sort((a, b) => a - b);
+    expect(px[0]).toBeCloseTo(40, 1);
+    expect(px[1]).toBeCloseTo(1000, 5);
+    expect(px[2]).toBeCloseTo(2000, 5);
+    expect(px[3]).toBeCloseTo(2960, 1);
+  });
+
+  it("places the flats at the exact pitch and centred offset of the STEP", () => {
+    const d = deriveRailing(moduleCfg(), flat45);
+    const xs = d.segments[0].bars.map((b) => b.bottom.x).sort((a, b) => a - b);
+    // first flat of field 1: post face 20 + centred offset 128.75 − half post 10 → 138.75
+    expect(xs[0]).toBeCloseTo(138.75, 1);
+    for (let k = 1; k < 6; k++) expect(xs[k] - xs[k - 1]).toBeCloseTo(144.5, 2);
+    // field 2 starts one post spacing later at the same in-field offset
+    expect(xs[6]).toBeCloseTo(1138.75, 1);
+  });
+
+  it("welds the flats between bottom rail and handrail (jour vertical 1017)", () => {
+    const d = deriveRailing(moduleCfg(), flat45);
+    const bar = d.segments[0].bars[0];
+    expect(bar.bottom.y).toBeCloseTo(117); // bottom rail top edge: 97 + 20
+    expect(bar.top.y).toBeCloseTo(1134); // handrail underside: 1154 − 20
+  });
+
+  it("keeps the 45° clear opening at 112.7 mm ≤ 120 (SIA sphere rule)", () => {
+    const cfg = moduleCfg();
+    const d = deriveRailing(cfg, flat45);
+    expect(d.segments[0].actualBarClear).toBeCloseTo(112.68, 1);
+    const results = evaluateSia(cfg, d, flat45);
+    expect(results.find((r) => r.id === "openings")?.status).toBe("pass");
+    expect(siaSummary(results)).toBe("pass");
+  });
+
+  it("matches the plan cartouche in the BOM (tubes 60×20×2, flats 40×5 L1045, plates 105×135×10)", () => {
+    const cfg = moduleCfg();
+    const d = deriveRailing(cfg, flat45);
+    const bom = buildBom(cfg, d, flat45);
+    expect(bom.find((l) => l.id === "posts")?.detail).toContain("60×20×2");
+    const flats = bom.find((l) => l.id === "bars")!;
+    expect(flats.qty).toBe(18);
+    expect(flats.detail).toContain("40×5 × 1045 mm");
+    expect(bom.find((l) => l.id === "handrailPart")?.detail).toBe("60×20×2 mm");
+    expect(bom.find((l) => l.id === "bottomRail")?.detail).toBe("60×20×2 mm");
+    const plates = bom.find((l) => l.id === "basePlate")!;
+    expect(plates.qty).toBe(4);
+    expect(plates.detail).toBe("105×135×10 mm");
+    expect(bom.find((l) => l.id === "anchors")?.qty).toBe(8); // 2 per plate
+  });
+
+  it("excludes stairs for this type (maxSlope 0)", () => {
+    const cfg = moduleCfg();
+    cfg.segments = [{ ...cfg.segments[0], stair: true, slope: 30 }];
+    const results = evaluateSia(cfg, deriveRailing(cfg, flat45), flat45);
+    expect(results.find((r) => r.id === "glassStairs")?.status).toBe("fail");
+  });
+});
+
 describe("situation parameters (walls, substrate, finish)", () => {
   it("deducts the 5 cm wall clearance from connected ends", () => {
     const cfg = { ...defaultConfig(), walls: "start" as const };

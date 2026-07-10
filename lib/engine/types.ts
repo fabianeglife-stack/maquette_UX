@@ -48,9 +48,9 @@ export interface SegmentInput {
 
 /* ---------- parametric type recipes (admin type designer) ---------- */
 
-export type PostProfile = "square" | "round" | "none";
-export type InfillKind = "vertical_bars" | "horizontal_rails" | "cables" | "glass" | "sheet";
-export type RailProfileKind = "round" | "flat" | "none";
+export type PostProfile = "square" | "round" | "rect" | "none";
+export type InfillKind = "vertical_bars" | "vertical_flats" | "horizontal_rails" | "cables" | "glass" | "sheet";
+export type RailProfileKind = "round" | "flat" | "rect" | "none";
 
 /**
  * A guardrail described as a component recipe — the parametric master model
@@ -58,7 +58,16 @@ export type RailProfileKind = "round" | "flat" | "none";
  * and drawings are all derived from it.
  */
 export interface TypeRecipe {
-  post: { profile: PostProfile; size: number; maxSpacing: number };
+  post: {
+    profile: PostProfile;
+    /** Post dimension along the railing axis, mm (façade width for rect). */
+    size: number;
+    /** Rect posts: dimension perpendicular to the railing plane, mm. */
+    depth?: number;
+    /** Tube wall thickness for the BOM designation, mm. */
+    wall?: number;
+    maxSpacing: number;
+  };
   infill: {
     kind: InfillKind;
     /** Member size: bar/rail/cable Ø, or panel thickness (glass/sheet), mm. */
@@ -67,10 +76,19 @@ export interface TypeRecipe {
     maxOpening: number;
     /** Max panel width for glass/sheet infill, mm. */
     maxPanelWidth: number;
+    /** vertical_flats: flat-bar section (width × thickness) set at 45°, mm. */
+    flatW?: number;
+    flatT?: number;
+    /** vertical_flats: fixed member pitch (centre distance), mm. */
+    pitch?: number;
   };
-  handrail: { profile: RailProfileKind; size: number };
-  bottomRail: { profile: RailProfileKind; size: number };
+  handrail: { profile: RailProfileKind; size: number; depth?: number; wall?: number };
+  bottomRail: { profile: RailProfileKind; size: number; depth?: number; wall?: number };
   maxSlope: number;
+  /** Config defaults applied when the type is selected (as-built dimensions). */
+  defaults?: { height?: number; bottomGap?: number };
+  /** Plate dims per role (real fixing detail), mm. */
+  plate?: { w: number; l: number; t: number };
 }
 
 export function defaultRecipe(): TypeRecipe {
@@ -98,6 +116,8 @@ export function infillKindOf(tp?: TypeProfile): InfillKind {
 export interface TypeProfile {
   id: string;
   template: System;
+  /** Public principle-drawing / fixing-detail PDF shipped with the type. */
+  planUrl?: string;
   /** Custom display names; built-ins resolve names from the i18n dict. */
   name?: { de: string; fr: string; en: string };
   /** Base price CHF/m; null → price book default for the template. */
@@ -117,6 +137,29 @@ export interface TypeProfile {
 export const builtinTypes: TypeProfile[] = [
   { id: "bars", template: "bars", basePerM: null, barDia: 12, maxSlope: 37, maxPanelWidth: 1200, active: true, builtin: true },
   { id: "glass", template: "glass", basePerM: null, barDia: 12, maxSlope: 0, maxPanelWidth: 1200, active: true, builtin: true },
+  {
+    // As-built Acomet type: plan 000001-1-140.000 "Barrière prototype — Barreau 45°"
+    // (tube inox 60×20×2 frame, 40×5 flats at 45°, pitch 144.5, plates 105×135×10).
+    id: "flat45",
+    template: "bars",
+    name: { de: "Staketen 45° Inox", fr: "Barreaudage 45° inox", en: "45° flat-bar stainless" },
+    planUrl: "/plans/barreaudage-principe.pdf",
+    basePerM: 420,
+    barDia: 5,
+    maxSlope: 0,
+    maxPanelWidth: 1200,
+    active: true,
+    builtin: true,
+    recipe: {
+      post: { profile: "rect", size: 20, depth: 60, wall: 2, maxSpacing: 1000 },
+      infill: { kind: "vertical_flats", memberSize: 5, maxOpening: 120, maxPanelWidth: 1200, flatW: 40, flatT: 5, pitch: 144.5 },
+      handrail: { profile: "rect", size: 20, depth: 60, wall: 2 },
+      bottomRail: { profile: "rect", size: 20, depth: 60, wall: 2 },
+      maxSlope: 0,
+      defaults: { height: 1154, bottomGap: 97 },
+      plate: { w: 105, l: 135, t: 10 },
+    },
+  },
 ];
 
 export interface RailingConfig {
@@ -195,6 +238,17 @@ export function normalizeForType(cfg: RailingConfig, tp: TypeProfile): RailingCo
   if (tp.recipe) {
     // Recipe types fix the handrail in the design.
     handrail = tp.recipe.handrail.profile === "none" ? "none" : tp.recipe.handrail.profile === "flat" ? "flat_steel" : "round_steel";
+    const d = tp.recipe.defaults;
+    if (d) {
+      return {
+        ...cfg,
+        system: tp.template,
+        typeId: tp.id,
+        handrail,
+        height: d.height ?? cfg.height,
+        bottomGap: d.bottomGap ?? cfg.bottomGap,
+      };
+    }
   } else {
     if (tp.template === "glass" && (handrail === "round_steel" || handrail === "flat_steel")) handrail = "round_inox";
     if (tp.template === "bars" && handrail === "none") handrail = "round_steel";

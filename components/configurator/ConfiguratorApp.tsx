@@ -403,17 +403,16 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
             {types
               .filter((x) => x.active)
               .map((x) => {
-                const name = x.builtin
-                  ? x.template === "bars"
-                    ? t.systemBars
-                    : t.systemGlass
-                  : (x.name?.[locale as "de" | "fr" | "en"] ?? x.name?.de ?? x.id);
-                const desc = x.builtin
-                  ? x.template === "bars"
-                    ? t.systemBarsDesc
-                    : t.systemGlassDesc
-                  : x.recipe
-                    ? `${t.infillKinds[x.recipe.infill.kind]}${x.basePerM ? ` · CHF ${x.basePerM}/m` : ""}`
+                const name =
+                  x.name?.[locale as "de" | "fr" | "en"] ??
+                  x.name?.de ??
+                  (x.builtin ? (x.template === "bars" ? t.systemBars : t.systemGlass) : x.id);
+                const desc = x.recipe
+                  ? `${t.infillKinds[x.recipe.infill.kind]}${x.basePerM ? ` · CHF ${x.basePerM}/m` : ""}`
+                  : x.builtin
+                    ? x.template === "bars"
+                      ? t.systemBarsDesc
+                      : t.systemGlassDesc
                     : x.template === "bars"
                       ? `Ø ${x.barDia} mm · ≤ ${x.maxSlope}°${x.basePerM ? ` · CHF ${x.basePerM}/m` : ""}`
                       : `VSG · ≤ ${x.maxPanelWidth} mm${x.basePerM ? ` · CHF ${x.basePerM}/m` : ""}`;
@@ -438,6 +437,19 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
                 );
               })}
           </div>
+          {tp.planUrl && (
+            <a
+              href={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}${tp.planUrl}`}
+              target="_blank"
+              rel="noopener"
+              className="inline-flex w-fit items-center gap-2 border border-hairline px-3.5 py-2.5 text-[11px] font-medium uppercase tracking-[0.14em] text-graphite transition-colors hover:border-graphite hover:text-ink"
+            >
+              <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" aria-hidden>
+                <path d="M8 1v9M4.5 6.5 8 10l3.5-3.5M2 13h12" fill="none" stroke="currentColor" strokeWidth="1.4" />
+              </svg>
+              {t.planPdf}
+            </a>
+          )}
         </section>
 
         {/* 2 — geometry */}

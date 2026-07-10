@@ -49,6 +49,12 @@ export function buildBom(cfg: RailingConfig, derived: DerivedRailing, tp?: TypeP
           groups.set(l, (groups.get(l) ?? 0) + 1);
         }),
       );
+      const postSpec =
+        p.profile === "round"
+          ? (l: number) => `Ø ${p.size} × ${l} mm`
+          : p.profile === "rect"
+            ? (l: number) => `${p.depth ?? p.size}×${p.size}${p.wall ? `×${p.wall}` : ""} × ${l} mm`
+            : (l: number) => `${p.size}×${p.size}×${l} mm`;
       [...groups.entries()]
         .sort((a, b) => b[0] - a[0])
         .forEach(([l, n]) =>
@@ -56,13 +62,20 @@ export function buildBom(cfg: RailingConfig, derived: DerivedRailing, tp?: TypeP
             id: "posts",
             qty: n,
             unit: "pc",
-            detail: p.profile === "round" ? `Ø ${p.size} × ${l} mm` : `${p.size}×${p.size}×${l} mm`,
+            detail: postSpec(l),
           }),
         );
     }
     if (inf.kind === "vertical_bars") {
       const barLen = cfg.height - (hrDepth > 0 ? hrDepth : 40) - cfg.bottomGap - brDepth;
       lines.push({ id: "bars", qty: derived.barCount, unit: "pc", detail: `Ø ${inf.memberSize} × ${barLen} mm` });
+    } else if (inf.kind === "vertical_flats") {
+      // 45° flats: cut length = weld-to-weld height + the 45° projection of the width.
+      const flatW = inf.flatW ?? 40;
+      const flatT = inf.flatT ?? inf.memberSize;
+      const weldH = cfg.height - (hrDepth > 0 ? hrDepth : 40) - cfg.bottomGap - brDepth;
+      const barLen = Math.round(weldH + flatW * Math.SQRT1_2);
+      lines.push({ id: "bars", qty: derived.barCount, unit: "pc", detail: `${flatW}×${flatT} × ${barLen} mm · 45°` });
     } else if (inf.kind === "cables") {
       const cableM = r1(derived.segments.reduce((s, x) => s + x.rails.reduce((a, r) => a + pieceLen(r) / 1000, 0), 0));
       lines.push({ id: "cables", qty: cableM, unit: "m", detail: `Ø ${inf.memberSize} mm` });
@@ -95,21 +108,17 @@ export function buildBom(cfg: RailingConfig, derived: DerivedRailing, tp?: TypeP
         );
       if (inf.kind === "glass") lines.push({ id: "gaskets", qty: derived.panelCount, unit: "set", detail: `${PANEL_GAP} mm` });
     }
+    const railSpec = (r: { profile: string; size: number; depth?: number; wall?: number }) =>
+      r.profile === "flat"
+        ? `${r.size}×8 mm`
+        : r.profile === "rect"
+          ? `${r.depth ?? r.size}×${r.size}${r.wall ? `×${r.wall}` : ""} mm`
+          : `Ø ${r.size} mm`;
     if (recipe.handrail.profile !== "none") {
-      lines.push({
-        id: "handrailPart",
-        qty: m,
-        unit: "m",
-        detail: recipe.handrail.profile === "flat" ? `${recipe.handrail.size}×8 mm` : `Ø ${recipe.handrail.size} mm`,
-      });
+      lines.push({ id: "handrailPart", qty: m, unit: "m", detail: railSpec(recipe.handrail) });
     }
     if (recipe.bottomRail.profile !== "none") {
-      lines.push({
-        id: "bottomRail",
-        qty: m,
-        unit: "m",
-        detail: recipe.bottomRail.profile === "flat" ? `${recipe.bottomRail.size}×8 mm` : `Ø ${recipe.bottomRail.size} mm`,
-      });
+      lines.push({ id: "bottomRail", qty: m, unit: "m", detail: railSpec(recipe.bottomRail) });
     }
     // ---- connection hardware derived from the assembly ----
     const plateCount = derived.segments.reduce((s, x) => s + x.plates.length, 0);
@@ -117,9 +126,16 @@ export function buildBom(cfg: RailingConfig, derived: DerivedRailing, tp?: TypeP
     const capCount = derived.segments.reduce((s, x) => s + x.caps.length, 0);
     const clampCount = derived.segments.reduce((s, x) => s + x.clamps.length, 0);
     if (recipe.post.profile !== "none") {
-      const plateSize = Math.max(100, Math.round(recipe.post.size * 2.2 / 10) * 10);
-      lines.push({ id: "basePlate", qty: plateCount, unit: "pc", detail: `${plateSize}×${plateSize}×8 mm` });
-      lines.push({ id: "anchors", qty: plateCount * (cfg.mounting === "side" ? 3 : 4), unit: "pc", detail: anchorSpec(cfg) });
+      if (recipe.plate) {
+        // As-built fixing detail: real plate dims, two anchors per plate.
+        const pl = recipe.plate;
+        lines.push({ id: "basePlate", qty: plateCount, unit: "pc", detail: `${pl.w}×${pl.l}×${pl.t} mm` });
+        lines.push({ id: "anchors", qty: plateCount * 2, unit: "pc", detail: anchorSpec(cfg) });
+      } else {
+        const plateSize = Math.max(100, Math.round(recipe.post.size * 2.2 / 10) * 10);
+        lines.push({ id: "basePlate", qty: plateCount, unit: "pc", detail: `${plateSize}×${plateSize}×8 mm` });
+        lines.push({ id: "anchors", qty: plateCount * (cfg.mounting === "side" ? 3 : 4), unit: "pc", detail: anchorSpec(cfg) });
+      }
     } else {
       lines.push({ id: "baseProfile", qty: m, unit: "m", detail: cfg.mounting === "side" ? "seitlich / lateral" : "aufgesetzt / top" });
       lines.push({ id: "anchors", qty: Math.ceil(derived.totalLength / 300), unit: "pc", detail: anchorSpec(cfg) + ", e=300 mm" });

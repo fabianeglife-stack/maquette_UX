@@ -185,20 +185,35 @@ export default function TypeDesigner({
             <PillRow
               label={d.kind}
               value={recipe.infill.kind}
-              options={(["vertical_bars", "horizontal_rails", "cables", "glass", "sheet"] as InfillKind[]).map((v) => ({
+              options={(["vertical_bars", "vertical_flats", "horizontal_rails", "cables", "glass", "sheet"] as InfillKind[]).map((v) => ({
                 v,
                 l: cfgDict.infillKinds[v],
               }))}
-              onChange={(kind) => set({ infill: { ...recipe.infill, kind, memberSize: kind === "cables" ? 5 : kind === "glass" ? 17 : kind === "sheet" ? 3 : 12 } })}
+              onChange={(kind) =>
+                set({
+                  infill:
+                    kind === "vertical_flats"
+                      ? { ...recipe.infill, kind, memberSize: 5, flatW: recipe.infill.flatW ?? 40, flatT: recipe.infill.flatT ?? 5, pitch: recipe.infill.pitch ?? 144.5 }
+                      : { ...recipe.infill, kind, memberSize: kind === "cables" ? 5 : kind === "glass" ? 17 : kind === "sheet" ? 3 : 12 },
+                })
+              }
             />
-            <div className="grid grid-cols-2 gap-2.5">
-              <Num label={d.memberSize} value={recipe.infill.memberSize} min={2} max={40} onChange={(v) => set({ infill: { ...recipe.infill, memberSize: v } })} />
-              {isMembers ? (
-                <Num label={d.maxOpening} value={recipe.infill.maxOpening} min={20} max={300} step={5} onChange={(v) => set({ infill: { ...recipe.infill, maxOpening: v } })} />
-              ) : (
-                <Num label={d.maxPanelWidth} value={recipe.infill.maxPanelWidth} min={300} max={2500} step={50} onChange={(v) => set({ infill: { ...recipe.infill, maxPanelWidth: v } })} />
-              )}
-            </div>
+            {recipe.infill.kind === "vertical_flats" ? (
+              <div className="grid grid-cols-3 gap-2.5">
+                <Num label={d.flatW} value={recipe.infill.flatW ?? 40} min={20} max={80} onChange={(v) => set({ infill: { ...recipe.infill, flatW: v } })} />
+                <Num label={d.flatT} value={recipe.infill.flatT ?? 5} min={3} max={12} onChange={(v) => set({ infill: { ...recipe.infill, flatT: v, memberSize: v } })} />
+                <Num label={d.pitch} value={recipe.infill.pitch ?? 144.5} min={60} max={200} step={0.5} onChange={(v) => set({ infill: { ...recipe.infill, pitch: v } })} />
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2.5">
+                <Num label={d.memberSize} value={recipe.infill.memberSize} min={2} max={40} onChange={(v) => set({ infill: { ...recipe.infill, memberSize: v } })} />
+                {isMembers ? (
+                  <Num label={d.maxOpening} value={recipe.infill.maxOpening} min={20} max={300} step={5} onChange={(v) => set({ infill: { ...recipe.infill, maxOpening: v } })} />
+                ) : (
+                  <Num label={d.maxPanelWidth} value={recipe.infill.maxPanelWidth} min={300} max={2500} step={50} onChange={(v) => set({ infill: { ...recipe.infill, maxPanelWidth: v } })} />
+                )}
+              </div>
+            )}
           </div>
 
           <div className="flex flex-col gap-2.5 border-t border-hairline pt-3">
@@ -206,12 +221,15 @@ export default function TypeDesigner({
             <PillRow
               label={d.profile}
               value={recipe.post.profile}
-              options={(["square", "round", "none"] as PostProfile[]).map((v) => ({ v, l: d[v] }))}
-              onChange={(profile) => set({ post: { ...recipe.post, profile } })}
+              options={(["square", "rect", "round", "none"] as PostProfile[]).map((v) => ({ v, l: d[v] }))}
+              onChange={(profile) => set({ post: { ...recipe.post, profile, depth: profile === "rect" ? (recipe.post.depth ?? 60) : recipe.post.depth } })}
             />
             {recipe.post.profile !== "none" && (
-              <div className="grid grid-cols-2 gap-2.5">
-                <Num label={d.size} value={recipe.post.size} min={20} max={120} onChange={(v) => set({ post: { ...recipe.post, size: v } })} />
+              <div className={`grid gap-2.5 ${recipe.post.profile === "rect" ? "grid-cols-3" : "grid-cols-2"}`}>
+                <Num label={d.size} value={recipe.post.size} min={15} max={120} onChange={(v) => set({ post: { ...recipe.post, size: v } })} />
+                {recipe.post.profile === "rect" && (
+                  <Num label={d.depth} value={recipe.post.depth ?? 60} min={20} max={150} onChange={(v) => set({ post: { ...recipe.post, depth: v } })} />
+                )}
                 <Num label={d.maxSpacing} value={recipe.post.maxSpacing} min={400} max={2500} step={50} onChange={(v) => set({ post: { ...recipe.post, maxSpacing: v } })} />
               </div>
             )}
@@ -223,11 +241,14 @@ export default function TypeDesigner({
               <PillRow
                 label={d.profile}
                 value={recipe.handrail.profile}
-                options={(["round", "flat", "none"] as RailProfileKind[]).map((v) => ({ v, l: d[v] }))}
-                onChange={(profile) => set({ handrail: { ...recipe.handrail, profile } })}
+                options={(["round", "flat", "rect", "none"] as RailProfileKind[]).map((v) => ({ v, l: d[v] }))}
+                onChange={(profile) => set({ handrail: { ...recipe.handrail, profile, depth: profile === "rect" ? (recipe.handrail.depth ?? 60) : recipe.handrail.depth } })}
               />
               {recipe.handrail.profile !== "none" && (
-                <Num label={d.size} value={recipe.handrail.size} min={20} max={120} onChange={(v) => set({ handrail: { ...recipe.handrail, size: v } })} />
+                <Num label={d.size} value={recipe.handrail.size} min={15} max={120} onChange={(v) => set({ handrail: { ...recipe.handrail, size: v } })} />
+              )}
+              {recipe.handrail.profile === "rect" && (
+                <Num label={d.depth} value={recipe.handrail.depth ?? 60} min={20} max={150} onChange={(v) => set({ handrail: { ...recipe.handrail, depth: v } })} />
               )}
             </div>
             <div className="flex flex-col gap-2.5">
@@ -235,11 +256,14 @@ export default function TypeDesigner({
               <PillRow
                 label={d.profile}
                 value={recipe.bottomRail.profile}
-                options={(["flat", "round", "none"] as RailProfileKind[]).map((v) => ({ v, l: d[v] }))}
-                onChange={(profile) => set({ bottomRail: { ...recipe.bottomRail, profile } })}
+                options={(["flat", "round", "rect", "none"] as RailProfileKind[]).map((v) => ({ v, l: d[v] }))}
+                onChange={(profile) => set({ bottomRail: { ...recipe.bottomRail, profile, depth: profile === "rect" ? (recipe.bottomRail.depth ?? 60) : recipe.bottomRail.depth } })}
               />
               {recipe.bottomRail.profile !== "none" && (
                 <Num label={d.size} value={recipe.bottomRail.size} min={10} max={80} onChange={(v) => set({ bottomRail: { ...recipe.bottomRail, size: v } })} />
+              )}
+              {recipe.bottomRail.profile === "rect" && (
+                <Num label={d.depth} value={recipe.bottomRail.depth ?? 60} min={20} max={150} onChange={(v) => set({ bottomRail: { ...recipe.bottomRail, depth: v } })} />
               )}
             </div>
           </div>

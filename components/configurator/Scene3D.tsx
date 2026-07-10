@@ -79,22 +79,30 @@ function Post({
   base,
   top,
   size,
+  depth,
   round,
+  headingDeg,
   color,
 }: {
   base: { x: number; y: number; z: number };
   top: { x: number; y: number; z: number };
   size: number;
+  /** Rect tubes: dimension perpendicular to the railing plane. */
+  depth?: number;
   round: boolean;
+  headingDeg: number;
   color: string;
 }) {
   const len = (top.y - base.y) * MM;
   return (
-    <mesh position={[base.x * MM, ((base.y + top.y) / 2) * MM, base.z * MM]}>
+    <mesh
+      position={[base.x * MM, ((base.y + top.y) / 2) * MM, base.z * MM]}
+      rotation={[0, -rad(headingDeg), 0]}
+    >
       {round ? (
         <cylinderGeometry args={[(size / 2) * MM, (size / 2) * MM, len, 16]} />
       ) : (
-        <boxGeometry args={[size * MM, len, size * MM]} />
+        <boxGeometry args={[size * MM, len, (depth ?? size) * MM]} />
       )}
       <Steel color={color} />
       <Ink />
@@ -102,18 +110,110 @@ function Post({
   );
 }
 
-/** Base plate with four anchor bolts under a post. */
+/**
+ * Rectangular-tube rail spanning two points: cross-section stays upright
+ * (w vertical × d perpendicular to the run), length follows heading + slope.
+ */
+function RectRail({
+  a,
+  b,
+  w,
+  d,
+  headingDeg,
+  color,
+}: {
+  a: THREE.Vector3;
+  b: THREE.Vector3;
+  w: number;
+  d: number;
+  headingDeg: number;
+  color: string;
+}) {
+  const { mid, quat, len } = useMemo(() => {
+    const dir = b.clone().sub(a);
+    const len = dir.length();
+    const run = Math.hypot(dir.x, dir.z);
+    const slope = Math.atan2(dir.y, run);
+    const quat = new THREE.Quaternion()
+      .setFromAxisAngle(new THREE.Vector3(0, 1, 0), -rad(headingDeg))
+      .multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), slope));
+    return { mid: a.clone().add(b).multiplyScalar(0.5), quat, len };
+  }, [a, b, headingDeg]);
+  return (
+    <mesh position={mid} quaternion={quat}>
+      <boxGeometry args={[len, w * MM, d * MM]} />
+      <Steel color={color} />
+      <Ink />
+    </mesh>
+  );
+}
+
+/** Flat bar set at 45° between bottom rail and handrail (as-built barreaudage). */
+function FlatBar45({
+  bottom,
+  top,
+  w,
+  t,
+  headingDeg,
+  color,
+}: {
+  bottom: { x: number; y: number; z: number };
+  top: { x: number; y: number; z: number };
+  w: number;
+  t: number;
+  headingDeg: number;
+  color: string;
+}) {
+  const len = (top.y - bottom.y) * MM;
+  return (
+    <mesh
+      position={[bottom.x * MM, ((bottom.y + top.y) / 2) * MM, bottom.z * MM]}
+      rotation={[0, -rad(headingDeg + 45), 0]}
+    >
+      <boxGeometry args={[w * MM, len, t * MM]} />
+      <Steel color={color} />
+      <Ink />
+    </mesh>
+  );
+}
+
+/** Base plate with anchor bolts under a post. */
 function BasePlate({
   at,
   headingDeg,
   postSize,
+  plate,
   color,
 }: {
   at: { x: number; y: number; z: number };
   headingDeg: number;
   postSize: number;
+  /** Real plate dims (w along the run, l across, t thick), mm. */
+  plate?: { w: number; l: number; t: number };
   color: string;
 }) {
+  if (plate) {
+    // As-built fixing detail: plate w×l×t with two anchors across the run,
+    // one each side of the tube.
+    const t = plate.t * MM;
+    const off = (plate.l / 2 - 28) * MM;
+    return (
+      <group position={[at.x * MM, at.y * MM + t / 2, at.z * MM]} rotation={[0, -rad(headingDeg), 0]}>
+        <mesh>
+          <boxGeometry args={[plate.w * MM, t, plate.l * MM]} />
+          <Steel color={color} />
+          <Ink />
+        </mesh>
+        {[1, -1].map((sz, b) => (
+          <mesh key={b} position={[0, t / 2 + 0.002, sz * off]}>
+            <cylinderGeometry args={[0.006, 0.006, 0.01, 10]} />
+            <Steel color="#8f9498" />
+            <Ink />
+          </mesh>
+        ))}
+      </group>
+    );
+  }
   const ps = Math.max(0.1, postSize * 2.2 * MM);
   const off = ps / 2 - 0.016;
   return (
@@ -224,11 +324,19 @@ function Railing({ cfg, derived, tp }: { cfg: RailingConfig; derived: DerivedRai
             <group key={seg.input.id + i}>
               {slabs}
               {/* handrail / bottom rail per recipe */}
-              {recipe.handrail.profile !== "none" && (
-                <Member a={hrA} b={hrB} radius={(recipe.handrail.size / 2) * MM} color={hrColor} box={recipe.handrail.profile === "flat"} />
+              {recipe.handrail.profile === "rect" ? (
+                <RectRail a={hrA} b={hrB} w={recipe.handrail.size} d={recipe.handrail.depth ?? recipe.handrail.size} headingDeg={seg.headingDeg} color={hrColor} />
+              ) : (
+                recipe.handrail.profile !== "none" && (
+                  <Member a={hrA} b={hrB} radius={(recipe.handrail.size / 2) * MM} color={hrColor} box={recipe.handrail.profile === "flat"} />
+                )
               )}
-              {recipe.bottomRail.profile !== "none" && (
-                <Member a={brA} b={brB} radius={Math.max(0.006, (recipe.bottomRail.size / 3) * MM)} color={color} box={recipe.bottomRail.profile === "flat"} />
+              {recipe.bottomRail.profile === "rect" ? (
+                <RectRail a={brA} b={brB} w={recipe.bottomRail.size} d={recipe.bottomRail.depth ?? recipe.bottomRail.size} headingDeg={seg.headingDeg} color={color} />
+              ) : (
+                recipe.bottomRail.profile !== "none" && (
+                  <Member a={brA} b={brB} radius={Math.max(0.006, (recipe.bottomRail.size / 3) * MM)} color={color} box={recipe.bottomRail.profile === "flat"} />
+                )
               )}
               {/* base profile when the design has no posts */}
               {recipe.post.profile === "none" && (
@@ -236,11 +344,20 @@ function Railing({ cfg, derived, tp }: { cfg: RailingConfig; derived: DerivedRai
               )}
               {/* posts, welded between base plate and handrail underside */}
               {seg.posts.map((p, k) => (
-                <Post key={k} base={p.base} top={p.top} size={recipe.post.size} round={recipe.post.profile === "round"} color={color} />
+                <Post
+                  key={k}
+                  base={p.base}
+                  top={p.top}
+                  size={recipe.post.size}
+                  depth={recipe.post.depth}
+                  round={recipe.post.profile === "round"}
+                  headingDeg={seg.headingDeg}
+                  color={color}
+                />
               ))}
               {/* base plates with anchor bolts */}
               {seg.plates.map((pl, k) => (
-                <BasePlate key={`pl${k}`} at={pl.at} headingDeg={pl.headingDeg} postSize={recipe.post.size} color={color} />
+                <BasePlate key={`pl${k}`} at={pl.at} headingDeg={pl.headingDeg} postSize={recipe.post.size} plate={recipe.plate} color={color} />
               ))}
               {/* post caps (designs without a handrail) */}
               {seg.caps.map((c, k) => (
@@ -254,10 +371,22 @@ function Railing({ cfg, derived, tp }: { cfg: RailingConfig; derived: DerivedRai
                   <Ink />
                 </mesh>
               ))}
-              {/* vertical bars */}
-              {seg.bars.map((b, k) => (
-                <Member key={k} a={v(b.bottom)} b={v(b.top)} radius={memberR} color={infColor} />
-              ))}
+              {/* vertical bars / 45° flats */}
+              {seg.bars.map((b, k) =>
+                inf.kind === "vertical_flats" ? (
+                  <FlatBar45
+                    key={k}
+                    bottom={b.bottom}
+                    top={b.top}
+                    w={inf.flatW ?? 40}
+                    t={inf.flatT ?? inf.memberSize}
+                    headingDeg={seg.headingDeg}
+                    color={infColor}
+                  />
+                ) : (
+                  <Member key={k} a={v(b.bottom)} b={v(b.top)} radius={memberR} color={infColor} />
+                ),
+              )}
               {/* horizontal rails / cables, framed per field */}
               {seg.rails.map((r, k) => (
                 <Member key={`r${k}`} a={v(r.bottom)} b={v(r.top)} radius={memberR} color={infColor} />
@@ -349,6 +478,10 @@ function Railing({ cfg, derived, tp }: { cfg: RailingConfig; derived: DerivedRai
           <mesh key={`j${k}`} position={v(j.at)}>
             {recipe.handrail.profile === "round" ? (
               <sphereGeometry args={[(recipe.handrail.size / 2) * MM * 1.12, 16, 16]} />
+            ) : recipe.handrail.profile === "rect" ? (
+              <boxGeometry
+                args={[(recipe.handrail.depth ?? recipe.handrail.size) * MM * 1.05, hrDepth * MM * 1.1, (recipe.handrail.depth ?? recipe.handrail.size) * MM * 1.05]}
+              />
             ) : (
               <boxGeometry args={[recipe.handrail.size * MM * 1.3, hrDepth * MM * 1.3, recipe.handrail.size * MM * 0.65]} />
             )}
