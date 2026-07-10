@@ -239,7 +239,8 @@ function CheckoutForm({
 /* ---------- main app ---------- */
 
 export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: string }) {
-  const [cfg, setCfg] = useState<RailingConfig>(defaultConfig);
+  // Start from the default type's as-built defaults (height, bottom gap).
+  const [cfg, setCfg] = useState<RailingConfig>(() => normalizeForType(defaultConfig(), builtinTypes[0]));
   const [tab, setTab] = useState<"3d" | "drawing">("3d");
   const [checkout, setCheckout] = useState<"order" | "quote" | null>(null);
   const [panel, setPanel] = useState<{ kind: "order" | "quote"; ref: string } | null>(null);
@@ -407,8 +408,13 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
                   x.name?.[locale as "de" | "fr" | "en"] ??
                   x.name?.de ??
                   (x.builtin ? (x.template === "bars" ? t.systemBars : t.systemGlass) : x.id);
+                const infillLabel = x.recipe
+                  ? x.recipe.infill.kind === "vertical_flats"
+                    ? `${t.infillKinds.vertical_flats} ${x.recipe.infill.angleDeg ? `${x.recipe.infill.angleDeg}°` : t.infillStraight}`
+                    : t.infillKinds[x.recipe.infill.kind]
+                  : "";
                 const desc = x.recipe
-                  ? `${t.infillKinds[x.recipe.infill.kind]}${x.basePerM ? ` · CHF ${x.basePerM}/m` : ""}`
+                  ? `${infillLabel}${x.basePerM ? ` · CHF ${x.basePerM}/m` : ""}`
                   : x.builtin
                     ? x.template === "bars"
                       ? t.systemBarsDesc
@@ -895,7 +901,16 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
           <Scene3D cfg={cfg} derived={derived} tp={tp} techLabel={t.scene.technical} />
         </div>
         <div className={`border border-hairline ${tab === "drawing" ? "" : "hidden"}`}>
-          <DrawingSVG ref={svgRef} cfg={cfg} derived={derived} labels={t.drawing} refNo={refNo} />
+          <DrawingSVG
+            ref={svgRef}
+            cfg={cfg}
+            derived={derived}
+            labels={t.drawing}
+            refNo={refNo}
+            tp={tp}
+            locale={locale}
+            typeName={tp.name?.[locale as "de" | "fr" | "en"] ?? tp.name?.de ?? (tp.template === "bars" ? t.systemBars : t.systemGlass)}
+          />
         </div>
 
         <div className="flex flex-wrap items-baseline justify-between gap-x-8 gap-y-2 border-t border-ink/50 pt-4">

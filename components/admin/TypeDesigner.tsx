@@ -193,16 +193,17 @@ export default function TypeDesigner({
                 set({
                   infill:
                     kind === "vertical_flats"
-                      ? { ...recipe.infill, kind, memberSize: 5, flatW: recipe.infill.flatW ?? 40, flatT: recipe.infill.flatT ?? 5, pitch: recipe.infill.pitch ?? 144.5 }
+                      ? { ...recipe.infill, kind, memberSize: 5, flatW: recipe.infill.flatW ?? 40, flatT: recipe.infill.flatT ?? 5, pitch: recipe.infill.pitch ?? 144.5, angleDeg: recipe.infill.angleDeg ?? 45 }
                       : { ...recipe.infill, kind, memberSize: kind === "cables" ? 5 : kind === "glass" ? 17 : kind === "sheet" ? 3 : 12 },
                 })
               }
             />
             {recipe.infill.kind === "vertical_flats" ? (
-              <div className="grid grid-cols-3 gap-2.5">
+              <div className="grid grid-cols-2 gap-2.5">
                 <Num label={d.flatW} value={recipe.infill.flatW ?? 40} min={20} max={80} onChange={(v) => set({ infill: { ...recipe.infill, flatW: v } })} />
                 <Num label={d.flatT} value={recipe.infill.flatT ?? 5} min={3} max={12} onChange={(v) => set({ infill: { ...recipe.infill, flatT: v, memberSize: v } })} />
                 <Num label={d.pitch} value={recipe.infill.pitch ?? 144.5} min={60} max={200} step={0.5} onChange={(v) => set({ infill: { ...recipe.infill, pitch: v } })} />
+                <Num label={d.angle} value={recipe.infill.angleDeg ?? 45} min={0} max={60} step={5} onChange={(v) => set({ infill: { ...recipe.infill, angleDeg: v } })} />
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-2.5">

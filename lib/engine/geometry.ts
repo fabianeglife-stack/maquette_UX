@@ -242,20 +242,21 @@ export function deriveRailing(cfg: RailingConfig, tp?: TypeProfile): DerivedRail
           }
         }
       } else if (inf.kind === "vertical_flats") {
-        // Flat bars set at 45°, welded between bottom rail and handrail
-        // underside at a fixed pitch, the group centred in each field
-        // (as-built principle plan: PLAT 40×5, pitch 144.5).
+        // Flat bars (face-on or rotated in plan), welded between bottom rail
+        // and handrail underside at a fixed pitch, the group centred in each
+        // field (as-built principle plan: PLAT 40×5, pitch 144.5).
         const barBot = cfg.bottomGap + brDepth;
         const barTop = cfg.height - (hrDepth > 0 ? hrDepth : 40);
         const flatW = inf.flatW ?? 40;
         const flatT = inf.flatT ?? inf.memberSize;
         const pitch = inf.pitch ?? inf.maxOpening + flatW;
+        const a = rad(inf.angleDeg ?? 45);
         const span = recipe.post.profile !== "none" ? spacing : seg.length;
         const usable = span - 2 * postHalf;
         const n = Math.max(1, Math.floor(usable / pitch));
         const offset = (usable - (n - 1) * pitch) / 2;
-        // Clear opening measured perpendicular between the 45° faces.
-        actualClear = pitch - (flatW + flatT) * Math.SQRT1_2;
+        // Clear opening measured between the projected faces along the run.
+        actualClear = pitch - (flatW * Math.cos(a) + flatT * Math.sin(a));
         for (let f = 0; f < fields; f++) {
           for (let b = 0; b < n; b++) {
             const t = f * span + postHalf + offset + b * pitch;

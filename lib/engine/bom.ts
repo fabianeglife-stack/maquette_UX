@@ -70,12 +70,19 @@ export function buildBom(cfg: RailingConfig, derived: DerivedRailing, tp?: TypeP
       const barLen = cfg.height - (hrDepth > 0 ? hrDepth : 40) - cfg.bottomGap - brDepth;
       lines.push({ id: "bars", qty: derived.barCount, unit: "pc", detail: `Ø ${inf.memberSize} × ${barLen} mm` });
     } else if (inf.kind === "vertical_flats") {
-      // 45° flats: cut length = weld-to-weld height + the 45° projection of the width.
+      // Flats: cut length = weld-to-weld height + the rotated width's
+      // projection (cartouche: 1045 for the 45° plan, straight = 1017).
       const flatW = inf.flatW ?? 40;
       const flatT = inf.flatT ?? inf.memberSize;
+      const angle = inf.angleDeg ?? 45;
       const weldH = cfg.height - (hrDepth > 0 ? hrDepth : 40) - cfg.bottomGap - brDepth;
-      const barLen = Math.round(weldH + flatW * Math.SQRT1_2);
-      lines.push({ id: "bars", qty: derived.barCount, unit: "pc", detail: `${flatW}×${flatT} × ${barLen} mm · 45°` });
+      const barLen = Math.round(weldH + flatW * Math.sin((angle * Math.PI) / 180));
+      lines.push({
+        id: "bars",
+        qty: derived.barCount,
+        unit: "pc",
+        detail: `${flatW}×${flatT} × ${barLen} mm${angle > 0 ? ` · ${angle}°` : ""}`,
+      });
     } else if (inf.kind === "cables") {
       const cableM = r1(derived.segments.reduce((s, x) => s + x.rails.reduce((a, r) => a + pieceLen(r) / 1000, 0), 0));
       lines.push({ id: "cables", qty: cableM, unit: "m", detail: `Ø ${inf.memberSize} mm` });

@@ -29,11 +29,13 @@ function OrderCard({
   order,
   t,
   cfgDict,
+  locale,
   onRefresh,
 }: {
   order: Order;
   t: Dict["portal"];
   cfgDict: Dict["cfg"];
+  locale?: string;
   onRefresh: () => void;
 }) {
   const flow = order.kind === "order" ? ORDER_FLOW : QUOTE_FLOW;
@@ -42,10 +44,14 @@ function OrderCard({
   useEffect(() => {
     fetchAllTypes().then(setTypes);
   }, []);
+  const tp = useMemo(
+    () => (order.config && types.length > 0 ? resolveType(types, order.config.typeId, order.config.system) : undefined),
+    [order.config, types],
+  );
   const derived = useMemo(() => {
-    if (!order.config || types.length === 0) return null;
-    return deriveRailing(order.config, resolveType(types, order.config.typeId, order.config.system));
-  }, [order.config, types]);
+    if (!order.config || !tp) return null;
+    return deriveRailing(order.config, tp);
+  }, [order.config, tp]);
 
   return (
     <div className="flex flex-col gap-3 border border-hairline bg-paper p-5 transition-colors hover:border-graphite">
@@ -110,7 +116,16 @@ function OrderCard({
       </div>
       {order.config && derived && (
         <div className="hidden">
-          <DrawingSVG ref={svgRef} cfg={order.config} derived={derived} labels={cfgDict.drawing} refNo={order.ref} />
+          <DrawingSVG
+            ref={svgRef}
+            cfg={order.config}
+            derived={derived}
+            labels={cfgDict.drawing}
+            refNo={order.ref}
+            tp={tp}
+            locale={locale}
+            typeName={tp?.name?.de ?? (order.system === "glass" ? cfgDict.systemGlass : cfgDict.systemBars)}
+          />
         </div>
       )}
     </div>
@@ -276,7 +291,7 @@ export default function PortalDashboard({
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {myOrders.map((o) => (
-              <OrderCard key={o.ref} order={o} t={t} cfgDict={cfgDict} onRefresh={refresh} />
+              <OrderCard key={o.ref} order={o} t={t} cfgDict={cfgDict} locale={locale} onRefresh={refresh} />
             ))}
           </div>
         )}
@@ -294,7 +309,7 @@ export default function PortalDashboard({
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {myQuotes.map((o) => (
-              <OrderCard key={o.ref} order={o} t={t} cfgDict={cfgDict} onRefresh={refresh} />
+              <OrderCard key={o.ref} order={o} t={t} cfgDict={cfgDict} locale={locale} onRefresh={refresh} />
             ))}
           </div>
         )}

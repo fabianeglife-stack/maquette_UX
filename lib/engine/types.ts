@@ -76,11 +76,13 @@ export interface TypeRecipe {
     maxOpening: number;
     /** Max panel width for glass/sheet infill, mm. */
     maxPanelWidth: number;
-    /** vertical_flats: flat-bar section (width × thickness) set at 45°, mm. */
+    /** vertical_flats: flat-bar section (width × thickness), mm. */
     flatW?: number;
     flatT?: number;
     /** vertical_flats: fixed member pitch (centre distance), mm. */
     pitch?: number;
+    /** vertical_flats: plan rotation of the flats (0 = face-on, 45 = diagonal), degrees. */
+    angleDeg?: number;
   };
   handrail: { profile: RailProfileKind; size: number; depth?: number; wall?: number };
   bottomRail: { profile: RailProfileKind; size: number; depth?: number; wall?: number };
@@ -135,7 +137,31 @@ export interface TypeProfile {
 }
 
 export const builtinTypes: TypeProfile[] = [
-  { id: "bars", template: "bars", basePerM: null, barDia: 12, maxSlope: 37, maxPanelWidth: 1200, active: true, builtin: true },
+  {
+    // As-built Acomet type, straight variant: same frame as the 45° plan
+    // (tube inox 60×20×2, plates 105×135×10) with the 40×5 flats face-on —
+    // the client's STEP prototype "Barreau 90°". Keeps the historic id "bars"
+    // so existing configurations and orders continue to resolve.
+    id: "bars",
+    template: "bars",
+    name: { de: "Staketen gerade Inox", fr: "Barreaudage droit inox", en: "Straight flat-bar stainless" },
+    planUrl: "/plans/barreaudage-principe.pdf",
+    basePerM: 390,
+    barDia: 5,
+    maxSlope: 37,
+    maxPanelWidth: 1200,
+    active: true,
+    builtin: true,
+    recipe: {
+      post: { profile: "rect", size: 20, depth: 60, wall: 2, maxSpacing: 1000 },
+      infill: { kind: "vertical_flats", memberSize: 5, maxOpening: 120, maxPanelWidth: 1200, flatW: 40, flatT: 5, pitch: 144.5, angleDeg: 0 },
+      handrail: { profile: "rect", size: 20, depth: 60, wall: 2 },
+      bottomRail: { profile: "rect", size: 20, depth: 60, wall: 2 },
+      maxSlope: 37,
+      defaults: { height: 1154, bottomGap: 97 },
+      plate: { w: 105, l: 135, t: 10 },
+    },
+  },
   { id: "glass", template: "glass", basePerM: null, barDia: 12, maxSlope: 0, maxPanelWidth: 1200, active: true, builtin: true },
   {
     // As-built Acomet type: plan 000001-1-140.000 "Barrière prototype — Barreau 45°"
@@ -152,7 +178,7 @@ export const builtinTypes: TypeProfile[] = [
     builtin: true,
     recipe: {
       post: { profile: "rect", size: 20, depth: 60, wall: 2, maxSpacing: 1000 },
-      infill: { kind: "vertical_flats", memberSize: 5, maxOpening: 120, maxPanelWidth: 1200, flatW: 40, flatT: 5, pitch: 144.5 },
+      infill: { kind: "vertical_flats", memberSize: 5, maxOpening: 120, maxPanelWidth: 1200, flatW: 40, flatT: 5, pitch: 144.5, angleDeg: 45 },
       handrail: { profile: "rect", size: 20, depth: 60, wall: 2 },
       bottomRail: { profile: "rect", size: 20, depth: 60, wall: 2 },
       maxSlope: 0,

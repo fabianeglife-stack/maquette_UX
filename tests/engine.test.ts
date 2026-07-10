@@ -28,10 +28,12 @@ describe("geometry engine", () => {
     const d = deriveRailing(defaultConfig(), barsType);
     expect(d.totalLength).toBe(5000);
     expect(d.cornerCount).toBe(1);
-    // 3000/1250 → 3 fields (4 posts), 2000/1250 → 2 fields (+2, corner shared)
+    // as-built recipe: fields of ≤1 m → 3000/1000 = 3 fields (4 posts),
+    // 2000/1000 = 2 fields (+2, corner shared)
     expect(d.postCount).toBe(6);
-    expect(d.barCount).toBe(40);
-    // openings must actually satisfy the requested 110 mm clear
+    // 6 flats per field at pitch 144.5 → (3 + 2) × 6
+    expect(d.barCount).toBe(30);
+    // straight 40 mm flats at pitch 144.5 → 104.5 mm clear ≤ 110 target
     d.segments.forEach((s) => expect(s.actualBarClear).toBeLessThanOrEqual(110));
   });
 
@@ -205,12 +207,58 @@ describe("recipe engine (type designer)", () => {
     expect(p.net).toBe(1744);
   });
 
-  it("keeps legacy types byte-identical (no recipe)", () => {
+  it("pins the default type's goldens (as-built straight barreaudage)", () => {
     const cfg = defaultConfig();
     const d = deriveRailing(cfg, builtinTypes[0]);
     expect(d.railCount).toBe(0);
     expect(d.postCount).toBe(6);
-    expect(priceRailing(cfg, d, defaultPriceBook, builtinTypes[0]).gross).toBe(1301.52);
+    // 5 m × 390 + corner 35 + setup 120 + shipping 89 = 2194 net, VAT 8.1 %
+    expect(priceRailing(cfg, d, defaultPriceBook, builtinTypes[0]).gross).toBe(2371.71);
+  });
+});
+
+describe("as-built straight variant (default type, flats face-on)", () => {
+  const straight = builtinTypes[0];
+  const moduleCfg = (): RailingConfig => {
+    const cfg = normalizeForType(defaultConfig(), straight);
+    return { ...cfg, segments: [{ id: "s1", length: 3000, angle: 0, stair: false, slope: 0 }] };
+  };
+
+  it("shares the as-built frame defaults and layout with the 45° plan", () => {
+    const cfg = moduleCfg();
+    expect(cfg.height).toBe(1154);
+    expect(cfg.bottomGap).toBe(97);
+    const d = deriveRailing(cfg, straight);
+    expect(d.postCount).toBe(4);
+    expect(d.barCount).toBe(18);
+    const xs = d.segments[0].bars.map((b) => b.bottom.x).sort((a, b) => a - b);
+    expect(xs[0]).toBeCloseTo(138.75, 1); // same centred pitch grid as the 45° type
+  });
+
+  it("clears 104.5 mm between face-on flats (pitch 144.5 − 40)", () => {
+    const cfg = moduleCfg();
+    const d = deriveRailing(cfg, straight);
+    expect(d.segments[0].actualBarClear).toBeCloseTo(104.5, 5);
+    expect(siaSummary(evaluateSia(cfg, d, straight))).toBe("pass");
+  });
+
+  it("cuts straight flats without the 45° projection (L 1017)", () => {
+    const cfg = moduleCfg();
+    const bom = buildBom(cfg, deriveRailing(cfg, straight), straight);
+    const flats = bom.find((l) => l.id === "bars")!;
+    expect(flats.detail).toBe("40×5 × 1017 mm");
+    expect(bom.find((l) => l.id === "posts")?.detail).toContain("60×20×2");
+    expect(bom.find((l) => l.id === "basePlate")?.detail).toBe("105×135×10 mm");
+  });
+
+  it("allows stairs on the straight variant (raked flats)", () => {
+    const cfg = moduleCfg();
+    cfg.segments = [
+      { id: "s1", length: 3000, angle: 0, stair: false, slope: 0 },
+      { id: "s2", length: 2000, angle: 0, stair: true, slope: 30 },
+    ];
+    const results = evaluateSia(cfg, deriveRailing(cfg, straight), straight);
+    expect(results.find((r) => r.id === "slope")?.status).toBe("pass");
   });
 });
 
@@ -363,20 +411,20 @@ describe("SIA 358 rules engine", () => {
 });
 
 describe("pricing engine", () => {
-  it("prices the default bar railing at CHF 1 301.52 gross", () => {
+  it("prices the default railing at CHF 2 371.71 gross (390/m as-built type)", () => {
     const cfg = defaultConfig();
     const p = priceRailing(cfg, deriveRailing(cfg, barsType), defaultPriceBook, barsType);
-    // 5 m × 192 + corner 35 + setup 120 + shipping 89 = 1204 net, VAT 8.1 %
-    expect(p.net).toBe(1204);
-    expect(p.gross).toBe(1301.52);
+    // 5 m × 390 + corner 35 + setup 120 + shipping 89 = 2194 net, VAT 8.1 %
+    expect(p.net).toBe(2194);
+    expect(p.gross).toBe(2371.71);
   });
 
   it("applies the B2B pro discount on goods before shipping and VAT", () => {
     const cfg = defaultConfig();
     const p = priceRailing(cfg, deriveRailing(cfg, barsType), defaultPriceBook, barsType, 0.1);
     const rebate = p.lines.find((l) => l.id === "b2b_discount");
-    expect(rebate?.total).toBe(-111.5);
-    expect(p.gross).toBe(1180.99);
+    expect(rebate?.total).toBe(-210.5);
+    expect(p.gross).toBe(2144.16);
   });
 
   it("uses a custom type's base price (CHF 260/m → 1 669.06 gross)", () => {
@@ -404,8 +452,8 @@ describe("BOM engine", () => {
     expect(bom.find((l) => l.id === "anchors")?.qty).toBe(d.postCount * 2);
   });
 
-  it("carries a custom bar diameter into the cut list", () => {
-    const tp: TypeProfile = { ...barsType, id: "ct-d", barDia: 18, builtin: false };
+  it("carries a custom bar diameter into the cut list (legacy template type)", () => {
+    const tp: TypeProfile = { ...barsType, id: "ct-d", barDia: 18, builtin: false, recipe: undefined };
     const cfg = { ...defaultConfig(), typeId: "ct-d" };
     const bom = buildBom(cfg, deriveRailing(cfg, tp), tp);
     expect(bom.find((l) => l.id === "bars")?.detail).toContain("Ø 18");

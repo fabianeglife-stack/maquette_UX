@@ -148,12 +148,13 @@ function RectRail({
   );
 }
 
-/** Flat bar set at 45° between bottom rail and handrail (as-built barreaudage). */
-function FlatBar45({
+/** Flat bar between bottom rail and handrail, rotated in plan (as-built barreaudage). */
+function FlatBar({
   bottom,
   top,
   w,
   t,
+  angleDeg,
   headingDeg,
   color,
 }: {
@@ -161,6 +162,7 @@ function FlatBar45({
   top: { x: number; y: number; z: number };
   w: number;
   t: number;
+  angleDeg: number;
   headingDeg: number;
   color: string;
 }) {
@@ -168,7 +170,7 @@ function FlatBar45({
   return (
     <mesh
       position={[bottom.x * MM, ((bottom.y + top.y) / 2) * MM, bottom.z * MM]}
-      rotation={[0, -rad(headingDeg + 45), 0]}
+      rotation={[0, -rad(headingDeg + angleDeg), 0]}
     >
       <boxGeometry args={[w * MM, len, t * MM]} />
       <Steel color={color} />
@@ -374,12 +376,13 @@ function Railing({ cfg, derived, tp }: { cfg: RailingConfig; derived: DerivedRai
               {/* vertical bars / 45° flats */}
               {seg.bars.map((b, k) =>
                 inf.kind === "vertical_flats" ? (
-                  <FlatBar45
+                  <FlatBar
                     key={k}
                     bottom={b.bottom}
                     top={b.top}
                     w={inf.flatW ?? 40}
                     t={inf.flatT ?? inf.memberSize}
+                    angleDeg={inf.angleDeg ?? 45}
                     headingDeg={seg.headingDeg}
                     color={infColor}
                   />

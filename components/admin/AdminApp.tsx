@@ -788,7 +788,11 @@ function ProductsTab({ t, cfgDict }: { t: AdminDict; cfgDict: Dict["cfg"] }) {
 
   const specFor = (x: TypeProfile) =>
     x.recipe
-      ? `${cfgDict.infillKinds[x.recipe.infill.kind]} · ≤ ${x.maxSlope}° · CHF ${x.basePerM}/m`
+      ? `${
+          x.recipe.infill.kind === "vertical_flats"
+            ? `${cfgDict.infillKinds.vertical_flats} ${x.recipe.infill.angleDeg ? `${x.recipe.infill.angleDeg}°` : cfgDict.infillStraight}`
+            : cfgDict.infillKinds[x.recipe.infill.kind]
+        } · ≤ ${x.maxSlope}° · CHF ${x.basePerM}/m`
       : x.builtin
         ? x.template === "bars"
           ? t.productBarsSpec
