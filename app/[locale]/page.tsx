@@ -1,7 +1,7 @@
 import Link from "next/link";
 import Reveal from "@/components/Reveal";
 import { SectionHeader, ButtonLink } from "@/components/ui";
-import { BarRailingElevation, GlassRailingElevation } from "@/components/illustrations";
+import { BarRailingElevation, Flat45RailingElevation } from "@/components/illustrations";
 import HomeHeroVisual from "@/components/HomeHeroVisual";
 import HomeRefsTeaser from "@/components/HomeRefsTeaser";
 import { getDict } from "@/lib/i18n";
@@ -40,7 +40,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
             {(
               [
                 { p: d.products.bars, Ill: BarRailingElevation },
-                { p: d.products.glass, Ill: GlassRailingElevation },
+                { p: d.products.flat45, Ill: Flat45RailingElevation },
               ] as const
             ).map(({ p, Ill }, i) => (
               <Reveal key={p.name} delay={i * 120} className="flex flex-col gap-6 bg-paper p-8 md:p-12">

@@ -80,11 +80,11 @@ export function HeroScene() {
   );
 }
 
-/** Product card: bar railing, front elevation with dimension. */
+/** Product card: straight flat-bar railing, front elevation with dimension. */
 export function BarRailingElevation() {
-  const bars = Array.from({ length: 19 }, (_, i) => 78 + i * 13);
+  const bars = Array.from({ length: 15 }, (_, i) => 82 + i * 17);
   return (
-    <svg viewBox="0 0 420 300" className="h-auto w-full" role="img" aria-label="Bar railing elevation">
+    <svg viewBox="0 0 420 300" className="h-auto w-full" role="img" aria-label="Straight flat-bar railing elevation">
       <line x1="20" y1="252" x2="400" y2="252" stroke={HAIRLINE} strokeWidth="2" />
       {/* posts */}
       <line x1="60" y1="70" x2="60" y2="252" stroke={INK} strokeWidth="4" />
@@ -92,11 +92,35 @@ export function BarRailingElevation() {
       {/* handrail + bottom rail */}
       <line x1="48" y1="68" x2="352" y2="68" stroke={INK} strokeWidth="5" />
       <line x1="60" y1="238" x2="340" y2="238" stroke={GRAPHITE} strokeWidth="3" />
-      {/* bars */}
+      {/* face-on 40 mm flats */}
       {bars.map((x) => (
-        <line key={x} x1={x} y1="72" x2={x} y2="236" stroke={GRAPHITE} strokeWidth="1.4" />
+        <line key={x} x1={x} y1="72" x2={x} y2="236" stroke={GRAPHITE} strokeWidth="4.6" />
       ))}
-      <DimV x={374} y1={68} y2={252} label="1000" />
+      <DimV x={374} y1={68} y2={252} label="1154" />
+    </svg>
+  );
+}
+
+/** Product card: 45° flat-bar railing, front elevation with dimension. */
+export function Flat45RailingElevation() {
+  const bars = Array.from({ length: 15 }, (_, i) => 82 + i * 17);
+  return (
+    <svg viewBox="0 0 420 300" className="h-auto w-full" role="img" aria-label="45° flat-bar railing elevation">
+      <line x1="20" y1="252" x2="400" y2="252" stroke={HAIRLINE} strokeWidth="2" />
+      {/* posts */}
+      <line x1="60" y1="70" x2="60" y2="252" stroke={INK} strokeWidth="4" />
+      <line x1="340" y1="70" x2="340" y2="252" stroke={INK} strokeWidth="4" />
+      {/* handrail + bottom rail */}
+      <line x1="48" y1="68" x2="352" y2="68" stroke={INK} strokeWidth="5" />
+      <line x1="60" y1="238" x2="340" y2="238" stroke={GRAPHITE} strokeWidth="3" />
+      {/* 45°-set flats: projected width + edge highlight */}
+      {bars.map((x) => (
+        <g key={x}>
+          <line x1={x} y1="72" x2={x} y2="236" stroke={GRAPHITE} strokeWidth="3.6" />
+          <line x1={x + 2.4} y1="72" x2={x + 2.4} y2="236" stroke={STONE} strokeWidth="1.1" />
+        </g>
+      ))}
+      <DimV x={374} y1={68} y2={252} label="1154" />
     </svg>
   );
 }

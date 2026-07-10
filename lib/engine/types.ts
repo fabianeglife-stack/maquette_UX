@@ -162,7 +162,9 @@ export const builtinTypes: TypeProfile[] = [
       plate: { w: 105, l: 135, t: 10 },
     },
   },
-  { id: "glass", template: "glass", basePerM: null, barDia: 12, maxSlope: 0, maxPanelWidth: 1200, active: true, builtin: true },
+  // Suppressed from the customer configurator (client sells the two
+  // barreaudage variants); kept for existing orders/configs to resolve.
+  { id: "glass", template: "glass", basePerM: null, barDia: 12, maxSlope: 0, maxPanelWidth: 1200, active: false, builtin: true },
   {
     // As-built Acomet type: plan 000001-1-140.000 "Barrière prototype — Barreau 45°"
     // (tube inox 60×20×2 frame, 40×5 flats at 45°, pitch 144.5, plates 105×135×10).
