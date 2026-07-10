@@ -24,6 +24,10 @@ export const ORDER_FLOW: OrderStatus[] = ["new", "confirmed", "production", "shi
 export function invoiceNoFor(ref: string): string {
   return "RE-" + ref.replace(/^AX-/, "");
 }
+/** Deterministic delivery-note number for an order. */
+export function deliveryNoFor(ref: string): string {
+  return "LS-" + ref.replace(/^AX-/, "");
+}
 export const QUOTE_FLOW: OrderStatus[] = ["quote_requested", "quoted"];
 
 export interface Order {

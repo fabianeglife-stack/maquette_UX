@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { chf, defaultPriceBook, type PriceBook } from "@/lib/engine/pricing";
 import { deriveRailing } from "@/lib/engine/geometry";
 import { buildBom } from "@/lib/engine/bom";
@@ -46,6 +46,8 @@ import { api, hasBackend, type ApiOrder } from "@/lib/api";
 import Link from "next/link";
 import StatusSteps from "@/components/StatusSteps";
 import { downloadInvoicePdf } from "@/components/portal/invoice";
+import { downloadDeliveryPdf, downloadFabricationPdf, downloadPickingPdf } from "./docs";
+import DrawingSVG from "@/components/configurator/DrawingSVG";
 import TypeDesigner from "./TypeDesigner";
 
 type AdminDict = Dict["admin"];
@@ -232,6 +234,7 @@ function OrderDrawer({
   statusLabels,
   cfgDict,
   invoiceDict,
+  locale,
   onClose,
   advance,
   sendQuote,
@@ -242,6 +245,7 @@ function OrderDrawer({
   statusLabels: Dict["portal"]["status"];
   cfgDict: Dict["cfg"];
   invoiceDict: Dict["portal"]["invoice"];
+  locale?: string;
   onClose: () => void;
   advance: (ref: string, status: OrderStatus) => void;
   sendQuote: (o: Order, value: number) => void;
@@ -250,6 +254,26 @@ function OrderDrawer({
   const [quote, setQuote] = useState(String(Math.round(order.quotedGross ?? order.gross)));
   const flow = order.kind === "order" ? ORDER_FLOW : QUOTE_FLOW;
   const idx = flow.indexOf(order.status);
+
+  // Engine output for the production/logistics documents.
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [types, setTypes] = useState<TypeProfile[]>([]);
+  useEffect(() => {
+    fetchAllTypes().then(setTypes);
+  }, []);
+  const tp = useMemo(
+    () => (order.config && types.length > 0 ? resolveType(types, order.config.typeId, order.config.system) : null),
+    [order.config, types],
+  );
+  const derived = useMemo(() => (order.config && tp ? deriveRailing(order.config, tp) : null), [order.config, tp]);
+  const bom = useMemo(
+    () => (order.config && tp && derived ? buildBom(order.config, derived, tp) : null),
+    [order.config, tp, derived],
+  );
+  const typeName =
+    tp?.name?.[locale as "de" | "fr" | "en"] ??
+    tp?.name?.de ??
+    (order.system === "glass" ? cfgDict.systemGlass : cfgDict.systemBars);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -385,8 +409,63 @@ function OrderDrawer({
           </div>
         )}
 
+        {/* production / logistics / transport documents */}
+        {order.kind === "order" && (
+          <div className="flex flex-col gap-2 border border-hairline p-4">
+            <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone">{t.docs.title}</span>
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                disabled={!order.config || !tp || !derived || !bom}
+                onClick={() =>
+                  order.config &&
+                  tp &&
+                  derived &&
+                  bom &&
+                  downloadFabricationPdf(order, order.config, tp, derived, bom, typeName, t.docs, t.bom, cfgDict, svgRef.current)
+                }
+                className="border border-hairline px-3 py-2 text-left text-[11px] uppercase tracking-[0.12em] text-graphite transition-colors hover:border-graphite hover:text-ink disabled:opacity-35"
+              >
+                ↓ {t.docs.fabrication}
+              </button>
+              <button
+                type="button"
+                disabled={!derived || !bom}
+                onClick={() => derived && bom && downloadPickingPdf(order, derived, bom, t.docs, t.bom)}
+                className="border border-hairline px-3 py-2 text-left text-[11px] uppercase tracking-[0.12em] text-graphite transition-colors hover:border-graphite hover:text-ink disabled:opacity-35"
+              >
+                ↓ {t.docs.picking}
+              </button>
+              <button
+                type="button"
+                onClick={() => downloadDeliveryPdf(order, typeName, t.docs, derived)}
+                className="border border-hairline px-3 py-2 text-left text-[11px] uppercase tracking-[0.12em] text-graphite transition-colors hover:border-graphite hover:text-ink"
+              >
+                ↓ {t.docs.delivery}
+              </button>
+            </div>
+            {!order.config && <p className="text-xs font-light text-stone">{t.docs.needConfig}</p>}
+          </div>
+        )}
+
         <OrderBom order={order} t={t} />
         <EventTimeline order={order} t={t} statusLabels={statusLabels} />
+
+        {/* offscreen principle drawing feeding the fabrication order's plan page */}
+        {order.config && derived && tp && (
+          <div className="hidden" aria-hidden>
+            <DrawingSVG
+              ref={svgRef}
+              cfg={order.config}
+              derived={derived}
+              labels={cfgDict.drawing}
+              refNo={order.ref}
+              tp={tp}
+              locale={locale}
+              typeName={typeName}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -395,7 +474,7 @@ function OrderDrawer({
 type KindFilter = "all" | "order" | "quote";
 type SortKey = "newest" | "value";
 
-function OrdersTable({ t, statusLabels, cfgDict, invoiceDict }: { t: AdminDict; statusLabels: Dict["portal"]["status"]; cfgDict: Dict["cfg"]; invoiceDict: Dict["portal"]["invoice"] }) {
+function OrdersTable({ t, statusLabels, cfgDict, invoiceDict, locale }: { t: AdminDict; statusLabels: Dict["portal"]["status"]; cfgDict: Dict["cfg"]; invoiceDict: Dict["portal"]["invoice"]; locale?: string }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [openRef, setOpenRef] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -570,6 +649,7 @@ function OrdersTable({ t, statusLabels, cfgDict, invoiceDict }: { t: AdminDict; 
           statusLabels={statusLabels}
           cfgDict={cfgDict}
           invoiceDict={invoiceDict}
+          locale={locale}
           onClose={() => setOpenRef(null)}
           advance={advance}
           sendQuote={sendQuote}
@@ -1456,7 +1536,7 @@ export default function AdminApp({
       </div>
 
       {tab === "dashboard" && <DashboardTab t={t} statusLabels={statusLabels} cfgDict={cfgDict} />}
-      {tab === "orders" && <OrdersTable t={t} statusLabels={statusLabels} cfgDict={cfgDict} invoiceDict={invoiceDict} />}
+      {tab === "orders" && <OrdersTable t={t} statusLabels={statusLabels} cfgDict={cfgDict} invoiceDict={invoiceDict} locale={locale} />}
       {tab === "customers" && <CustomersTab t={t} />}
       {tab === "pricing" && <PricingEditor t={t} />}
       {tab === "products" && <ProductsTab t={t} cfgDict={cfgDict} />}
