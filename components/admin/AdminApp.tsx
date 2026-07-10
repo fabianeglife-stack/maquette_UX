@@ -6,6 +6,8 @@ import { deriveRailing } from "@/lib/engine/geometry";
 import { buildBom } from "@/lib/engine/bom";
 import { type TypeProfile } from "@/lib/engine/types";
 import {
+  acceptQuote,
+  invoiceNoFor,
   loadEvents,
   loadOrders,
   loadTiers,
@@ -43,6 +45,7 @@ import type { Dict } from "@/lib/i18n";
 import { api, hasBackend, type ApiOrder } from "@/lib/api";
 import Link from "next/link";
 import StatusSteps from "@/components/StatusSteps";
+import { downloadInvoicePdf } from "@/components/portal/invoice";
 import TypeDesigner from "./TypeDesigner";
 
 type AdminDict = Dict["admin"];
@@ -94,7 +97,7 @@ function DashboardTab({
   const real = orders.filter((o) => o.kind === "order");
   const quotes = orders.filter((o) => o.kind === "quote");
   const revenue = real.reduce((s, o) => s + o.gross, 0);
-  const openOrders = real.filter((o) => o.status !== "shipped").length;
+  const openOrders = real.filter((o) => !["shipped", "invoiced", "paid"].includes(o.status)).length;
 
   const byStatus = ORDER_FLOW.map((s) => ({ s, n: real.filter((o) => o.status === s).length }));
   const maxN = Math.max(1, ...byStatus.map((x) => x.n));
@@ -228,17 +231,21 @@ function OrderDrawer({
   t,
   statusLabels,
   cfgDict,
+  invoiceDict,
   onClose,
   advance,
   sendQuote,
+  markAccepted,
 }: {
   order: Order;
   t: AdminDict;
   statusLabels: Dict["portal"]["status"];
   cfgDict: Dict["cfg"];
+  invoiceDict: Dict["portal"]["invoice"];
   onClose: () => void;
   advance: (ref: string, status: OrderStatus) => void;
   sendQuote: (o: Order, value: number) => void;
+  markAccepted: (o: Order) => void;
 }) {
   const [quote, setQuote] = useState(String(Math.round(order.quotedGross ?? order.gross)));
   const flow = order.kind === "order" ? ORDER_FLOW : QUOTE_FLOW;
@@ -321,9 +328,20 @@ function OrderDrawer({
               </button>
             </div>
           ) : (
-            <p className="text-sm font-light text-graphite">
-              {statusLabels[order.status]} · <span className="text-ink">{chf(order.quotedGross ?? order.gross)}</span>
-            </p>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm font-light text-graphite">
+                {statusLabels[order.status]} · <span className="text-ink">{chf(order.quotedGross ?? order.gross)}</span>
+              </p>
+              {order.status === "quoted" && (
+                <button
+                  type="button"
+                  onClick={() => markAccepted(order)}
+                  className="border border-ink/40 px-3 py-1.5 text-[11px] uppercase tracking-[0.12em] text-ink transition-colors hover:border-ink hover:bg-ink hover:text-paper"
+                >
+                  {t.orders.markAccepted}
+                </button>
+              )}
+            </div>
           )}
         </div>
 
@@ -349,6 +367,24 @@ function OrderDrawer({
           {order.payment && <p className="pt-1 text-xs font-light uppercase text-stone">{t.bom.payment}: {order.payment}</p>}
         </div>
 
+        {order.kind === "order" && (order.status === "invoiced" || order.status === "paid") && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border border-hairline p-4">
+            <div>
+              <span className="block text-[10px] uppercase tracking-[0.12em] text-stone">{t.orders.invoiceNo}</span>
+              <span className="text-sm text-ink">{invoiceNoFor(order.ref)}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                downloadInvoicePdf(order, invoiceDict, order.system === "glass" ? cfgDict.systemGlass : cfgDict.systemBars)
+              }
+              className="bg-ink px-3 py-2 text-[11px] uppercase tracking-[0.12em] text-paper transition-colors hover:bg-graphite"
+            >
+              ↓ {t.orders.invoicePdf}
+            </button>
+          </div>
+        )}
+
         <OrderBom order={order} t={t} />
         <EventTimeline order={order} t={t} statusLabels={statusLabels} />
       </div>
@@ -359,7 +395,7 @@ function OrderDrawer({
 type KindFilter = "all" | "order" | "quote";
 type SortKey = "newest" | "value";
 
-function OrdersTable({ t, statusLabels, cfgDict }: { t: AdminDict; statusLabels: Dict["portal"]["status"]; cfgDict: Dict["cfg"] }) {
+function OrdersTable({ t, statusLabels, cfgDict, invoiceDict }: { t: AdminDict; statusLabels: Dict["portal"]["status"]; cfgDict: Dict["cfg"]; invoiceDict: Dict["portal"]["invoice"] }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [openRef, setOpenRef] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -393,16 +429,27 @@ function OrdersTable({ t, statusLabels, cfgDict }: { t: AdminDict; statusLabels:
     setOrders(loadOrders());
   };
 
+  // Admin accepts a binding quote on the customer's behalf (e.g. by phone).
+  const markAccepted = (o: Order) => {
+    if (hasBackend) {
+      api.patchOrder(o.ref, { accept: true }).then(refresh).catch(() => {});
+      return;
+    }
+    acceptQuote(o.ref);
+    setOrders(loadOrders());
+  };
+
   // summary metrics over all orders (independent of the active filter)
   const orderList = orders.filter((o) => o.kind === "order");
   const quoteList = orders.filter((o) => o.kind === "quote");
+  const done = new Set(["shipped", "invoiced", "paid"]);
   const stats = {
-    open: orderList.filter((o) => o.status !== "shipped").length,
+    open: orderList.filter((o) => !done.has(o.status)).length,
     production: orderList.filter((o) => o.status === "production").length,
-    shipped: orderList.filter((o) => o.status === "shipped").length,
+    invoices: orderList.filter((o) => o.status === "invoiced").length,
     quotes: quoteList.length,
     pipeline:
-      orderList.filter((o) => o.status !== "shipped").reduce((s, o) => s + o.gross, 0) +
+      orderList.filter((o) => o.status !== "paid").reduce((s, o) => s + o.gross, 0) +
       quoteList.reduce((s, o) => s + (o.quotedGross ?? o.gross), 0),
   };
 
@@ -427,7 +474,7 @@ function OrdersTable({ t, statusLabels, cfgDict }: { t: AdminDict; statusLabels:
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <Kpi label={t.orders.openOrders} value={String(stats.open)} />
         <Kpi label={t.orders.inProduction} value={String(stats.production)} />
-        <Kpi label={t.orders.shipped} value={String(stats.shipped)} />
+        <Kpi label={t.orders.openInvoices} value={String(stats.invoices)} />
         <Kpi label={t.orders.openQuotes} value={String(stats.quotes)} />
         <Kpi label={t.orders.pipelineValue} value={chf(stats.pipeline)} />
       </div>
@@ -522,9 +569,11 @@ function OrdersTable({ t, statusLabels, cfgDict }: { t: AdminDict; statusLabels:
           t={t}
           statusLabels={statusLabels}
           cfgDict={cfgDict}
+          invoiceDict={invoiceDict}
           onClose={() => setOpenRef(null)}
           advance={advance}
           sendQuote={sendQuote}
+          markAccepted={markAccepted}
         />
       )}
     </div>
@@ -1372,6 +1421,7 @@ export default function AdminApp({
   cfgDict,
   refsDict,
   aboutDict,
+  invoiceDict,
   locale,
 }: {
   t: AdminDict;
@@ -1379,6 +1429,7 @@ export default function AdminApp({
   cfgDict: Dict["cfg"];
   refsDict: Dict["references"];
   aboutDict: Dict["about"];
+  invoiceDict: Dict["portal"]["invoice"];
   locale: string;
 }) {
   const [tab, setTab] = useState<Tab>("dashboard");
@@ -1401,7 +1452,7 @@ export default function AdminApp({
       </div>
 
       {tab === "dashboard" && <DashboardTab t={t} statusLabels={statusLabels} cfgDict={cfgDict} />}
-      {tab === "orders" && <OrdersTable t={t} statusLabels={statusLabels} cfgDict={cfgDict} />}
+      {tab === "orders" && <OrdersTable t={t} statusLabels={statusLabels} cfgDict={cfgDict} invoiceDict={invoiceDict} />}
       {tab === "customers" && <CustomersTab t={t} />}
       {tab === "pricing" && <PricingEditor t={t} />}
       {tab === "products" && <ProductsTab t={t} cfgDict={cfgDict} />}

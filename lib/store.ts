@@ -8,9 +8,22 @@ import { defaultPriceBook, type PriceBook } from "./engine/pricing";
 import { builtinTypes, type RailingConfig, type TypeProfile } from "./engine/types";
 
 export type OrderKind = "order" | "quote";
-export type OrderStatus = "new" | "confirmed" | "production" | "shipped" | "quote_requested" | "quoted";
+export type OrderStatus =
+  | "new"
+  | "confirmed"
+  | "production"
+  | "shipped"
+  | "invoiced"
+  | "paid"
+  | "quote_requested"
+  | "quoted";
 
-export const ORDER_FLOW: OrderStatus[] = ["new", "confirmed", "production", "shipped"];
+export const ORDER_FLOW: OrderStatus[] = ["new", "confirmed", "production", "shipped", "invoiced", "paid"];
+
+/** Deterministic invoice number for an order (no schema field needed). */
+export function invoiceNoFor(ref: string): string {
+  return "RE-" + ref.replace(/^AX-/, "");
+}
 export const QUOTE_FLOW: OrderStatus[] = ["quote_requested", "quoted"];
 
 export interface Order {

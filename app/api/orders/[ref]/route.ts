@@ -3,7 +3,7 @@ import { db } from "@/lib/server/db";
 import { sessionUser } from "@/lib/server/auth";
 import { toClientOrder } from "@/lib/server/serialize";
 
-const ORDER_STATUSES = ["new", "confirmed", "production", "shipped"];
+const ORDER_STATUSES = ["new", "confirmed", "production", "shipped", "invoiced", "paid"];
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ ref: string }> }) {
   const { ref } = await params;

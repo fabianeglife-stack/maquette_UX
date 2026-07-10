@@ -5,7 +5,7 @@
 
 import { jsPDF } from "jspdf";
 import { chf } from "@/lib/engine/pricing";
-import type { Order } from "@/lib/store";
+import { invoiceNoFor, type Order } from "@/lib/store";
 import type { Dict } from "@/lib/i18n";
 
 const VAT_RATE = 0.081;
@@ -41,6 +41,7 @@ export function downloadInvoicePdf(order: Order, t: Dict["portal"]["invoice"], s
 
   // meta block
   const meta: [string, string][] = [
+    [t.no, invoiceNoFor(order.ref)],
     [t.ref, order.ref],
     [t.date, order.createdAt],
   ];
