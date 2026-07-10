@@ -5,7 +5,7 @@ import * as THREE from "three";
 import { Canvas } from "@react-three/fiber";
 import { Edges, OrbitControls } from "@react-three/drei";
 import { railDepth, type DerivedRailing } from "@/lib/engine/geometry";
-import type { RailingConfig, TypeProfile } from "@/lib/engine/types";
+import { WALL_CLEARANCE, type RailingConfig, type TypeProfile } from "@/lib/engine/types";
 
 const MM = 0.001;
 
@@ -241,6 +241,66 @@ function BasePlate({
   );
 }
 
+/** Side-mount fixing: vertical plate on the slab edge face, horizontal anchors. */
+function SidePlate({
+  at,
+  headingDeg,
+  face,
+  plate,
+  color,
+}: {
+  at: { x: number; y: number; z: number };
+  headingDeg: number;
+  /** Slab face distance from the railing axis, m. */
+  face: number;
+  plate?: { w: number; l: number; t: number };
+  color: string;
+}) {
+  const w = (plate?.w ?? 100) * MM;
+  const l = Math.max((plate?.l ?? 160) * MM, 0.14);
+  const t = (plate?.t ?? 10) * MM;
+  return (
+    <group position={[at.x * MM, at.y * MM, at.z * MM]} rotation={[0, -rad(headingDeg), 0]}>
+      <mesh position={[0, 0.02 - l / 2, face - t / 2]}>
+        <boxGeometry args={[w, l, t]} />
+        <Steel color={color} />
+        <Ink />
+      </mesh>
+      {[0.02 - l * 0.25, 0.02 - l * 0.8].map((dy, b) => (
+        <mesh key={b} position={[0, dy, face - t - 0.005]} rotation={[Math.PI / 2, 0, 0]}>
+          <cylinderGeometry args={[0.007, 0.007, 0.012, 10]} />
+          <Steel color="#8f9498" />
+          <Ink />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+/** Adjoining building wall at a connected run end (customer measures to it). */
+function WallBlock({
+  at,
+  headingDeg,
+  baseY,
+  railH,
+}: {
+  at: THREE.Vector3;
+  headingDeg: number;
+  baseY: number;
+  railH: number;
+}) {
+  const h = railH + 0.95;
+  return (
+    <group position={[at.x, baseY, at.z]} rotation={[0, -rad(headingDeg), 0]}>
+      <mesh position={[0, -0.12 + h / 2, 0.35]}>
+        <boxGeometry args={[0.12, h, 2.2]} />
+        <Steel color="#e6e2d8" metalness={0} roughness={0.96} />
+        <Ink />
+      </mesh>
+    </group>
+  );
+}
+
 const GLASS: Record<RailingConfig["glassType"], { color: string; opacity: number }> = {
   clear: { color: "#a9c0cc", opacity: 0.22 },
   satin: { color: "#e9ebe9", opacity: 0.6 },
@@ -251,11 +311,19 @@ function Railing({ cfg, derived, tp }: { cfg: RailingConfig; derived: DerivedRai
   // Galvanized-only finish renders as zinc grey regardless of the RAL choice.
   const color = cfg.finish === "galvanized" ? "#a6abae" : RAL[cfg.color];
   const hrColor = cfg.handrail === "round_inox" ? INOX : color;
-  const slabColor = "#dddad2";
+  const substrate = cfg.substrate ?? "concrete_top";
+  const sideMount = (cfg.mounting ?? "top") === "side";
+  const parapet = substrate === "concrete_parapet";
+  // Substrate material: concrete grey, sandstone, or wood joist edge.
+  const slabColor = substrate === "wood_side" ? "#a87f55" : substrate === "stone_top" ? "#c6bfae" : "#dddad2";
+  // Side mounting: the slab's edge face sits at the railing line (with the
+  // configured offset variant); top mounting keeps the slab under the posts.
+  const faceOffset = sideMount ? (substrate === "concrete_side_offset" ? 0.1 : 0.04) : -0.05;
   const glass = GLASS[cfg.glassType];
   const recipe = tp?.recipe;
   const hrDepth = recipe ? railDepth(recipe.handrail.profile, recipe.handrail.size) : 0;
   const brDepth = recipe ? railDepth(recipe.bottomRail.profile, recipe.bottomRail.size) : 0;
+  const walls = cfg.walls ?? "none";
 
   return (
     <group>
@@ -268,14 +336,27 @@ function Railing({ cfg, derived, tp }: { cfg: RailingConfig; derived: DerivedRai
         // the nosing line, so treads sit below it and members never clip them.
         const slabs: React.ReactNode[] = [];
         if (!seg.steps) {
-          const mid = start.clone().add(end).multiplyScalar(0.5).add(perp.clone().multiplyScalar(0.6));
+          // Parapet: the main slab sits lower; a concrete band rises to the
+          // railing base and carries the side fixing.
+          const slabTop = parapet ? start.y - 0.35 : start.y;
+          const mid = start.clone().add(end).multiplyScalar(0.5).add(perp.clone().multiplyScalar(faceOffset + 0.65));
           slabs.push(
-            <mesh key="slab" position={[mid.x, start.y - 0.06, mid.z]} rotation={[0, -rad(seg.headingDeg), 0]}>
+            <mesh key="slab" position={[mid.x, slabTop - 0.06, mid.z]} rotation={[0, -rad(seg.headingDeg), 0]}>
               <boxGeometry args={[(seg.input.length * MM) + 0.08, 0.12, 1.3]} />
               <Steel color={slabColor} metalness={0} roughness={0.95} />
               <Ink />
             </mesh>,
           );
+          if (parapet) {
+            const pmid = start.clone().add(end).multiplyScalar(0.5).add(perp.clone().multiplyScalar(faceOffset + 0.09));
+            slabs.push(
+              <mesh key="parapet" position={[pmid.x, start.y - 0.175, pmid.z]} rotation={[0, -rad(seg.headingDeg), 0]}>
+                <boxGeometry args={[(seg.input.length * MM) + 0.08, 0.35, 0.18]} />
+                <Steel color={slabColor} metalness={0} roughness={0.95} />
+                <Ink />
+              </mesh>,
+            );
+          }
         } else {
           const { count, len } = seg.steps;
           for (let s = 0; s < count; s++) {
@@ -344,11 +425,12 @@ function Railing({ cfg, derived, tp }: { cfg: RailingConfig; derived: DerivedRai
               {recipe.post.profile === "none" && (
                 <Member a={start.clone().setY(start.y + 0.055)} b={end.clone().setY(end.y + 0.055)} radius={0.048} color={color} box />
               )}
-              {/* posts, welded between base plate and handrail underside */}
+              {/* posts, welded between base plate and handrail underside;
+                  side mounting runs them down the slab edge to the plate */}
               {seg.posts.map((p, k) => (
                 <Post
                   key={k}
-                  base={p.base}
+                  base={sideMount ? { ...p.base, y: p.base.y - (recipe.plate?.l ?? 160) + 25 } : p.base}
                   top={p.top}
                   size={recipe.post.size}
                   depth={recipe.post.depth}
@@ -357,10 +439,14 @@ function Railing({ cfg, derived, tp }: { cfg: RailingConfig; derived: DerivedRai
                   color={color}
                 />
               ))}
-              {/* base plates with anchor bolts */}
-              {seg.plates.map((pl, k) => (
-                <BasePlate key={`pl${k}`} at={pl.at} headingDeg={pl.headingDeg} postSize={recipe.post.size} plate={recipe.plate} color={color} />
-              ))}
+              {/* fixing: base plates on the slab, or vertical side plates */}
+              {seg.plates.map((pl, k) =>
+                sideMount ? (
+                  <SidePlate key={`pl${k}`} at={pl.at} headingDeg={pl.headingDeg} face={faceOffset} plate={recipe.plate} color={color} />
+                ) : (
+                  <BasePlate key={`pl${k}`} at={pl.at} headingDeg={pl.headingDeg} postSize={recipe.post.size} plate={recipe.plate} color={color} />
+                ),
+              )}
               {/* post caps (designs without a handrail) */}
               {seg.caps.map((c, k) => (
                 <mesh key={`c${k}`} position={[c.x * MM, c.y * MM + 0.003, c.z * MM]} rotation={[0, -rad(seg.headingDeg), 0]}>
@@ -474,6 +560,34 @@ function Railing({ cfg, derived, tp }: { cfg: RailingConfig; derived: DerivedRai
           </group>
         );
       })}
+      {/* adjoining walls at connected run ends (5 cm clearance is deducted) */}
+      {(walls === "start" || walls === "both") && derived.segments.length > 0 && (
+        <WallBlock
+          at={v(derived.segments[0].start).addScaledVector(
+            new THREE.Vector3(Math.cos(rad(derived.segments[0].headingDeg)), 0, Math.sin(rad(derived.segments[0].headingDeg))),
+            -(WALL_CLEARANCE * MM + 0.06),
+          )}
+          headingDeg={derived.segments[0].headingDeg}
+          baseY={derived.segments[0].start.y * MM}
+          railH={cfg.height * MM}
+        />
+      )}
+      {(walls === "end" || walls === "both") && derived.segments.length > 0 && (
+        <WallBlock
+          at={v(derived.segments[derived.segments.length - 1].end).addScaledVector(
+            new THREE.Vector3(
+              Math.cos(rad(derived.segments[derived.segments.length - 1].headingDeg)),
+              0,
+              Math.sin(rad(derived.segments[derived.segments.length - 1].headingDeg)),
+            ),
+            WALL_CLEARANCE * MM + 0.06,
+          )}
+          headingDeg={derived.segments[derived.segments.length - 1].headingDeg}
+          baseY={derived.segments[derived.segments.length - 1].end.y * MM}
+          railH={cfg.height * MM}
+        />
+      )}
+
       {/* handrail miter elbows / stair bends at segment junctions */}
       {recipe &&
         recipe.handrail.profile !== "none" &&
