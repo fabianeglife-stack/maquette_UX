@@ -449,16 +449,17 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
           </div>
           {(() => {
             // Principle plan for the selected type AND fixing situation:
-            // admin-uploaded plan wins, the type's built-in PDF is the fallback.
-            const mounting = SUBSTRATE_MOUNTING[cfg.substrate ?? "concrete_top"];
-            const plan = planFor(typePlans, tp.id, mounting, tp.planUrl);
+            // the admin-uploaded plan for this exact substrate wins, then a
+            // mounting-level upload, then the type's built-in PDF.
+            const substrate = cfg.substrate ?? "concrete_top";
+            const plan = planFor(typePlans, tp.id, substrate, tp.planUrl);
             if (!plan) return null;
             const uploaded = plan.startsWith("data:");
             return (
               <a
                 href={uploaded ? plan : `${process.env.NEXT_PUBLIC_BASE_PATH || ""}${plan}`}
                 {...(uploaded
-                  ? { download: `axioform-plan-${tp.id}-${mounting}.pdf` }
+                  ? { download: `axioform-plan-${tp.id}-${substrate}.pdf` }
                   : { target: "_blank", rel: "noopener" })}
                 className="inline-flex w-fit items-center gap-2 border border-hairline px-3.5 py-2.5 text-[11px] font-medium uppercase tracking-[0.14em] text-graphite transition-colors hover:border-graphite hover:text-ink"
               >

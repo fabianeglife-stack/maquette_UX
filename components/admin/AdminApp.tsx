@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { chf, defaultPriceBook, type PriceBook } from "@/lib/engine/pricing";
 import { deriveRailing } from "@/lib/engine/geometry";
 import { buildBom } from "@/lib/engine/bom";
-import { type TypeProfile } from "@/lib/engine/types";
+import { SUBSTRATE_MOUNTING, type Substrate, type TypeProfile } from "@/lib/engine/types";
 import {
   acceptQuote,
   invoiceNoFor,
@@ -1234,18 +1234,20 @@ function readPdfFile(file: File): Promise<string> {
 function PlanCell({
   t,
   typeId,
-  mounting,
+  slot,
+  label,
   current,
   hasDefault,
   onChange,
 }: {
   t: AdminDict;
   typeId: string;
-  mounting: "top" | "side";
+  /** Storage key for this fixing situation (substrate id). */
+  slot: string;
+  label: string;
   current?: string;
   hasDefault: boolean;
   onChange: (value?: string) => void;
-  onError?: () => void;
 }) {
   const [err, setErr] = useState(false);
   const pick = (
@@ -1270,13 +1272,14 @@ function PlanCell({
     </label>
   );
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-1.5 rounded-md border border-hairline/70 p-3">
+      <span className="text-[10px] font-medium uppercase tracking-[0.1em] text-graphite">{label}</span>
       <div className="flex flex-wrap items-center gap-2">
         {current && (
           <>
             <a
               href={current}
-              download={`axioform-plan-${typeId}-${mounting}.pdf`}
+              download={`axioform-plan-${typeId}-${slot}.pdf`}
               className="border border-ink/40 px-3 py-1.5 text-[10px] uppercase tracking-[0.12em] text-ink transition-colors hover:bg-ink hover:text-paper"
             >
               ↓ {t.plans.view}
@@ -1302,18 +1305,34 @@ function PlanCell({
   );
 }
 
-/** Upload a principle drawing (PDF) per type × fixing situation. */
-function PlansSection({ t, types }: { t: AdminDict; types: TypeProfile[] }) {
+/** All fixing situations offered in the configurator, one plan slot each. */
+const PLAN_SUBSTRATES: Substrate[] = [
+  "concrete_top",
+  "concrete_side",
+  "concrete_side_offset",
+  "concrete_parapet",
+  "wood_side",
+  "stone_top",
+];
+
+/** Upload one principle drawing (PDF) per type × fixing situation. */
+function PlansSection({ t, cfgDict, types }: { t: AdminDict; cfgDict: Dict["cfg"]; types: TypeProfile[] }) {
   const [plans, setPlans] = useState<TypePlans>({});
   const [saved, setSaved] = useState(false);
   useEffect(() => {
     fetchPageContent<TypePlans>("typeplans", {}).then(setPlans);
   }, []);
 
-  const set = (typeId: string, mounting: "top" | "side", value?: string) => {
+  const set = (typeId: string, slot: Substrate, value?: string) => {
     const entry = { ...(plans[typeId] ?? {}) };
-    if (value) entry[mounting] = value;
-    else delete entry[mounting];
+    if (value) {
+      entry[slot] = value;
+    } else if (entry[slot]) {
+      delete entry[slot];
+    } else {
+      // The cell displayed an inherited mounting-level plan — remove that.
+      delete entry[SUBSTRATE_MOUNTING[slot]];
+    }
     const next = { ...plans, [typeId]: entry };
     setPlans(next);
     putPageContent("typeplans", next)
@@ -1336,20 +1355,25 @@ function PlansSection({ t, types }: { t: AdminDict; types: TypeProfile[] }) {
         )}
       </div>
       <p className="text-xs font-light leading-relaxed text-stone">{t.plans.hint}</p>
-      <div className="grid gap-x-6 gap-y-3 sm:grid-cols-[1fr_1fr_1fr]">
-        <span className="hidden text-[10px] uppercase tracking-[0.12em] text-stone sm:block" />
-        <span className="hidden text-[10px] uppercase tracking-[0.12em] text-stone sm:block">{t.plans.colTop}</span>
-        <span className="hidden text-[10px] uppercase tracking-[0.12em] text-stone sm:block">{t.plans.colSide}</span>
-        {active.map((x) => (
-          <div key={x.id} className="contents">
-            <span className="self-center border-t border-hairline/60 pt-3 text-sm font-light text-ink sm:border-t-0 sm:pt-0">
-              {x.name?.de ?? x.id}
-            </span>
-            <PlanCell t={t} typeId={x.id} mounting="top" current={plans[x.id]?.top} hasDefault={!!x.planUrl} onChange={(v) => set(x.id, "top", v)} />
-            <PlanCell t={t} typeId={x.id} mounting="side" current={plans[x.id]?.side} hasDefault={!!x.planUrl} onChange={(v) => set(x.id, "side", v)} />
+      {active.map((x) => (
+        <div key={x.id} className="flex flex-col gap-2.5 border-t border-hairline/70 pt-3">
+          <span className="text-sm text-ink">{x.name?.de ?? x.id}</span>
+          <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+            {PLAN_SUBSTRATES.map((s) => (
+              <PlanCell
+                key={s}
+                t={t}
+                typeId={x.id}
+                slot={s}
+                label={cfgDict.substrates[s]}
+                current={plans[x.id]?.[s] ?? plans[x.id]?.[SUBSTRATE_MOUNTING[s]]}
+                hasDefault={!!x.planUrl}
+                onChange={(v) => set(x.id, s, v)}
+              />
+            ))}
           </div>
-        ))}
-      </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -1471,7 +1495,7 @@ function ProductsTab({ t, cfgDict }: { t: AdminDict; cfgDict: Dict["cfg"] }) {
         </p>
       )}
 
-      <PlansSection t={t} types={types} />
+      <PlansSection t={t} cfgDict={cfgDict} types={types} />
     </div>
   );
 }

@@ -5,7 +5,7 @@
  */
 
 import { defaultPriceBook, type PriceBook } from "./engine/pricing";
-import { builtinTypes, type RailingConfig, type TypeProfile } from "./engine/types";
+import { builtinTypes, SUBSTRATE_MOUNTING, type RailingConfig, type Substrate, type TypeProfile } from "./engine/types";
 
 export type OrderKind = "order" | "quote";
 export type OrderStatus =
@@ -276,10 +276,16 @@ export interface HomeContent {
  * (bottom = mounted on the slab, side = lateral). Values are PDF data-URLs
  * (prototype) or hosted URLs; the type's built-in planUrl is the fallback.
  */
-export type TypePlans = Record<string, { top?: string; side?: string }>;
+export type TypePlans = Record<string, Partial<Record<Substrate | "top" | "side", string>>>;
 
-export function planFor(plans: TypePlans, typeId: string, mounting: "top" | "side", fallback?: string): string | undefined {
-  return plans[typeId]?.[mounting] ?? fallback;
+/**
+ * Plan resolution: exact substrate → legacy mounting-level upload
+ * ("top"/"side", kept for plans stored before the per-substrate matrix) →
+ * the type's built-in planUrl.
+ */
+export function planFor(plans: TypePlans, typeId: string, substrate: Substrate, fallback?: string): string | undefined {
+  const entry = plans[typeId];
+  return entry?.[substrate] ?? entry?.[SUBSTRATE_MOUNTING[substrate]] ?? fallback;
 }
 
 export function loadPageContent<T>(id: string, empty: T): T {

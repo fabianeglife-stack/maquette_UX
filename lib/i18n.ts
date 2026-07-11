@@ -507,7 +507,7 @@ const de = {
     newTypeNote: "Neue Typen sind sofort im Konfigurator wählbar — mit eigenen Parametern, Preis und SIA-Regelprofil (Demo: lokal gespeichert).",
     plans: {
       title: "Prinzippläne",
-      hint: "Pro Geländertyp und Befestigungsart einen Prinzipplan (PDF, max. 3 MB) hinterlegen. Der Konfigurator bietet dem Kunden automatisch den Plan an, der zu Typ und gewählter Befestigung passt.",
+      hint: "Pro Geländertyp und Befestigungssituation (6 Situationen) einen Prinzipplan (PDF, max. 3 MB) hinterlegen. Der Konfigurator bietet dem Kunden automatisch den Plan der gewählten Kombination an.",
       colTop: "Bodenmontage",
       colSide: "Seitliche Montage",
       upload: "PDF hochladen …",
@@ -1196,7 +1196,7 @@ const fr: Dict = {
     newTypeNote: "Les nouveaux types sont immédiatement disponibles dans le configurateur — avec leurs paramètres, prix et profil de règles SIA (démo : stockage local).",
     plans: {
       title: "Plans de principe",
-      hint: "Déposer un plan de principe (PDF, max. 3 Mo) par type de garde-corps et par mode de fixation. Le configurateur propose automatiquement au client le plan correspondant au type et à la fixation choisie.",
+      hint: "Déposer un plan de principe (PDF, max. 3 Mo) par type de garde-corps et par situation de fixation (6 situations). Le configurateur propose automatiquement au client le plan de la combinaison choisie.",
       colTop: "Fixation au sol",
       colSide: "Fixation latérale",
       upload: "Téléverser un PDF …",
@@ -1883,7 +1883,7 @@ const en: Dict = {
     newTypeNote: "New types are selectable in the configurator immediately — with their own parameters, price and SIA rule profile (demo: stored locally).",
     plans: {
       title: "Principle drawings",
-      hint: "Store one principle drawing (PDF, max. 3 MB) per guardrail type and fixing situation. The configurator automatically offers the customer the plan matching the selected type and fixing.",
+      hint: "Store one principle drawing (PDF, max. 3 MB) per guardrail type and fixing situation (6 situations). The configurator automatically offers the customer the plan of the chosen combination.",
       colTop: "Floor mounting",
       colSide: "Side mounting",
       upload: "Upload PDF …",
