@@ -2,6 +2,11 @@ export const locales = ["de", "fr", "en"] as const;
 export type Locale = (typeof locales)[number];
 export const defaultLocale: Locale = "de";
 
+/** Fill {placeholders} in an i18n template string. */
+export function fmt(tpl: string, params: Record<string, string | number>): string {
+  return tpl.replace(/\{(\w+)\}/g, (_, k) => String(params[k] ?? ""));
+}
+
 const de = {
   nav: {
     about: "Über uns",
@@ -144,6 +149,9 @@ const de = {
   cfg: {
     tab3d: "3D-Ansicht",
     tabDrawing: "Zeichnung",
+    stepsNav: "Schritte",
+    view3d: "3D",
+    loading3d: "3D …",
     stepSystem: "System",
     stepGeometry: "Verlauf",
     stepOptions: "Montage & Optionen",
@@ -369,6 +377,11 @@ const de = {
     kicker: "Admin",
     title: "Betrieb.",
     lead: "Bestellungen verfolgen, Preise publizieren, Produkte verwalten — die Demo arbeitet mit lokalen Daten.",
+    gate: {
+      needLogin: "Der Admin-Bereich ist geschützt. Bitte melden Sie sich an.",
+      toLogin: "Anmelden",
+      forbidden: "Dieses Konto hat keine Admin-Berechtigung.",
+    },
     tabs: {
       dashboard: "Übersicht",
       orders: "Bestellungen",
@@ -835,6 +848,9 @@ const fr: Dict = {
   cfg: {
     tab3d: "Vue 3D",
     tabDrawing: "Plan",
+    stepsNav: "Étapes",
+    view3d: "3D",
+    loading3d: "3D …",
     stepSystem: "Système",
     stepGeometry: "Tracé",
     stepOptions: "Pose & options",
@@ -1060,6 +1076,11 @@ const fr: Dict = {
     kicker: "Admin",
     title: "Exploitation.",
     lead: "Suivre les commandes, publier les prix, gérer les produits — la démo travaille avec des données locales.",
+    gate: {
+      needLogin: "L'espace admin est protégé. Veuillez vous connecter.",
+      toLogin: "Se connecter",
+      forbidden: "Ce compte n'a pas les droits d'administration.",
+    },
     tabs: {
       dashboard: "Aperçu",
       orders: "Commandes",
@@ -1524,6 +1545,9 @@ const en: Dict = {
   cfg: {
     tab3d: "3D view",
     tabDrawing: "Drawing",
+    stepsNav: "Steps",
+    view3d: "3D",
+    loading3d: "3D …",
     stepSystem: "System",
     stepGeometry: "Layout",
     stepOptions: "Mounting & options",
@@ -1749,6 +1773,11 @@ const en: Dict = {
     kicker: "Admin",
     title: "Operations.",
     lead: "Track orders, publish prices, manage products — the demo runs on local data.",
+    gate: {
+      needLogin: "The admin area is protected. Please sign in.",
+      toLogin: "Sign in",
+      forbidden: "This account does not have admin access.",
+    },
     tabs: {
       dashboard: "Overview",
       orders: "Orders",

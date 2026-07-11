@@ -7,6 +7,7 @@ import { buildBom } from "@/lib/engine/bom";
 import { SUBSTRATE_MOUNTING, type Substrate, type TypeProfile } from "@/lib/engine/types";
 import {
   acceptQuote,
+  getSession,
   invoiceNoFor,
   loadEvents,
   loadOrders,
@@ -42,7 +43,7 @@ import {
   resolveType,
   saveType,
 } from "@/lib/data";
-import type { Dict } from "@/lib/i18n";
+import { fmt, type Dict } from "@/lib/i18n";
 import { api, hasBackend, type ApiOrder } from "@/lib/api";
 import Link from "next/link";
 import StatusSteps from "@/components/StatusSteps";
@@ -53,11 +54,6 @@ import TypeDesigner from "./TypeDesigner";
 
 type AdminDict = Dict["admin"];
 type Tab = "dashboard" | "orders" | "invoices" | "production" | "logistics" | "customers" | "pricing" | "products" | "content";
-
-/** Fill {placeholders} in an i18n template. */
-function fmt(tpl: string, params: Record<string, string | number>): string {
-  return tpl.replace(/\{(\w+)\}/g, (_, k) => String(params[k] ?? ""));
-}
 
 /* ---------- ERP visual vocabulary (branding-free zone) ---------- */
 
@@ -2043,6 +2039,50 @@ export default function AdminApp({
   locale: string;
 }) {
   const [tab, setTab] = useState<Tab>("dashboard");
+
+  // Access gate. In the server build the session carries a role, so we require
+  // an admin account; in the static prototype the local session has no role, so
+  // we can only require that someone is signed in. Either way the ERP is no
+  // longer exposed to an anonymous visitor who lands on the URL.
+  const [gate, setGate] = useState<"loading" | "ok" | "anon" | "forbidden">("loading");
+  useEffect(() => {
+    let alive = true;
+    if (hasBackend) {
+      api
+        .me()
+        .then((u) => alive && setGate(!u ? "anon" : u.role === "admin" ? "ok" : "forbidden"))
+        .catch(() => alive && setGate("anon"));
+    } else {
+      setGate(getSession() ? "ok" : "anon");
+    }
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  if (gate !== "ok") {
+    return (
+      <div className="flex min-h-[320px] items-center justify-center rounded-xl border border-hairline bg-paper p-8">
+        {gate === "loading" ? (
+          <div className="h-6 w-40 animate-pulse rounded bg-mist" aria-busy="true" aria-label="…" />
+        ) : (
+          <div className="flex flex-col items-start gap-5">
+            <p className="text-sm font-light text-graphite">
+              {gate === "forbidden" ? t.gate.forbidden : t.gate.needLogin}
+            </p>
+            {gate === "anon" && (
+              <Link
+                href={`/${locale}/login/`}
+                className="inline-flex items-center justify-center bg-ink px-6 py-3 text-xs font-medium uppercase tracking-[0.16em] text-paper transition-colors hover:bg-graphite"
+              >
+                {t.gate.toLogin}
+              </Link>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   const groups: { label: string; items: { v: Tab; icon: string }[] }[] = [
     { label: t.erp.control, items: [{ v: "dashboard", icon: "dashboard" }] },

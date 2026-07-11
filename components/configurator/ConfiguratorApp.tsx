@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import DrawingSVG from "./DrawingSVG";
 import { downloadDrawingPdf } from "./pdf";
 import { deriveRailing } from "@/lib/engine/geometry";
-import { evaluateSia, siaSummary, type RuleStatus } from "@/lib/engine/sia";
+import { evaluateSia, siaSummary } from "@/lib/engine/sia";
 import { chf, defaultPriceBook, priceRailing, type PriceBook } from "@/lib/engine/pricing";
 import {
   builtinTypes,
@@ -45,7 +45,8 @@ import {
   WallIcon,
   type ShapeKind,
 } from "./visual";
-import type { Dict } from "@/lib/i18n";
+import { fmt, type Dict } from "@/lib/i18n";
+import { RAL_HEX, STATUS_COLOR } from "@/lib/theme";
 import Link from "next/link";
 
 const Scene3D = dynamic(() => import("./Scene3D"), {
@@ -60,23 +61,6 @@ const STORAGE_KEY = "axioform-config-v1";
 // Launch mode: everything goes through a reviewed quote — no direct orders.
 // Set NEXT_PUBLIC_QUOTE_ONLY=0 to re-enable direct ordering later.
 const QUOTE_ONLY = process.env.NEXT_PUBLIC_QUOTE_ONLY !== "0";
-
-const RAL_HEX: Record<RailingConfig["color"], string> = {
-  ral7016: "#383e42",
-  ral9005: "#0e0e0e",
-  ral9010: "#efece3",
-  custom: "#4d6172",
-};
-
-function fmt(tpl: string, params: Record<string, string | number>): string {
-  return tpl.replace(/\{(\w+)\}/g, (_, k) => String(params[k] ?? ""));
-}
-
-const STATUS_COLOR: Record<RuleStatus, string> = {
-  pass: "#4a7c59",
-  warn: "#b9882f",
-  fail: "#b04a3a",
-};
 
 /* ---------- small form primitives ---------- */
 
@@ -365,7 +349,7 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
             href="#preview"
             className="inline-flex items-center justify-center border border-hairline px-3 py-3 text-xs uppercase tracking-[0.14em] text-graphite"
           >
-            3D
+            {t.view3d}
           </a>
           <a
             href="#cta"
@@ -379,7 +363,7 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
       {/* ---------- left: steps ---------- */}
       <div className="flex flex-col gap-10">
         {/* step rail (desktop): scrollspy over the four sections */}
-        <nav className="sticky top-16 z-30 hidden gap-px self-start bg-hairline lg:flex" aria-label="Schritte">
+        <nav className="sticky top-16 z-30 hidden gap-px self-start bg-hairline lg:flex" aria-label={t.stepsNav}>
           {[
             { id: "step-1", n: 1, l: t.stepSystem },
             { id: "step-2", n: 2, l: t.stepGeometry },
@@ -554,6 +538,8 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
                       value={seg.slope}
                       onChange={(e) => setSeg(seg.id, { slope: Number(e.target.value) })}
                       className="flex-1 accent-[#171716]"
+                      aria-label={t.slope}
+                      aria-valuetext={`${seg.slope}°`}
                     />
                     <span className="w-10 text-right text-sm font-light text-ink">{seg.slope}°</span>
                   </div>
@@ -912,7 +898,7 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
         </div>
 
         <div className={`h-[380px] overflow-hidden border border-hairline md:h-[520px] ${tab === "3d" ? "" : "hidden"}`}>
-          <Scene3D cfg={cfg} derived={derived} tp={tp} techLabel={t.scene.technical} />
+          <Scene3D cfg={cfg} derived={derived} tp={tp} techLabel={t.scene.technical} sceneLabel={t.tab3d} />
         </div>
         <div className={`border border-hairline ${tab === "drawing" ? "" : "hidden"}`}>
           <DrawingSVG
