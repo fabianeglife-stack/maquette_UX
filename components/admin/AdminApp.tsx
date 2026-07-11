@@ -52,32 +52,125 @@ import DrawingSVG from "@/components/configurator/DrawingSVG";
 import TypeDesigner from "./TypeDesigner";
 
 type AdminDict = Dict["admin"];
-type Tab = "dashboard" | "orders" | "customers" | "pricing" | "products" | "content";
+type Tab = "dashboard" | "orders" | "invoices" | "production" | "logistics" | "customers" | "pricing" | "products" | "content";
 
 /** Fill {placeholders} in an i18n template. */
 function fmt(tpl: string, params: Record<string, string | number>): string {
   return tpl.replace(/\{(\w+)\}/g, (_, k) => String(params[k] ?? ""));
 }
 
+/* ---------- ERP visual vocabulary (branding-free zone) ---------- */
+
+/** One colour per lifecycle status, used across chips, bars and charts. */
+const STATUS_HUES: Record<OrderStatus, string> = {
+  quote_requested: "#d97706",
+  quoted: "#2563eb",
+  new: "#7c3aed",
+  confirmed: "#0284c7",
+  production: "#ea580c",
+  shipped: "#0d9488",
+  invoiced: "#4f46e5",
+  paid: "#16a34a",
+};
+
+function StatusChip({ status, label }: { status: OrderStatus; label: string }) {
+  const hue = STATUS_HUES[status] ?? "#6b7280";
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em]"
+      style={{ color: hue, borderColor: `${hue}55`, background: `${hue}14` }}
+    >
+      <span className="h-1.5 w-1.5 rounded-full" style={{ background: hue }} />
+      {label}
+    </span>
+  );
+}
+
+/** Minimal stroke icon set for the ERP sidebar and KPI tiles. */
+function NavIcon({ name }: { name: string }) {
+  const p: Record<string, React.ReactNode> = {
+    dashboard: <path d="M2 2h5v5H2zM9 2h5v3H9zM9 7h5v7H9zM2 9h5v5H2z" />,
+    orders: <path d="M3 2h8l2 2v10H3zM6 7h6M6 10h6M6 4h3" />,
+    invoices: <path d="M4 1h8v14l-2-1.4L8 15l-2-1.4L4 15zM6 5h4M6 8h4" />,
+    customers: <path d="M5.5 6.5a2.3 2.3 0 1 0 0-4.6 2.3 2.3 0 0 0 0 4.6zM1.5 14c0-2.7 1.8-4.4 4-4.4s4 1.7 4 4.4M11 6.2a2 2 0 1 0-.6-3.9M10.7 9.8c1.9.2 3.4 1.7 3.4 4.2" />,
+    production: <path d="M2 14V8l4 2.5V8l4 2.5V4l4-1.5V14zM2 14h12" />,
+    logistics: <path d="M1.5 3.5H9v7H1.5zM9 6h3l2.5 2.5V10.5H9zM4 13.2a1.4 1.4 0 1 0 0-2.8 1.4 1.4 0 0 0 0 2.8zM11.5 13.2a1.4 1.4 0 1 0 0-2.8 1.4 1.4 0 0 0 0 2.8z" />,
+    products: <path d="M8 1.5 14 5v6l-6 3.5L2 11V5zM2 5l6 3.5L14 5M8 8.5V15" />,
+    pricing: <path d="M8.5 1.5H14v5.5L7 14.5 1.5 9zM11 5.2a.8.8 0 1 0 0-1.6.8.8 0 0 0 0 1.6z" />,
+    content: <path d="M2 2.5h12v11H2zM2 10l3.5-3 3 2.5 2.5-2 3 2.5M10.5 6.2a1 1 0 1 0 0-2 1 1 0 0 0 0 2z" />,
+  };
+  return (
+    <svg viewBox="0 0 16 16" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinejoin="round" strokeLinecap="round" aria-hidden>
+      {p[name] ?? p.dashboard}
+    </svg>
+  );
+}
+
 /* ---------- dashboard tab ---------- */
 
-function Kpi({ label, value }: { label: string; value: string }) {
+function Kpi({ label, value, hue, icon, sub }: { label: string; value: string; hue: string; icon: string; sub?: string }) {
   return (
-    <div className="flex flex-col gap-2 border border-hairline p-5">
-      <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone">{label}</span>
-      <span className="text-2xl font-light tracking-tight text-ink">{value}</span>
+    <div className="flex items-center gap-4 rounded-lg border border-[#e4e6ea] bg-white p-4 shadow-sm">
+      <span className="flex h-10 w-10 items-center justify-center rounded-lg" style={{ background: `${hue}18`, color: hue }}>
+        <NavIcon name={icon} />
+      </span>
+      <div className="min-w-0">
+        <span className="block truncate text-[11px] font-medium uppercase tracking-[0.1em] text-[#8a8f98]">{label}</span>
+        <span className="block text-xl font-semibold tracking-tight text-[#1b1e24]">{value}</span>
+        {sub && <span className="block text-[11px] text-[#8a8f98]">{sub}</span>}
+      </div>
     </div>
   );
 }
 
-function BarRow({ label, value, max, display }: { label: string; value: number; max: number; display: string }) {
+function BarRow({ label, value, max, display, hue }: { label: string; value: number; max: number; display: string; hue?: string }) {
   return (
     <div className="flex items-center gap-3">
-      <span className="w-32 shrink-0 text-[12px] font-light text-graphite">{label}</span>
-      <div className="h-4 flex-1 bg-mist">
-        <div className="h-full bg-graphite" style={{ width: `${(value / max) * 100}%` }} />
+      <span className="w-32 shrink-0 truncate text-[12px] text-[#5b6069]">{label}</span>
+      <div className="h-3.5 flex-1 overflow-hidden rounded-full bg-[#eef0f3]">
+        <div className="h-full rounded-full" style={{ width: `${(value / max) * 100}%`, background: hue ?? "#45453f" }} />
       </div>
-      <span className="w-24 shrink-0 text-right text-[12px] font-light text-ink">{display}</span>
+      <span className="w-24 shrink-0 text-right text-[12px] font-medium text-[#1b1e24]">{display}</span>
+    </div>
+  );
+}
+
+/** Revenue per month (last 6), simple SVG column chart. */
+function RevenueChart({ orders, title }: { orders: Order[]; title: string }) {
+  const months: { key: string; label: string; v: number }[] = [];
+  const now = new Date();
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = d.toISOString().slice(0, 7);
+    months.push({ key, label: key.slice(5), v: 0 });
+  }
+  orders.forEach((o) => {
+    const m = months.find((x) => x.key === o.createdAt.slice(0, 7));
+    if (m) m.v += o.gross;
+  });
+  const max = Math.max(1, ...months.map((m) => m.v));
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border border-[#e4e6ea] bg-white p-5 shadow-sm">
+      <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#8a8f98]">{title}</span>
+      <svg viewBox="0 0 300 120" className="h-auto w-full">
+        {months.map((m, i) => {
+          const h = Math.max(2, (m.v / max) * 88);
+          const x = 14 + i * 48;
+          return (
+            <g key={m.key}>
+              <rect x={x} y={100 - h} width={30} height={h} rx="3" fill={m.v > 0 ? "#2563eb" : "#e5e7eb"} opacity={m.v > 0 ? 0.9 : 1} />
+              {m.v > 0 && (
+                <text x={x + 15} y={95 - h} fontSize="8" textAnchor="middle" fill="#5b6069">
+                  {Math.round(m.v / 1000)}k
+                </text>
+              )}
+              <text x={x + 15} y={113} fontSize="8.5" textAnchor="middle" fill="#8a8f98">
+                {m.label}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
     </div>
   );
 }
@@ -111,23 +204,24 @@ function DashboardTab({
   const maxV = Math.max(1, ...bySystem.map((x) => x.v));
 
   return (
-    <div className="flex flex-col gap-8">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Kpi label={t.dash.revenue} value={chf(revenue)} />
-        <Kpi label={t.dash.openOrders} value={String(openOrders)} />
-        <Kpi label={t.dash.openQuotes} value={String(quotes.length)} />
-        <Kpi label={t.dash.avgOrder} value={real.length ? chf(revenue / real.length) : "—"} />
+    <div className="flex flex-col gap-5">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Kpi label={t.dash.revenue} value={chf(revenue)} hue="#16a34a" icon="invoices" />
+        <Kpi label={t.dash.openOrders} value={String(openOrders)} hue="#ea580c" icon="production" />
+        <Kpi label={t.dash.openQuotes} value={String(quotes.length)} hue="#2563eb" icon="orders" />
+        <Kpi label={t.dash.avgOrder} value={real.length ? chf(revenue / real.length) : "—"} hue="#7c3aed" icon="pricing" />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="flex flex-col gap-3 border border-hairline p-5">
-          <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone">{t.dash.byStatus}</span>
+      <div className="grid gap-4 xl:grid-cols-3">
+        <RevenueChart orders={real} title={t.dash.months} />
+        <div className="flex flex-col gap-3 rounded-lg border border-[#e4e6ea] bg-white p-5 shadow-sm">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#8a8f98]">{t.dash.byStatus}</span>
           {byStatus.map((x) => (
-            <BarRow key={x.s} label={statusLabels[x.s]} value={x.n} max={maxN} display={String(x.n)} />
+            <BarRow key={x.s} label={statusLabels[x.s]} value={x.n} max={maxN} display={String(x.n)} hue={STATUS_HUES[x.s]} />
           ))}
         </div>
-        <div className="flex flex-col gap-3 border border-hairline p-5">
-          <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone">{t.dash.bySystem}</span>
+        <div className="flex flex-col gap-3 rounded-lg border border-[#e4e6ea] bg-white p-5 shadow-sm">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#8a8f98]">{t.dash.bySystem}</span>
           {bySystem.map((x) => (
             <BarRow
               key={x.sys}
@@ -135,21 +229,22 @@ function DashboardTab({
               value={x.v}
               max={maxV}
               display={chf(x.v)}
+              hue={x.sys === "glass" ? "#0d9488" : "#2563eb"}
             />
           ))}
         </div>
       </div>
 
-      <div className="flex flex-col border border-hairline p-5">
-        <span className="pb-3 text-[11px] font-medium uppercase tracking-[0.14em] text-stone">{t.dash.recent}</span>
-        {orders.slice(0, 5).map((o) => (
-          <div key={o.ref} className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 border-t border-hairline/70 py-2">
-            <span className="text-sm text-ink">{o.ref}</span>
-            <span className="flex-1 text-sm font-light text-graphite">
+      <div className="flex flex-col rounded-lg border border-[#e4e6ea] bg-white p-5 shadow-sm">
+        <span className="pb-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-[#8a8f98]">{t.dash.recent}</span>
+        {orders.slice(0, 6).map((o) => (
+          <div key={o.ref} className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 border-t border-[#eef0f3] py-2.5">
+            <span className="w-24 text-[13px] font-semibold text-[#1b1e24]">{o.ref}</span>
+            <span className="flex-1 truncate text-[13px] text-[#5b6069]">
               {o.customer.name} · {o.system === "glass" ? cfgDict.systemGlass : cfgDict.systemBars} · {o.lengthM.toLocaleString("de-CH")} m
             </span>
-            <span className="text-xs font-light text-stone">{statusLabels[o.status]}</span>
-            <span className="text-sm font-light text-ink">{chf(o.gross)}</span>
+            <StatusChip status={o.status} label={statusLabels[o.status]} />
+            <span className="w-28 text-right text-[13px] font-medium text-[#1b1e24]">{chf(o.gross)}</span>
           </div>
         ))}
       </div>
@@ -552,11 +647,11 @@ function OrdersTable({ t, statusLabels, cfgDict, invoiceDict, locale }: { t: Adm
     <div className="flex flex-col gap-6">
       {/* summary strip */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <Kpi label={t.orders.openOrders} value={String(stats.open)} />
-        <Kpi label={t.orders.inProduction} value={String(stats.production)} />
-        <Kpi label={t.orders.openInvoices} value={String(stats.invoices)} />
-        <Kpi label={t.orders.openQuotes} value={String(stats.quotes)} />
-        <Kpi label={t.orders.pipelineValue} value={chf(stats.pipeline)} />
+        <Kpi label={t.orders.openOrders} value={String(stats.open)} hue="#7c3aed" icon="orders" />
+        <Kpi label={t.orders.inProduction} value={String(stats.production)} hue="#ea580c" icon="production" />
+        <Kpi label={t.orders.openInvoices} value={String(stats.invoices)} hue="#4f46e5" icon="invoices" />
+        <Kpi label={t.orders.openQuotes} value={String(stats.quotes)} hue="#2563eb" icon="pricing" />
+        <Kpi label={t.orders.pipelineValue} value={chf(stats.pipeline)} hue="#16a34a" icon="dashboard" />
       </div>
 
       {/* toolbar */}
@@ -638,6 +733,144 @@ function OrdersTable({ t, statusLabels, cfgDict, invoiceDict, locale }: { t: Adm
                   <StatusSteps status={o.status} flow={flow} labels={statusLabels} showLabel={false} />
                 </span>
               </button>
+            );
+          })}
+        </div>
+      )}
+
+      {selected && (
+        <OrderDrawer
+          order={selected}
+          t={t}
+          statusLabels={statusLabels}
+          cfgDict={cfgDict}
+          invoiceDict={invoiceDict}
+          locale={locale}
+          onClose={() => setOpenRef(null)}
+          advance={advance}
+          sendQuote={sendQuote}
+          markAccepted={markAccepted}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ---------- operational views: production / logistics / invoicing ---------- */
+
+/**
+ * A filtered lens on the order book for one operational role: which orders
+ * need work in this station, their value, and one-click access to the
+ * documents and the next lifecycle step.
+ */
+function OpsView({
+  t,
+  statusLabels,
+  cfgDict,
+  invoiceDict,
+  locale,
+  statuses,
+  accent,
+  hint,
+}: {
+  t: AdminDict;
+  statusLabels: Dict["portal"]["status"];
+  cfgDict: Dict["cfg"];
+  invoiceDict: Dict["portal"]["invoice"];
+  locale?: string;
+  statuses: OrderStatus[];
+  accent: string;
+  hint: string;
+}) {
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [openRef, setOpenRef] = useState<string | null>(null);
+  const refresh = () => {
+    if (hasBackend) api.listOrders().then(setOrders).catch(() => {});
+    else setOrders(loadOrders());
+  };
+  useEffect(refresh, []);
+
+  const advance = (ref: string, status: OrderStatus) => {
+    if (hasBackend) {
+      api.patchOrder(ref, { status }).then(refresh).catch(() => {});
+      return;
+    }
+    updateOrderStatus(ref, status);
+    refresh();
+  };
+  const sendQuote = (o: Order, value: number) => {
+    if (!Number.isFinite(value) || value <= 0) return;
+    if (hasBackend) {
+      api.patchOrder(o.ref, { quotedGross: value }).then(refresh).catch(() => {});
+      return;
+    }
+    updateOrder(o.ref, { status: "quoted", quotedGross: value });
+    logEvent(o.ref, "quoted", o.customer.email);
+    refresh();
+  };
+  const markAccepted = (o: Order) => {
+    if (hasBackend) {
+      api.patchOrder(o.ref, { accept: true }).then(refresh).catch(() => {});
+      return;
+    }
+    acceptQuote(o.ref);
+    refresh();
+  };
+
+  const list = orders
+    .filter((o) => o.kind === "order" && statuses.includes(o.status))
+    .sort((a, b) => statuses.indexOf(a.status) - statuses.indexOf(b.status));
+  const total = list.reduce((s, o) => s + o.gross, 0);
+  const selected = list.find((o) => o.ref === openRef) ?? orders.find((o) => o.ref === openRef) ?? null;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-[#e4e6ea] bg-white px-5 py-3.5 shadow-sm">
+        <span className="flex items-center gap-2 text-sm font-semibold text-[#1b1e24]">
+          <span className="h-2.5 w-2.5 rounded-full" style={{ background: accent }} />
+          {list.length} {t.ops.count}
+        </span>
+        <span className="text-sm text-[#5b6069]">
+          {t.ops.value}: <span className="font-medium text-[#1b1e24]">{chf(total)}</span>
+        </span>
+        <span className="ml-auto text-[11px] text-[#8a8f98]">{hint}</span>
+      </div>
+
+      {list.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-[#d6d9de] p-8 text-center text-sm text-[#8a8f98]">{t.ops.empty}</p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {list.map((o) => {
+            const idx = ORDER_FLOW.indexOf(o.status);
+            const next = idx >= 0 && idx < ORDER_FLOW.length - 1 ? ORDER_FLOW[idx + 1] : null;
+            return (
+              <div key={o.ref} className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-lg border border-[#e4e6ea] bg-white px-4 py-3 shadow-sm transition-shadow hover:shadow-md">
+                <StatusChip status={o.status} label={statusLabels[o.status]} />
+                <button type="button" onClick={() => setOpenRef(o.ref)} className="text-[13px] font-semibold text-[#1b1e24] underline-offset-4 hover:underline">
+                  {o.ref}
+                </button>
+                <span className="min-w-0 flex-1 truncate text-[13px] text-[#5b6069]">
+                  {o.customer.name} · {o.customer.city} · {o.system === "glass" ? cfgDict.systemGlass : cfgDict.systemBars} · {o.lengthM.toLocaleString("de-CH")} m
+                </span>
+                <span className="text-[13px] font-medium text-[#1b1e24]">{chf(o.gross)}</span>
+                {next && (
+                  <button
+                    type="button"
+                    onClick={() => advance(o.ref, next)}
+                    className="rounded-md px-3 py-1.5 text-[11px] font-semibold text-white transition-opacity hover:opacity-85"
+                    style={{ background: accent }}
+                  >
+                    {statusLabels[next]} ›
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setOpenRef(o.ref)}
+                  className="rounded-md border border-[#d6d9de] px-3 py-1.5 text-[11px] font-medium text-[#5b6069] transition-colors hover:border-[#8a8f98] hover:text-[#1b1e24]"
+                >
+                  {t.ops.open}
+                </button>
+              </div>
             );
           })}
         </div>
@@ -1658,29 +1891,109 @@ export default function AdminApp({
 }) {
   const [tab, setTab] = useState<Tab>("dashboard");
 
-  return (
-    <div className="flex flex-col gap-8">
-      <div className="flex flex-wrap gap-px self-start bg-hairline">
-        {(["dashboard", "orders", "customers", "pricing", "products", "content"] as const).map((v) => (
-          <button
-            key={v}
-            type="button"
-            onClick={() => setTab(v)}
-            className={`px-5 py-2.5 text-xs uppercase tracking-[0.14em] transition-colors ${
-              tab === v ? "bg-ink text-paper" : "bg-paper text-graphite hover:text-ink"
-            }`}
-          >
-            {t.tabs[v]}
-          </button>
-        ))}
-      </div>
+  const groups: { label: string; items: { v: Tab; icon: string }[] }[] = [
+    { label: t.erp.control, items: [{ v: "dashboard", icon: "dashboard" }] },
+    {
+      label: t.erp.sales,
+      items: [
+        { v: "orders", icon: "orders" },
+        { v: "invoices", icon: "invoices" },
+        { v: "customers", icon: "customers" },
+      ],
+    },
+    {
+      label: t.erp.operations,
+      items: [
+        { v: "production", icon: "production" },
+        { v: "logistics", icon: "logistics" },
+      ],
+    },
+    {
+      label: t.erp.catalog,
+      items: [
+        { v: "products", icon: "products" },
+        { v: "pricing", icon: "pricing" },
+        { v: "content", icon: "content" },
+      ],
+    },
+  ];
 
-      {tab === "dashboard" && <DashboardTab t={t} statusLabels={statusLabels} cfgDict={cfgDict} />}
-      {tab === "orders" && <OrdersTable t={t} statusLabels={statusLabels} cfgDict={cfgDict} invoiceDict={invoiceDict} locale={locale} />}
-      {tab === "customers" && <CustomersTab t={t} />}
-      {tab === "pricing" && <PricingEditor t={t} />}
-      {tab === "products" && <ProductsTab t={t} cfgDict={cfgDict} />}
-      {tab === "content" && <ContentSection t={t} refsDict={refsDict} aboutDict={aboutDict} locale={locale} />}
+  return (
+    <div className="flex min-h-[760px] flex-col overflow-hidden rounded-xl border border-[#1c212b] bg-[#f3f4f6] shadow-2xl md:flex-row">
+      {/* ERP sidebar */}
+      <aside className="flex w-full shrink-0 flex-col gap-5 bg-[#151a23] px-3 py-5 md:w-56">
+        <span className="px-3 text-[13px] font-semibold tracking-[0.18em] text-white">
+          AXIOFORM <span className="rounded bg-[#2563eb] px-1.5 py-0.5 text-[9px] font-bold tracking-[0.1em]">ERP</span>
+        </span>
+        <nav className="flex flex-col gap-4">
+          {groups.map((g) => (
+            <div key={g.label} className="flex flex-col gap-0.5">
+              <span className="px-3 pb-1 text-[9.5px] font-semibold uppercase tracking-[0.16em] text-[#5c6472]">{g.label}</span>
+              {g.items.map(({ v, icon }) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setTab(v)}
+                  className={`flex items-center gap-2.5 rounded-md px-3 py-2 text-left text-[12.5px] transition-colors ${
+                    tab === v ? "bg-[#242b38] font-medium text-white" : "text-[#9aa1ac] hover:bg-[#1c2230] hover:text-white"
+                  }`}
+                >
+                  <span style={tab === v ? { color: "#60a5fa" } : undefined}>
+                    <NavIcon name={icon} />
+                  </span>
+                  {t.tabs[v]}
+                </button>
+              ))}
+            </div>
+          ))}
+        </nav>
+      </aside>
+
+      {/* workspace */}
+      <main className="min-w-0 flex-1 overflow-x-auto p-4 md:p-6">
+        {tab === "dashboard" && <DashboardTab t={t} statusLabels={statusLabels} cfgDict={cfgDict} />}
+        {tab === "orders" && <OrdersTable t={t} statusLabels={statusLabels} cfgDict={cfgDict} invoiceDict={invoiceDict} locale={locale} />}
+        {tab === "production" && (
+          <OpsView
+            t={t}
+            statusLabels={statusLabels}
+            cfgDict={cfgDict}
+            invoiceDict={invoiceDict}
+            locale={locale}
+            statuses={["new", "confirmed", "production"]}
+            accent="#ea580c"
+            hint={t.ops.productionHint}
+          />
+        )}
+        {tab === "logistics" && (
+          <OpsView
+            t={t}
+            statusLabels={statusLabels}
+            cfgDict={cfgDict}
+            invoiceDict={invoiceDict}
+            locale={locale}
+            statuses={["confirmed", "production", "shipped"]}
+            accent="#0d9488"
+            hint={t.ops.logisticsHint}
+          />
+        )}
+        {tab === "invoices" && (
+          <OpsView
+            t={t}
+            statusLabels={statusLabels}
+            cfgDict={cfgDict}
+            invoiceDict={invoiceDict}
+            locale={locale}
+            statuses={["shipped", "invoiced", "paid"]}
+            accent="#4f46e5"
+            hint={t.ops.invoicesHint}
+          />
+        )}
+        {tab === "customers" && <CustomersTab t={t} />}
+        {tab === "pricing" && <PricingEditor t={t} />}
+        {tab === "products" && <ProductsTab t={t} cfgDict={cfgDict} />}
+        {tab === "content" && <ContentSection t={t} refsDict={refsDict} aboutDict={aboutDict} locale={locale} />}
+      </main>
     </div>
   );
 }
