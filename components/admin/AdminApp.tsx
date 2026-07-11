@@ -569,11 +569,99 @@ function OrderDrawer({
 
 type KindFilter = "all" | "order" | "quote";
 type SortKey = "newest" | "value";
+type OrdersViewMode = "kanban" | "list";
+
+/** Drag-and-drop order board: one column per lifecycle status. */
+function KanbanBoard({
+  orders,
+  statusLabels,
+  cfgDict,
+  onDrop,
+  onOpen,
+}: {
+  orders: Order[];
+  statusLabels: Dict["portal"]["status"];
+  cfgDict: Dict["cfg"];
+  onDrop: (ref: string, status: OrderStatus) => void;
+  onOpen: (ref: string) => void;
+}) {
+  const [dragRef, setDragRef] = useState<string | null>(null);
+  const [overCol, setOverCol] = useState<OrderStatus | null>(null);
+
+  return (
+    <div className="flex items-start gap-3 overflow-x-auto pb-2">
+      {ORDER_FLOW.map((s) => {
+        const col = orders.filter((o) => o.status === s);
+        const hue = STATUS_HUES[s];
+        const sum = col.reduce((a, o) => a + o.gross, 0);
+        return (
+          <div
+            key={s}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setOverCol(s);
+            }}
+            onDragLeave={() => setOverCol((c) => (c === s ? null : c))}
+            onDrop={(e) => {
+              e.preventDefault();
+              if (dragRef) onDrop(dragRef, s);
+              setDragRef(null);
+              setOverCol(null);
+            }}
+            className={`flex w-56 shrink-0 flex-col gap-2 rounded-lg p-2.5 pt-2 transition-colors ${
+              overCol === s && dragRef ? "bg-[#dbe3ec] ring-2 ring-inset" : "bg-[#eceef1]"
+            }`}
+            style={{ borderTop: `3px solid ${hue}`, ...(overCol === s && dragRef ? ({ ["--tw-ring-color" as string]: `${hue}66` } as React.CSSProperties) : {}) }}
+          >
+            <div className="flex items-baseline justify-between gap-2 px-1 pb-1">
+              <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em]" style={{ color: hue }}>
+                {statusLabels[s]}
+                <span className="rounded-full bg-white px-1.5 text-[10px] font-bold text-[#5b6069]">{col.length}</span>
+              </span>
+              {sum > 0 && <span className="whitespace-nowrap text-[10px] text-[#8a8f98]">{Math.round(sum / 1000)}k</span>}
+            </div>
+            {col.map((o) => (
+              <div
+                key={o.ref}
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.effectAllowed = "move";
+                  setDragRef(o.ref);
+                }}
+                onDragEnd={() => {
+                  setDragRef(null);
+                  setOverCol(null);
+                }}
+                onClick={() => onOpen(o.ref)}
+                className={`cursor-grab rounded-md border border-[#e4e6ea] bg-white p-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing ${
+                  dragRef === o.ref ? "opacity-50" : ""
+                }`}
+              >
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="text-[12px] font-semibold text-[#1b1e24]">{o.ref}</span>
+                  <span className="whitespace-nowrap text-[11px] font-medium text-[#1b1e24]">{chf(o.gross)}</span>
+                </div>
+                <span className="mt-0.5 block truncate text-[11.5px] text-[#5b6069]">{o.customer.name}</span>
+                <span className="block truncate text-[10.5px] text-[#9aa1ac]">
+                  {o.system === "glass" ? cfgDict.systemGlass : cfgDict.systemBars} · {o.lengthM.toLocaleString("de-CH")} m
+                </span>
+              </div>
+            ))}
+            {col.length === 0 && (
+              <div className="rounded-md border border-dashed border-[#c9cdd4] py-4 text-center text-[11px] text-[#a8adb6]">—</div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 function OrdersTable({ t, statusLabels, cfgDict, invoiceDict, locale }: { t: AdminDict; statusLabels: Dict["portal"]["status"]; cfgDict: Dict["cfg"]; invoiceDict: Dict["portal"]["invoice"]; locale?: string }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [openRef, setOpenRef] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [view, setView] = useState<OrdersViewMode>("kanban");
   const [kindF, setKindF] = useState<KindFilter>("all");
   const [statusF, setStatusF] = useState<OrderStatus | "all">("all");
   const [sort, setSort] = useState<SortKey>("newest");
@@ -695,10 +783,51 @@ function OrdersTable({ t, statusLabels, cfgDict, invoiceDict, locale }: { t: Adm
           <option value="newest">{t.orders.sortNewest}</option>
           <option value="value">{t.orders.sortValue}</option>
         </select>
+        <div className="flex overflow-hidden rounded-md border border-[#d6d9de]">
+          {(
+            [
+              { v: "kanban", l: t.orders.viewKanban },
+              { v: "list", l: t.orders.viewList },
+            ] as const
+          ).map((o) => (
+            <button
+              key={o.v}
+              type="button"
+              onClick={() => setView(o.v)}
+              className={`px-3 py-2 text-[11px] font-medium uppercase tracking-[0.1em] transition-colors ${
+                view === o.v ? "bg-[#1b1e24] text-white" : "bg-white text-[#5b6069] hover:text-[#1b1e24]"
+              }`}
+            >
+              {o.l}
+            </button>
+          ))}
+        </div>
       </div>
 
+      {/* board: drag a card into the next column to advance the order */}
+      {view === "kanban" && kindF !== "quote" && (
+        <>
+          <KanbanBoard
+            orders={filtered.filter((o) => o.kind === "order")}
+            statusLabels={statusLabels}
+            cfgDict={cfgDict}
+            onDrop={advance}
+            onOpen={setOpenRef}
+          />
+          {filtered.some((o) => o.kind === "quote") && (
+            <button
+              type="button"
+              onClick={() => setKindF("quote")}
+              className="self-start text-[12px] text-[#2563eb] underline-offset-4 hover:underline"
+            >
+              {fmt(t.orders.kanbanQuotes, { n: filtered.filter((o) => o.kind === "quote").length })} ›
+            </button>
+          )}
+        </>
+      )}
+
       {/* rows */}
-      {filtered.length === 0 ? (
+      {(view === "list" || kindF === "quote") && (filtered.length === 0 ? (
         <p className="border border-dashed border-hairline p-8 text-center text-sm font-light text-stone">{t.orders.empty}</p>
       ) : (
         <div className="flex flex-col border-t border-hairline">
@@ -736,7 +865,7 @@ function OrdersTable({ t, statusLabels, cfgDict, invoiceDict, locale }: { t: Adm
             );
           })}
         </div>
-      )}
+      ))}
 
       {selected && (
         <OrderDrawer
