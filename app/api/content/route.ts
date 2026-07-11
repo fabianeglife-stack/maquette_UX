@@ -2,14 +2,15 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/server/db";
 import { sessionUser } from "@/lib/server/auth";
 
-/** CMS content rows, one JSON blob per page. */
-const CONTENT_IDS = ["references", "about", "home"] as const;
+/** CMS content rows, one JSON blob per page (typeplans: principle PDFs per type × fixing). */
+const CONTENT_IDS = ["references", "about", "home", "typeplans"] as const;
 type ContentId = (typeof CONTENT_IDS)[number];
 
 const EMPTY: Record<ContentId, unknown> = {
   references: { projects: {}, added: [] },
   about: {},
   home: {},
+  typeplans: {},
 };
 
 function contentId(raw: string | null): ContentId | null {

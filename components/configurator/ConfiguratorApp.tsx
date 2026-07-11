@@ -24,11 +24,13 @@ import {
   getSession,
   newRef,
   saveOrder,
+  planFor,
   TIER_DISCOUNT,
   tierFor,
   type Order,
+  type TypePlans,
 } from "@/lib/store";
-import { addSavedConfig, fetchAllTypes, fetchPriceBook } from "@/lib/data";
+import { addSavedConfig, fetchAllTypes, fetchPageContent, fetchPriceBook } from "@/lib/data";
 import { api, hasBackend } from "@/lib/api";
 import {
   FinishIcon,
@@ -246,6 +248,7 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
   const [panel, setPanel] = useState<{ kind: "order" | "quote"; ref: string } | null>(null);
   const [pb, setPb] = useState<PriceBook>(defaultPriceBook);
   const [types, setTypes] = useState<TypeProfile[]>(builtinTypes);
+  const [typePlans, setTypePlans] = useState<TypePlans>({});
   const [loaded, setLoaded] = useState(false);
   const [saveOpen, setSaveOpen] = useState(false);
   const [saveName, setSaveName] = useState("");
@@ -271,6 +274,7 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
     }
     fetchPriceBook().then(setPb);
     fetchAllTypes().then(setTypes);
+    fetchPageContent<TypePlans>("typeplans", {}).then(setTypePlans);
     if (hasBackend) {
       api.me().then((u) => setDiscount(TIER_DISCOUNT[u?.tier ?? "standard"])).catch(() => {});
     } else {
@@ -443,19 +447,28 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
                 );
               })}
           </div>
-          {tp.planUrl && (
-            <a
-              href={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}${tp.planUrl}`}
-              target="_blank"
-              rel="noopener"
-              className="inline-flex w-fit items-center gap-2 border border-hairline px-3.5 py-2.5 text-[11px] font-medium uppercase tracking-[0.14em] text-graphite transition-colors hover:border-graphite hover:text-ink"
-            >
-              <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" aria-hidden>
-                <path d="M8 1v9M4.5 6.5 8 10l3.5-3.5M2 13h12" fill="none" stroke="currentColor" strokeWidth="1.4" />
-              </svg>
-              {t.planPdf}
-            </a>
-          )}
+          {(() => {
+            // Principle plan for the selected type AND fixing situation:
+            // admin-uploaded plan wins, the type's built-in PDF is the fallback.
+            const mounting = SUBSTRATE_MOUNTING[cfg.substrate ?? "concrete_top"];
+            const plan = planFor(typePlans, tp.id, mounting, tp.planUrl);
+            if (!plan) return null;
+            const uploaded = plan.startsWith("data:");
+            return (
+              <a
+                href={uploaded ? plan : `${process.env.NEXT_PUBLIC_BASE_PATH || ""}${plan}`}
+                {...(uploaded
+                  ? { download: `axioform-plan-${tp.id}-${mounting}.pdf` }
+                  : { target: "_blank", rel: "noopener" })}
+                className="inline-flex w-fit items-center gap-2 border border-hairline px-3.5 py-2.5 text-[11px] font-medium uppercase tracking-[0.14em] text-graphite transition-colors hover:border-graphite hover:text-ink"
+              >
+                <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" aria-hidden>
+                  <path d="M8 1v9M4.5 6.5 8 10l3.5-3.5M2 13h12" fill="none" stroke="currentColor" strokeWidth="1.4" />
+                </svg>
+                {t.planPdf}
+              </a>
+            );
+          })()}
         </section>
 
         {/* 2 — geometry */}

@@ -27,6 +27,7 @@ import {
   type OrderStatus,
   type RefProject,
   type Tier,
+  type TypePlans,
 } from "@/lib/store";
 import {
   fetchAllTypes,
@@ -854,6 +855,143 @@ function PricingEditor({ t }: { t: AdminDict }) {
   );
 }
 
+/* ---------- principle plans per type × fixing (admin uploads) ---------- */
+
+/** Read an uploaded principle-drawing PDF as a data URL (≤ 3 MB). */
+function readPdfFile(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (file.type !== "application/pdf") return reject(new Error("not_pdf"));
+    if (file.size > 3 * 1024 * 1024) return reject(new Error("too_big"));
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result));
+    r.onerror = () => reject(new Error("read_failed"));
+    r.readAsDataURL(file);
+  });
+}
+
+function PlanCell({
+  t,
+  typeId,
+  mounting,
+  current,
+  hasDefault,
+  onChange,
+}: {
+  t: AdminDict;
+  typeId: string;
+  mounting: "top" | "side";
+  current?: string;
+  hasDefault: boolean;
+  onChange: (value?: string) => void;
+  onError?: () => void;
+}) {
+  const [err, setErr] = useState(false);
+  const pick = (
+    <label className="cursor-pointer border border-hairline px-3 py-1.5 text-[10px] uppercase tracking-[0.12em] text-graphite transition-colors hover:border-graphite hover:text-ink">
+      {current ? t.plans.replace : t.plans.upload}
+      <input
+        type="file"
+        accept="application/pdf"
+        className="hidden"
+        onChange={async (e) => {
+          const f = e.target.files?.[0];
+          e.target.value = "";
+          if (!f) return;
+          try {
+            setErr(false);
+            onChange(await readPdfFile(f));
+          } catch {
+            setErr(true);
+          }
+        }}
+      />
+    </label>
+  );
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex flex-wrap items-center gap-2">
+        {current && (
+          <>
+            <a
+              href={current}
+              download={`axioform-plan-${typeId}-${mounting}.pdf`}
+              className="border border-ink/40 px-3 py-1.5 text-[10px] uppercase tracking-[0.12em] text-ink transition-colors hover:bg-ink hover:text-paper"
+            >
+              ↓ {t.plans.view}
+            </a>
+            <button
+              type="button"
+              onClick={() => onChange(undefined)}
+              className="px-1 text-[10px] uppercase tracking-[0.12em] text-alert underline-offset-2 hover:underline"
+            >
+              {t.plans.remove}
+            </button>
+          </>
+        )}
+        {pick}
+      </div>
+      {!current && hasDefault && <span className="text-[10px] font-light text-stone">{t.plans.defaultNote}</span>}
+      {err && (
+        <span role="alert" className="text-[10px] text-alert">
+          {t.plans.tooBig}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** Upload a principle drawing (PDF) per type × fixing situation. */
+function PlansSection({ t, types }: { t: AdminDict; types: TypeProfile[] }) {
+  const [plans, setPlans] = useState<TypePlans>({});
+  const [saved, setSaved] = useState(false);
+  useEffect(() => {
+    fetchPageContent<TypePlans>("typeplans", {}).then(setPlans);
+  }, []);
+
+  const set = (typeId: string, mounting: "top" | "side", value?: string) => {
+    const entry = { ...(plans[typeId] ?? {}) };
+    if (value) entry[mounting] = value;
+    else delete entry[mounting];
+    const next = { ...plans, [typeId]: entry };
+    setPlans(next);
+    putPageContent("typeplans", next)
+      .then(() => {
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2500);
+      })
+      .catch(() => {});
+  };
+
+  const active = types.filter((x) => x.active);
+  return (
+    <div className="flex max-w-3xl flex-col gap-4 border border-hairline p-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <span className="text-xs font-medium uppercase tracking-[0.16em] text-ink">{t.plans.title}</span>
+        {saved && (
+          <span role="status" className="text-[11px] font-light text-steel">
+            {t.plans.saved}
+          </span>
+        )}
+      </div>
+      <p className="text-xs font-light leading-relaxed text-stone">{t.plans.hint}</p>
+      <div className="grid gap-x-6 gap-y-3 sm:grid-cols-[1fr_1fr_1fr]">
+        <span className="hidden text-[10px] uppercase tracking-[0.12em] text-stone sm:block" />
+        <span className="hidden text-[10px] uppercase tracking-[0.12em] text-stone sm:block">{t.plans.colTop}</span>
+        <span className="hidden text-[10px] uppercase tracking-[0.12em] text-stone sm:block">{t.plans.colSide}</span>
+        {active.map((x) => (
+          <div key={x.id} className="contents">
+            <span className="self-center border-t border-hairline/60 pt-3 text-sm font-light text-ink sm:border-t-0 sm:pt-0">
+              {x.name?.de ?? x.id}
+            </span>
+            <PlanCell t={t} typeId={x.id} mounting="top" current={plans[x.id]?.top} hasDefault={!!x.planUrl} onChange={(v) => set(x.id, "top", v)} />
+            <PlanCell t={t} typeId={x.id} mounting="side" current={plans[x.id]?.side} hasDefault={!!x.planUrl} onChange={(v) => set(x.id, "side", v)} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /* ---------- products tab: parametric type designer ---------- */
 
 function ProductsTab({ t, cfgDict }: { t: AdminDict; cfgDict: Dict["cfg"] }) {
@@ -970,6 +1108,8 @@ function ProductsTab({ t, cfgDict }: { t: AdminDict; cfgDict: Dict["cfg"] }) {
           {t.typesForm.created}
         </p>
       )}
+
+      <PlansSection t={t} types={types} />
     </div>
   );
 }

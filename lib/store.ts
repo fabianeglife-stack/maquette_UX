@@ -271,6 +271,17 @@ export interface HomeContent {
   heroImage?: string;
 }
 
+/**
+ * Admin-uploaded principle drawings per guardrail type and fixing situation
+ * (bottom = mounted on the slab, side = lateral). Values are PDF data-URLs
+ * (prototype) or hosted URLs; the type's built-in planUrl is the fallback.
+ */
+export type TypePlans = Record<string, { top?: string; side?: string }>;
+
+export function planFor(plans: TypePlans, typeId: string, mounting: "top" | "side", fallback?: string): string | undefined {
+  return plans[typeId]?.[mounting] ?? fallback;
+}
+
 export function loadPageContent<T>(id: string, empty: T): T {
   try {
     const raw = localStorage.getItem(`axioform-content-${id}-v1`);
