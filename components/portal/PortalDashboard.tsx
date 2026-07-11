@@ -22,6 +22,7 @@ import { fetchAllTypes, fetchSavedConfigs, removeSavedConfig, resolveType } from
 import type { TypeProfile } from "@/lib/engine/types";
 import type { Dict } from "@/lib/i18n";
 import { api, hasBackend } from "@/lib/api";
+import { notify } from "@/lib/toast";
 import StatusSteps from "@/components/StatusSteps";
 import { PlanSketch } from "@/components/configurator/visual";
 
@@ -79,7 +80,7 @@ function OrderCard({
             type="button"
             onClick={() => {
               if (hasBackend) {
-                api.patchOrder(order.ref, { accept: true }).then(onRefresh).catch(() => {});
+                api.patchOrder(order.ref, { accept: true }).then(onRefresh).catch(() => notify("saveFailed"));
               } else {
                 acceptQuote(order.ref);
                 onRefresh();
@@ -155,7 +156,10 @@ export default function PortalDashboard({
           setSess(u ? { email: u.email } : null);
           if (u) setOrders(await api.listOrders());
         })
-        .catch(() => setSess(null))
+        .catch(() => {
+          setSess(null);
+          notify("loadFailed");
+        })
         .finally(() => setReady(true));
     } else {
       setSess(getSession());
@@ -165,7 +169,7 @@ export default function PortalDashboard({
   }, []);
 
   const refresh = () => {
-    if (hasBackend) api.listOrders().then(setOrders).catch(() => {});
+    if (hasBackend) api.listOrders().then(setOrders).catch(() => notify("loadFailed"));
     else setOrders(loadOrders());
   };
 
@@ -212,7 +216,7 @@ export default function PortalDashboard({
           <button
             type="button"
             onClick={() => {
-              if (hasBackend) api.logout().catch(() => {});
+              if (hasBackend) api.logout().catch(() => notify("saveFailed"));
               clearSession();
               setSess(null);
             }}
@@ -265,7 +269,7 @@ export default function PortalDashboard({
                         removeSavedConfig(s.id)
                           .then(() => fetchSavedConfigs())
                           .then(setSaved)
-                          .catch(() => {});
+                          .catch(() => notify("saveFailed"));
                       }}
                       className="text-xs uppercase tracking-[0.12em] text-stone underline-offset-4 hover:text-ink hover:underline"
                     >

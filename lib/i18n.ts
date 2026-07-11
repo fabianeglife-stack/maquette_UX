@@ -8,6 +8,11 @@ export function fmt(tpl: string, params: Record<string, string | number>): strin
 }
 
 const de = {
+  common: {
+    loadFailed: "Daten konnten nicht geladen werden.",
+    saveFailed: "Änderung konnte nicht gespeichert werden.",
+    close: "Schliessen",
+  },
   nav: {
     about: "Über uns",
     references: "Referenzen",
@@ -707,6 +712,11 @@ const de = {
 export type Dict = typeof de;
 
 const fr: Dict = {
+  common: {
+    loadFailed: "Impossible de charger les données.",
+    saveFailed: "La modification n'a pas pu être enregistrée.",
+    close: "Fermer",
+  },
   nav: {
     about: "À propos",
     references: "Références",
@@ -1404,6 +1414,11 @@ const fr: Dict = {
 };
 
 const en: Dict = {
+  common: {
+    loadFailed: "Could not load data.",
+    saveFailed: "The change could not be saved.",
+    close: "Close",
+  },
   nav: {
     about: "About us",
     references: "References",
