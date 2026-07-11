@@ -227,7 +227,7 @@ export function deriveRailing(cfg: RailingConfig, tp?: TypeProfile): DerivedRail
         const barBot = cfg.bottomGap + brDepth;
         const barTop = cfg.height - (hrDepth > 0 ? hrDepth : 40);
         const span = recipe.post.profile !== "none" ? spacing : seg.length;
-        const usable = span - 2 * postHalf;
+        const usable = Math.max(0, span - 2 * postHalf);
         const target = Math.min(cfg.barClear, inf.maxOpening);
         const n = Math.max(1, Math.ceil((usable - target) / (inf.memberSize + target)));
         actualClear = (usable - n * inf.memberSize) / (n + 1);
@@ -252,7 +252,7 @@ export function deriveRailing(cfg: RailingConfig, tp?: TypeProfile): DerivedRail
         const pitch = inf.pitch ?? inf.maxOpening + flatW;
         const a = rad(inf.angleDeg ?? 45);
         const span = recipe.post.profile !== "none" ? spacing : seg.length;
-        const usable = span - 2 * postHalf;
+        const usable = Math.max(0, span - 2 * postHalf);
         const n = Math.max(1, Math.floor(usable / pitch));
         const offset = (usable - (n - 1) * pitch) / 2;
         // Clear opening measured between the projected faces along the run.
@@ -298,7 +298,7 @@ export function deriveRailing(cfg: RailingConfig, tp?: TypeProfile): DerivedRail
       } else {
         // glass / sheet panels between joints of PANEL_GAP
         const n = Math.max(1, Math.ceil((seg.length - PANEL_GAP) / (inf.maxPanelWidth + PANEL_GAP)));
-        const width = (seg.length - (n + 1) * PANEL_GAP) / n;
+        const width = Math.max(0, (seg.length - (n + 1) * PANEL_GAP) / n);
         actualClear = PANEL_GAP;
         const panelH = cfg.height - cfg.bottomGap - hrDepth;
         for (let p = 0; p < n; p++) {
@@ -378,7 +378,7 @@ export function deriveRailing(cfg: RailingConfig, tp?: TypeProfile): DerivedRail
       caps,
       clamps,
       steps: stepCount > 0 ? { count: stepCount, len: stepLen } : null,
-      actualBarClear: actualClear,
+      actualBarClear: Math.max(0, actualClear),
       postSpacing: spacing,
       rise: dir.y * seg.length,
     });

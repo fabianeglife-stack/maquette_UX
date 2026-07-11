@@ -18,7 +18,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ ref: s
     if (order.kind !== "quote" || order.status !== "quoted") {
       return NextResponse.json({ error: "not_acceptable" }, { status: 409 });
     }
-    if (user.role !== "admin" && order.email !== user.email) {
+    // Ownership is the immutable userId link, not the mutable email field.
+    if (user.role !== "admin" && order.userId !== user.id) {
       return NextResponse.json({ error: "forbidden" }, { status: 403 });
     }
     const updated = await db.order.update({

@@ -198,6 +198,8 @@ const de = {
     siaTitle: "SIA-358-Prüfung",
     siaBadge: { pass: "SIA-Vorprüfung bestanden", warn: "Mit Hinweisen", fail: "Vorprüfung nicht bestanden" },
     rules: {
+      guardRequired: "Absturzhöhe {fh} m ≥ 1.0 m — Absturzsicherung erforderlich",
+      guardOptional: "Absturzhöhe {fh} m < 1.0 m — Absturzsicherung nicht zwingend",
       height: "Schutzhöhe {h} mm — min. 1000 mm",
       height12: "Absturzhöhe über 12 m: 1100 mm empfohlen (aktuell {h} mm)",
       openings: "Grösste Öffnung {clear} mm — Kugel Ø 120 mm darf nicht passieren",
@@ -887,6 +889,8 @@ const fr: Dict = {
     siaTitle: "Contrôle SIA 358",
     siaBadge: { pass: "Pré-contrôle SIA réussi", warn: "Avec remarques", fail: "Pré-contrôle non réussi" },
     rules: {
+      guardRequired: "Hauteur de chute {fh} m ≥ 1.0 m — garde-corps obligatoire",
+      guardOptional: "Hauteur de chute {fh} m < 1.0 m — garde-corps non obligatoire",
       height: "Hauteur de protection {h} mm — min. 1000 mm",
       height12: "Chute de plus de 12 m : 1100 mm recommandés (actuel {h} mm)",
       openings: "Plus grande ouverture {clear} mm — la sphère Ø 120 mm ne doit pas passer",
@@ -1574,6 +1578,8 @@ const en: Dict = {
     siaTitle: "SIA 358 check",
     siaBadge: { pass: "SIA pre-check passed", warn: "With notes", fail: "Pre-check failed" },
     rules: {
+      guardRequired: "Fall height {fh} m ≥ 1.0 m — guard mandatory",
+      guardOptional: "Fall height {fh} m < 1.0 m — guard not mandatory",
       height: "Guard height {h} mm — min. 1000 mm",
       height12: "Fall height above 12 m: 1100 mm recommended (currently {h} mm)",
       openings: "Largest opening {clear} mm — Ø 120 mm sphere must not pass",

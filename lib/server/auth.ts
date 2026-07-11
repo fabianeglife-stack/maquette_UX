@@ -2,7 +2,14 @@ import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import { db } from "./db";
 
-const secret = new TextEncoder().encode(process.env.AUTH_SECRET ?? "axioform-dev-secret");
+// Fail closed in production: a hardcoded fallback secret would let anyone forge
+// a session JWT (sub = any user id) and take over the admin account. The dev
+// fallback is only tolerated outside production so `npm run dev` still works.
+const rawSecret = process.env.AUTH_SECRET;
+if (process.env.NODE_ENV === "production" && (!rawSecret || rawSecret.length < 16)) {
+  throw new Error("AUTH_SECRET must be set to a strong value (≥16 chars) in production");
+}
+const secret = new TextEncoder().encode(rawSecret ?? "axioform-dev-secret");
 const COOKIE = "axioform-session";
 const MAX_AGE = 60 * 60 * 24 * 30; // 30 days
 
