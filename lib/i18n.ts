@@ -2,7 +2,17 @@ export const locales = ["de", "fr", "en"] as const;
 export type Locale = (typeof locales)[number];
 export const defaultLocale: Locale = "de";
 
+/** Fill {placeholders} in an i18n template string. */
+export function fmt(tpl: string, params: Record<string, string | number>): string {
+  return tpl.replace(/\{(\w+)\}/g, (_, k) => String(params[k] ?? ""));
+}
+
 const de = {
+  common: {
+    loadFailed: "Daten konnten nicht geladen werden.",
+    saveFailed: "Änderung konnte nicht gespeichert werden.",
+    close: "Schliessen",
+  },
   nav: {
     about: "Über uns",
     references: "Referenzen",
@@ -144,6 +154,9 @@ const de = {
   cfg: {
     tab3d: "3D-Ansicht",
     tabDrawing: "Zeichnung",
+    stepsNav: "Schritte",
+    view3d: "3D",
+    loading3d: "3D …",
     stepSystem: "System",
     stepGeometry: "Verlauf",
     stepOptions: "Montage & Optionen",
@@ -198,6 +211,8 @@ const de = {
     siaTitle: "SIA-358-Prüfung",
     siaBadge: { pass: "SIA-Vorprüfung bestanden", warn: "Mit Hinweisen", fail: "Vorprüfung nicht bestanden" },
     rules: {
+      guardRequired: "Absturzhöhe {fh} m ≥ 1.0 m — Absturzsicherung erforderlich",
+      guardOptional: "Absturzhöhe {fh} m < 1.0 m — Absturzsicherung nicht zwingend",
       height: "Schutzhöhe {h} mm — min. 1000 mm",
       height12: "Absturzhöhe über 12 m: 1100 mm empfohlen (aktuell {h} mm)",
       openings: "Grösste Öffnung {clear} mm — Kugel Ø 120 mm darf nicht passieren",
@@ -367,6 +382,11 @@ const de = {
     kicker: "Admin",
     title: "Betrieb.",
     lead: "Bestellungen verfolgen, Preise publizieren, Produkte verwalten — die Demo arbeitet mit lokalen Daten.",
+    gate: {
+      needLogin: "Der Admin-Bereich ist geschützt. Bitte melden Sie sich an.",
+      toLogin: "Anmelden",
+      forbidden: "Dieses Konto hat keine Admin-Berechtigung.",
+    },
     tabs: {
       dashboard: "Übersicht",
       orders: "Bestellungen",
@@ -692,6 +712,11 @@ const de = {
 export type Dict = typeof de;
 
 const fr: Dict = {
+  common: {
+    loadFailed: "Impossible de charger les données.",
+    saveFailed: "La modification n'a pas pu être enregistrée.",
+    close: "Fermer",
+  },
   nav: {
     about: "À propos",
     references: "Références",
@@ -833,6 +858,9 @@ const fr: Dict = {
   cfg: {
     tab3d: "Vue 3D",
     tabDrawing: "Plan",
+    stepsNav: "Étapes",
+    view3d: "3D",
+    loading3d: "3D …",
     stepSystem: "Système",
     stepGeometry: "Tracé",
     stepOptions: "Pose & options",
@@ -887,6 +915,8 @@ const fr: Dict = {
     siaTitle: "Contrôle SIA 358",
     siaBadge: { pass: "Pré-contrôle SIA réussi", warn: "Avec remarques", fail: "Pré-contrôle non réussi" },
     rules: {
+      guardRequired: "Hauteur de chute {fh} m ≥ 1.0 m — garde-corps obligatoire",
+      guardOptional: "Hauteur de chute {fh} m < 1.0 m — garde-corps non obligatoire",
       height: "Hauteur de protection {h} mm — min. 1000 mm",
       height12: "Chute de plus de 12 m : 1100 mm recommandés (actuel {h} mm)",
       openings: "Plus grande ouverture {clear} mm — la sphère Ø 120 mm ne doit pas passer",
@@ -1056,6 +1086,11 @@ const fr: Dict = {
     kicker: "Admin",
     title: "Exploitation.",
     lead: "Suivre les commandes, publier les prix, gérer les produits — la démo travaille avec des données locales.",
+    gate: {
+      needLogin: "L'espace admin est protégé. Veuillez vous connecter.",
+      toLogin: "Se connecter",
+      forbidden: "Ce compte n'a pas les droits d'administration.",
+    },
     tabs: {
       dashboard: "Aperçu",
       orders: "Commandes",
@@ -1379,6 +1414,11 @@ const fr: Dict = {
 };
 
 const en: Dict = {
+  common: {
+    loadFailed: "Could not load data.",
+    saveFailed: "The change could not be saved.",
+    close: "Close",
+  },
   nav: {
     about: "About us",
     references: "References",
@@ -1520,6 +1560,9 @@ const en: Dict = {
   cfg: {
     tab3d: "3D view",
     tabDrawing: "Drawing",
+    stepsNav: "Steps",
+    view3d: "3D",
+    loading3d: "3D …",
     stepSystem: "System",
     stepGeometry: "Layout",
     stepOptions: "Mounting & options",
@@ -1574,6 +1617,8 @@ const en: Dict = {
     siaTitle: "SIA 358 check",
     siaBadge: { pass: "SIA pre-check passed", warn: "With notes", fail: "Pre-check failed" },
     rules: {
+      guardRequired: "Fall height {fh} m ≥ 1.0 m — guard mandatory",
+      guardOptional: "Fall height {fh} m < 1.0 m — guard not mandatory",
       height: "Guard height {h} mm — min. 1000 mm",
       height12: "Fall height above 12 m: 1100 mm recommended (currently {h} mm)",
       openings: "Largest opening {clear} mm — Ø 120 mm sphere must not pass",
@@ -1743,6 +1788,11 @@ const en: Dict = {
     kicker: "Admin",
     title: "Operations.",
     lead: "Track orders, publish prices, manage products — the demo runs on local data.",
+    gate: {
+      needLogin: "The admin area is protected. Please sign in.",
+      toLogin: "Sign in",
+      forbidden: "This account does not have admin access.",
+    },
     tabs: {
       dashboard: "Overview",
       orders: "Orders",

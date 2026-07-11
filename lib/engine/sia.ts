@@ -25,6 +25,16 @@ export function evaluateSia(cfg: RailingConfig, derived: DerivedRailing, tp?: Ty
   const kind = infillKindOf(tp);
   const hasPosts = tp?.recipe ? tp.recipe.post.profile !== "none" : cfg.system === "bars";
 
+  // 0 — Guard mandatory once the fall height reaches 1.00 m (SIA 358, 2.1).
+  //     Below that a guard is not strictly required, so we surface it as info.
+  const fh = cfg.fallHeightM;
+  results.push({
+    id: fh >= 1 ? "guardRequired" : "guardOptional",
+    status: fh >= 1 ? "pass" : "warn",
+    ref: "SIA 358, 2.1",
+    params: { fh },
+  });
+
   // 1 — Minimum guard height ≥ 1.00 m; 1.10 m recommended above 12 m fall height.
   if (cfg.height < 1000) {
     results.push({ id: "height", status: "fail", ref: "SIA 358, 2.11", params: { h: cfg.height } });

@@ -1,5 +1,6 @@
 import PortalDashboard from "@/components/portal/PortalDashboard";
 import Reveal from "@/components/Reveal";
+import Toasts from "@/components/Toasts";
 import { getDict, locales } from "@/lib/i18n";
 
 export const dynamicParams = false;
@@ -29,6 +30,7 @@ export default async function Portal({ params }: { params: Promise<{ locale: str
       <section className="mx-auto max-w-6xl px-6 pb-24">
         <PortalDashboard locale={locale} t={d.portal} cfgDict={d.cfg} />
       </section>
+      <Toasts labels={d.common} />
     </>
   );
 }

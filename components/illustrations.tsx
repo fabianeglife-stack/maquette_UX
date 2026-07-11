@@ -37,7 +37,7 @@ function DimV({ x, y1, y2, label }: { x: number; y1: number; y2: number; label: 
 /** Hero: frameless glass railing on a cantilevered slab, elevation view. */
 export function HeroScene() {
   return (
-    <svg viewBox="0 0 1100 620" className="h-auto w-full" role="img" aria-label="Glass railing on a terrace, technical elevation">
+    <svg viewBox="0 0 1100 620" className="h-auto w-full" aria-hidden="true" focusable="false">
       {/* sun + horizon */}
       <circle cx="880" cy="150" r="86" fill="none" stroke={HAIRLINE} strokeWidth="1.5" />
       <line x1="0" y1="470" x2="1100" y2="470" stroke={HAIRLINE} strokeWidth="1" />
@@ -84,7 +84,7 @@ export function HeroScene() {
 export function BarRailingElevation() {
   const bars = Array.from({ length: 15 }, (_, i) => 82 + i * 17);
   return (
-    <svg viewBox="0 0 420 300" className="h-auto w-full" role="img" aria-label="Straight flat-bar railing elevation">
+    <svg viewBox="0 0 420 300" className="h-auto w-full" aria-hidden="true" focusable="false">
       <line x1="20" y1="252" x2="400" y2="252" stroke={HAIRLINE} strokeWidth="2" />
       {/* posts */}
       <line x1="60" y1="70" x2="60" y2="252" stroke={INK} strokeWidth="4" />
@@ -105,7 +105,7 @@ export function BarRailingElevation() {
 export function Flat45RailingElevation() {
   const bars = Array.from({ length: 15 }, (_, i) => 82 + i * 17);
   return (
-    <svg viewBox="0 0 420 300" className="h-auto w-full" role="img" aria-label="45° flat-bar railing elevation">
+    <svg viewBox="0 0 420 300" className="h-auto w-full" aria-hidden="true" focusable="false">
       <line x1="20" y1="252" x2="400" y2="252" stroke={HAIRLINE} strokeWidth="2" />
       {/* posts */}
       <line x1="60" y1="70" x2="60" y2="252" stroke={INK} strokeWidth="4" />
@@ -128,7 +128,7 @@ export function Flat45RailingElevation() {
 /** Product card: glass railing, front elevation with dimension. */
 export function GlassRailingElevation() {
   return (
-    <svg viewBox="0 0 420 300" className="h-auto w-full" role="img" aria-label="Glass railing elevation">
+    <svg viewBox="0 0 420 300" className="h-auto w-full" aria-hidden="true" focusable="false">
       <line x1="20" y1="252" x2="400" y2="252" stroke={HAIRLINE} strokeWidth="2" />
       {/* base profile */}
       <rect x="48" y="230" width="304" height="16" fill={INK} />
@@ -225,7 +225,7 @@ export function ReferenceScene({ index }: { index: number }) {
   ];
 
   return (
-    <svg viewBox="0 0 400 300" className="h-auto w-full" role="img" aria-label="Reference project illustration">
+    <svg viewBox="0 0 400 300" className="h-auto w-full" aria-hidden="true" focusable="false">
       {scenes[index % scenes.length]}
     </svg>
   );

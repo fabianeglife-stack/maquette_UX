@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/server/db";
 import { sessionUser } from "@/lib/server/auth";
+import { safeParse } from "@/lib/server/json";
 import type { SavedConfig as DbSavedConfig } from "@prisma/client";
 
 function toClient(s: DbSavedConfig) {
@@ -8,7 +9,7 @@ function toClient(s: DbSavedConfig) {
     id: s.id,
     name: s.name,
     createdAt: s.createdAt.toISOString().slice(0, 10),
-    config: JSON.parse(s.configJson),
+    config: safeParse(s.configJson),
   };
 }
 

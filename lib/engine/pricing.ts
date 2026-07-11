@@ -91,6 +91,8 @@ export function priceRailing(
 ): PriceResult {
   const m = derived.totalLength / 1000;
   const stairM = derived.slopedLength / 1000;
+  // A trade tier out of the documented 0–1 range must never corrupt totals.
+  const rate = Math.min(1, Math.max(0, discountRate));
   const lines: PriceLine[] = [];
   const baseBars = tp?.basePerM ?? pb.basePerM;
   const baseGlass = tp?.basePerM ?? pb.glassBasePerM;
@@ -141,15 +143,15 @@ export function priceRailing(
   lines.push({ id: "setup", qty: 1, unit: "flat", unitPrice: pb.setupFee, total: pb.setupFee, params: {} });
 
   let netBeforeShipping = lines.reduce((s, l) => s + l.total, 0);
-  if (discountRate > 0) {
-    const rebate = r2(-netBeforeShipping * discountRate);
+  if (rate > 0) {
+    const rebate = r2(-netBeforeShipping * rate);
     lines.push({
       id: "b2b_discount",
       qty: 1,
       unit: "flat",
       unitPrice: rebate,
       total: rebate,
-      params: { pct: Math.round(discountRate * 100) },
+      params: { pct: Math.round(rate * 100) },
     });
     netBeforeShipping += rebate;
   }

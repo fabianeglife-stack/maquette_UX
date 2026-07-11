@@ -410,6 +410,58 @@ describe("SIA 358 rules engine", () => {
   });
 });
 
+describe("SIA 358 — failing paths & warnings (regression guards)", () => {
+  it("flags the guard as mandatory at/above 1 m fall height, optional below", () => {
+    const high = evaluateSia(defaultConfig(), deriveRailing(defaultConfig(), barsType), barsType);
+    expect(high.find((r) => r.id === "guardRequired")?.status).toBe("pass");
+    const lowCfg = { ...defaultConfig(), fallHeightM: 0.5 };
+    const low = evaluateSia(lowCfg, deriveRailing(lowCfg, barsType), barsType);
+    expect(low.find((r) => r.id === "guardOptional")?.status).toBe("warn");
+    expect(low.find((r) => r.id === "guardRequired")).toBeUndefined();
+  });
+
+  it("fails openings when the clear gap exceeds the Ø120 mm sphere", () => {
+    // Legacy bar fill with an intentionally wide target opening.
+    const tp: TypeProfile = { ...barsType, id: "ct-open", barDia: 12, builtin: false, recipe: undefined };
+    const cfg = { ...defaultConfig(), typeId: "ct-open", barClear: 300 };
+    const d = deriveRailing(cfg, tp);
+    expect(Math.max(...d.segments.map((s) => s.actualBarClear))).toBeGreaterThan(120);
+    expect(evaluateSia(cfg, d, tp).find((r) => r.id === "openings")?.status).toBe("fail");
+  });
+
+  it("fails loads when post spacing exceeds the SIA 261 limit", () => {
+    // Geometry itself caps spacing at MAX_POST_SPACING, so the rule is exercised
+    // by pinning an over-wide spacing on the derived model directly.
+    const cfg = defaultConfig();
+    const d = deriveRailing(cfg, barsType);
+    d.segments.forEach((s) => (s.postSpacing = 1500)); // > residential 1250
+    expect(evaluateSia(cfg, d, barsType).find((x) => x.id === "loads")?.status).toBe("fail");
+  });
+
+  it("warns on transport when a segment exceeds the kit length, and summarises as warn", () => {
+    const cfg = { ...defaultConfig(), segments: [{ id: "s1", length: 6500, angle: 0, stair: false, slope: 0 }] };
+    const results = evaluateSia(cfg, deriveRailing(cfg, barsType), barsType);
+    expect(results.find((r) => r.id === "transport")?.status).toBe("warn");
+    expect(siaSummary(results)).toBe("warn");
+  });
+});
+
+describe("geometry — weight model (feeds shipping) is pinned", () => {
+  it("pins the default kit weight for the bar and glass systems", () => {
+    expect(deriveRailing(defaultConfig(), barsType).weightKg).toBe(79);
+    expect(deriveRailing(glassConfig(), glassType).weightKg).toBe(232);
+  });
+
+  it("never emits negative dimensions for a degenerate short segment", () => {
+    const cfg = { ...defaultConfig(), segments: [{ id: "s1", length: 250, angle: 0, stair: false, slope: 0 }] };
+    const d = deriveRailing(cfg, glassType);
+    d.segments.forEach((s) => {
+      expect(s.actualBarClear).toBeGreaterThanOrEqual(0);
+      s.panels.forEach((p) => expect(p.width).toBeGreaterThanOrEqual(0));
+    });
+  });
+});
+
 describe("pricing engine", () => {
   it("prices the default railing at CHF 2 371.71 gross (390/m as-built type)", () => {
     const cfg = defaultConfig();
@@ -432,6 +484,20 @@ describe("pricing engine", () => {
     const cfg = { ...defaultConfig(), typeId: "ct-z" };
     const p = priceRailing(cfg, deriveRailing(cfg, tp), defaultPriceBook, tp);
     expect(p.gross).toBe(1669.06);
+  });
+
+  it("clamps an out-of-range discount rate to [0,1]", () => {
+    const cfg = defaultConfig();
+    const d = deriveRailing(cfg, barsType);
+    // A rate above 1 must not invert or over-credit the total; clamp to full rebate.
+    const over = priceRailing(cfg, d, defaultPriceBook, barsType, 5);
+    const full = priceRailing(cfg, d, defaultPriceBook, barsType, 1);
+    expect(over.gross).toBe(full.gross);
+    // A negative rate must behave like no discount.
+    const neg = priceRailing(cfg, d, defaultPriceBook, barsType, -0.5);
+    const none = priceRailing(cfg, d, defaultPriceBook, barsType, 0);
+    expect(neg.gross).toBe(none.gross);
+    expect(neg.lines.find((l) => l.id === "b2b_discount")).toBeUndefined();
   });
 
   it("grants free shipping above the threshold", () => {

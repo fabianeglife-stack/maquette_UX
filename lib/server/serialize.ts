@@ -1,4 +1,5 @@
 import type { Order as DbOrder, OrderEvent as DbEvent } from "@prisma/client";
+import { safeParse } from "./json";
 
 /** Map a DB order to the shape the client UIs already consume. */
 export function toClientOrder(o: DbOrder & { events?: DbEvent[] }) {
@@ -13,7 +14,7 @@ export function toClientOrder(o: DbOrder & { events?: DbEvent[] }) {
     lengthM: o.lengthM,
     gross: o.gross,
     quotedGross: o.quotedGross ?? undefined,
-    config: o.configJson ? JSON.parse(o.configJson) : undefined,
+    config: safeParse(o.configJson),
     events: o.events?.map((e) => ({
       ref: e.orderRef,
       at: e.at.toISOString().slice(0, 16).replace("T", " "),

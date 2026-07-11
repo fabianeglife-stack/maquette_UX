@@ -1,22 +1,15 @@
 "use client";
 
-import { createContext, useContext, useMemo, useRef, useState } from "react";
+import { createContext, memo, useContext, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { Canvas } from "@react-three/fiber";
 import { Edges, OrbitControls } from "@react-three/drei";
 import { railDepth, type DerivedRailing } from "@/lib/engine/geometry";
 import { WALL_CLEARANCE, type RailingConfig, type TypeProfile } from "@/lib/engine/types";
+import { INOX, RAL_HEX as RAL } from "@/lib/theme";
 
 const MM = 0.001;
 
-const RAL: Record<RailingConfig["color"], string> = {
-  ral7016: "#383e42",
-  ral9005: "#0e0e0e",
-  ral9010: "#efece3",
-  custom: "#4d6172",
-};
-
-const INOX = "#b9bdbf";
 
 function v(p: { x: number; y: number; z: number }) {
   return new THREE.Vector3(p.x * MM, p.y * MM, p.z * MM);
@@ -307,7 +300,11 @@ const GLASS: Record<RailingConfig["glassType"], { color: string; opacity: number
   tinted: { color: "#4f5e66", opacity: 0.38 },
 };
 
-function Railing({ cfg, derived, tp }: { cfg: RailingConfig; derived: DerivedRailing; tp?: TypeProfile }) {
+// Memoized: the scene subtree only rebuilds when the config/geometry actually
+// change, not when the parent re-renders for unrelated reasons (checkout fields,
+// share input). The tech-view toggle flows through TechCtx, so material changes
+// still propagate to the context consumers below.
+const Railing = memo(function Railing({ cfg, derived, tp }: { cfg: RailingConfig; derived: DerivedRailing; tp?: TypeProfile }) {
   // Galvanized-only finish renders as zinc grey regardless of the RAL choice.
   const color = cfg.finish === "galvanized" ? "#a6abae" : RAL[cfg.color];
   const hrColor = cfg.handrail === "round_inox" ? INOX : color;
@@ -608,18 +605,20 @@ function Railing({ cfg, derived, tp }: { cfg: RailingConfig; derived: DerivedRai
         ))}
     </group>
   );
-}
+});
 
 export default function Scene3D({
   cfg,
   derived,
   tp,
   techLabel = "CAD",
+  sceneLabel = "3D view",
 }: {
   cfg: RailingConfig;
   derived: DerivedRailing;
   tp?: TypeProfile;
   techLabel?: string;
+  sceneLabel?: string;
 }) {
   const controls = useRef(null);
   const [tech, setTech] = useState(false);
@@ -645,6 +644,8 @@ export default function Scene3D({
         shadows={false}
         camera={{ position: [center.x + dist * 0.8, center.y + dist * 0.55, center.z + dist * 0.85], fov: 40 }}
         style={{ background: tech ? "#fcfcfa" : "#f1f0ec" }}
+        role="img"
+        aria-label={sceneLabel}
       >
         <ambientLight intensity={tech ? 1.05 : 0.85} />
         <directionalLight position={[4, 8, 5]} intensity={tech ? 0.75 : 1.1} />

@@ -1,5 +1,6 @@
 import AdminApp from "@/components/admin/AdminApp";
 import Reveal from "@/components/Reveal";
+import Toasts from "@/components/Toasts";
 import { getDict, locales } from "@/lib/i18n";
 
 export const dynamicParams = false;
@@ -29,6 +30,7 @@ export default async function Admin({ params }: { params: Promise<{ locale: stri
       <section className="mx-auto max-w-[1500px] px-4 pb-24 md:px-6">
         <AdminApp t={d.admin} statusLabels={d.portal.status} cfgDict={d.cfg} refsDict={d.references} aboutDict={d.about} invoiceDict={d.portal.invoice} locale={locale} />
       </section>
+      <Toasts labels={d.common} />
     </>
   );
 }

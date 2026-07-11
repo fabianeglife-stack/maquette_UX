@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
 import { deriveRailing } from "@/lib/engine/geometry";
-import { evaluateSia, siaSummary, type RuleStatus } from "@/lib/engine/sia";
+import { evaluateSia, siaSummary } from "@/lib/engine/sia";
 import { chf, defaultPriceBook, priceRailing } from "@/lib/engine/pricing";
 import {
   defaultConfig,
@@ -16,13 +16,12 @@ import {
   type TypeRecipe,
 } from "@/lib/engine/types";
 import type { Dict } from "@/lib/i18n";
+import { STATUS_COLOR } from "@/lib/theme";
 
 const Scene3D = dynamic(() => import("@/components/configurator/Scene3D"), {
   ssr: false,
   loading: () => <div className="flex h-full items-center justify-center text-xs uppercase tracking-[0.2em] text-stone">3D …</div>,
 });
-
-const STATUS_COLOR: Record<RuleStatus, string> = { pass: "#4a7c59", warn: "#b9882f", fail: "#b04a3a" };
 
 function Num({
   label,
