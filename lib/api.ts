@@ -13,8 +13,26 @@ export const hasBackend = process.env.NEXT_PUBLIC_BACKEND === "1";
 export interface SessionInfo {
   email: string;
   name: string;
-  role: "customer" | "admin";
+  role: "customer" | "staff" | "admin";
   tier: Tier;
+  /** Company-portal areas granted to staff accounts (empty for customers). */
+  access?: string[];
+}
+
+export interface StaffRow {
+  email: string;
+  name: string;
+  role: "staff" | "admin";
+  access: string[];
+  active: boolean;
+}
+
+export interface AuditRow {
+  at: string;
+  actor: string;
+  action: string;
+  target: string;
+  detail: string;
 }
 
 export interface CustomerRow {
@@ -59,6 +77,12 @@ export const api = {
 
   listCustomers: () => call<{ customers: CustomerRow[] }>("GET", "/api/customers/").then((r) => r.customers),
   setTier: (email: string, tier: Tier) => call<{ ok: true }>("PATCH", "/api/customers/", { email, tier }),
+
+  listStaff: () => call<{ staff: StaffRow[]; audit: AuditRow[] }>("GET", "/api/staff/"),
+  createStaff: (payload: { email: string; name: string; password: string; role: "staff" | "admin"; access: string[] }) =>
+    call<{ staff: StaffRow }>("POST", "/api/staff/", payload).then((r) => r.staff),
+  patchStaff: (email: string, patch: { role?: "staff" | "admin"; access?: string[]; active?: boolean; password?: string }) =>
+    call<{ staff: StaffRow }>("PATCH", "/api/staff/", { email, ...patch }).then((r) => r.staff),
 
   listTypes: () => call<{ types: TypeProfile[] }>("GET", "/api/types/").then((r) => r.types),
   putType: (type: TypeProfile) => call<{ ok: true }>("PUT", "/api/types/", { type }),

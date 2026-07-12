@@ -381,6 +381,42 @@ export function tierFor(email: string | undefined | null): Tier {
   return loadTiers()[email.toLowerCase()] ?? "standard";
 }
 
+/* ---------- company-portal collaborators (static prototype) ---------- */
+
+const STAFF_KEY = "axioform-staff-v1";
+
+export interface LocalStaff {
+  email: string;
+  name: string;
+  role: "staff" | "admin";
+  access: string[];
+  active: boolean;
+}
+
+const seedStaff: LocalStaff[] = [
+  { email: "admin@axioform.ch", name: "AxioForm Admin", role: "admin", access: [], active: true },
+  { email: "production@axioform.ch", name: "Atelier Production", role: "staff", access: ["production"], active: true },
+  { email: "logistique@axioform.ch", name: "Équipe Logistique", role: "staff", access: ["logistics"], active: true },
+];
+
+export function loadStaff(): LocalStaff[] {
+  try {
+    const raw = localStorage.getItem(STAFF_KEY);
+    return raw ? (JSON.parse(raw) as LocalStaff[]) : [...seedStaff];
+  } catch {
+    return [...seedStaff];
+  }
+}
+
+export function saveStaffMember(member: LocalStaff): void {
+  const list = loadStaff();
+  const i = list.findIndex((s) => s.email === member.email.toLowerCase());
+  const next = { ...member, email: member.email.toLowerCase() };
+  if (i >= 0) list[i] = next;
+  else list.push(next);
+  localStorage.setItem(STAFF_KEY, JSON.stringify(list));
+}
+
 /* ---------- saved configurations & share links ---------- */
 
 const SAVED_KEY = "axioform-saved-v1";

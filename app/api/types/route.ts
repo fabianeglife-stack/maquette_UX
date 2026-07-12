@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/server/db";
 import { sessionUser } from "@/lib/server/auth";
+import { hasArea } from "@/lib/server/authz";
 import { customTypes } from "@/lib/server/catalog";
 import { builtinTypes, type TypeProfile } from "@/lib/engine/types";
 
@@ -9,10 +10,10 @@ export async function GET() {
   return NextResponse.json({ types: await customTypes() });
 }
 
-/** Create or update a custom type (admin). */
+/** Create or update a custom type (products area). */
 export async function PUT(req: Request) {
   const user = await sessionUser();
-  if (user?.role !== "admin") return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!hasArea(user, "products")) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const body = await req.json().catch(() => null);
   const tp = body?.type as TypeProfile | undefined;
   if (!tp?.id || !["bars", "glass"].includes(tp.template)) {

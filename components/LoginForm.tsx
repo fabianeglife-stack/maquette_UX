@@ -27,7 +27,8 @@ export default function LoginForm({ dict, locale }: { dict: Dict["login"]; local
     try {
       const session = mode === "signup" ? await api.signup(email, password, name) : await api.login(email, password);
       setSession(session.email);
-      router.push(`/${locale}/portal/`);
+      // Company accounts land on the company portal, customers on theirs.
+      router.push(`/${locale}/${session.role === "customer" ? "portal" : "admin"}/`);
     } catch (e) {
       setError((e as Error).message);
       setBusy(false);
@@ -35,7 +36,13 @@ export default function LoginForm({ dict, locale }: { dict: Dict["login"]; local
   };
 
   const errorText = (code: string) =>
-    code === "email_taken" ? dict.errTaken : code === "invalid_input" ? dict.errInput : dict.errCredentials;
+    code === "email_taken"
+      ? dict.errTaken
+      : code === "invalid_input"
+        ? dict.errInput
+        : code === "account_disabled"
+          ? dict.errDisabled
+          : dict.errCredentials;
 
   const inputCls =
     "w-full border border-hairline bg-paper px-4 py-3 text-sm font-light text-ink outline-none transition-colors placeholder:text-stone focus:border-graphite";

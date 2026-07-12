@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/server/db";
 import { sessionUser } from "@/lib/server/auth";
+import { hasArea } from "@/lib/server/authz";
 import { activePriceBook } from "@/lib/server/catalog";
 import { defaultPriceBook, type PriceBook } from "@/lib/engine/pricing";
 
@@ -15,7 +16,7 @@ export async function GET() {
 /** Publish a new price-book version (admin). Older versions stay for audit. */
 export async function PUT(req: Request) {
   const user = await sessionUser();
-  if (user?.role !== "admin") return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!hasArea(user, "pricing")) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const body = await req.json().catch(() => null);
   const pb = body?.priceBook as PriceBook | undefined;
   if (!pb || !isFinitePositive(pb.basePerM) || !isValidVat(pb.vatRate)) {
@@ -45,7 +46,7 @@ export async function PUT(req: Request) {
 /** Reset to the seed defaults (admin): retire all published versions. */
 export async function DELETE() {
   const user = await sessionUser();
-  if (user?.role !== "admin") return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!hasArea(user, "pricing")) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   await db.priceBook.updateMany({ where: { active: true }, data: { active: false } });
   return NextResponse.json({ priceBook: defaultPriceBook });
 }

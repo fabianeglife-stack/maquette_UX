@@ -43,7 +43,9 @@ export async function sessionUser() {
   try {
     const { payload } = await jwtVerify(token, secretKey());
     if (!payload.sub) return null;
-    return await db.user.findUnique({ where: { id: payload.sub } });
+    const user = await db.user.findUnique({ where: { id: payload.sub } });
+    // Disabled accounts stop resolving immediately, even with a valid JWT.
+    return user?.active ? user : null;
   } catch {
     return null;
   }

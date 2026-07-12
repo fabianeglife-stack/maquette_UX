@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/server/db";
 import { sessionUser } from "@/lib/server/auth";
+import { hasArea } from "@/lib/server/authz";
 
 export async function GET() {
   const user = await sessionUser();
-  if (user?.role !== "admin") return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!hasArea(user, "customers")) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const orders = await db.order.findMany();
   const users = await db.user.findMany({ where: { role: "customer" } });
   const tierByEmail = new Map(users.map((u) => [u.email, u.tier]));
@@ -30,7 +31,7 @@ export async function GET() {
 
 export async function PATCH(req: Request) {
   const user = await sessionUser();
-  if (user?.role !== "admin") return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!hasArea(user, "customers")) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const { email, tier } = await req.json().catch(() => ({}));
   if (!email || !["standard", "partner", "pro"].includes(tier)) {
     return NextResponse.json({ error: "invalid_input" }, { status: 400 });

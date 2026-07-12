@@ -16,7 +16,11 @@ model User {
   email        String   @unique
   name         String
   passwordHash String
-  role         String   @default("customer") // customer | admin
+  role         String   @default("customer") // customer | staff | admin
+  // Company-portal areas granted to staff accounts (JSON array of area ids).
+  access       String   @default("[]")
+  // Disabled accounts cannot sign in and existing sessions stop resolving.
+  active       Boolean  @default(true)
   tier         String   @default("standard") // standard | partner | pro
   createdAt    DateTime @default(now())
   orders       Order[]
@@ -83,4 +87,14 @@ model SiteContent {
   id        String   @id
   json      String
   updatedAt DateTime @updatedAt
+}
+
+// Immutable trail of access-rights changes made in the company portal.
+model AuditLog {
+  id     String   @id @default(cuid())
+  at     DateTime @default(now())
+  actor  String
+  action String
+  target String
+  detail String   @default("")
 }

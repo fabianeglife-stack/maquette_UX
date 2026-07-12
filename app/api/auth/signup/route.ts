@@ -19,5 +19,5 @@ export async function POST(req: Request) {
     },
   });
   await createSession(user.id);
-  return NextResponse.json({ email: user.email, name: user.name, role: user.role, tier: user.tier });
+  return NextResponse.json({ email: user.email, name: user.name, role: user.role, tier: user.tier, access: [] });
 }
