@@ -66,6 +66,11 @@ function OrderCard({
         {order.system === "glass" ? cfgDict.systemGlass : cfgDict.systemBars} · {order.lengthM.toLocaleString("de-CH")} m
       </p>
       <StatusSteps status={order.status} flow={flow} labels={t.status} />
+      {order.kind === "order" && order.deliveryDate && order.status !== "new" && (
+        <p className="text-sm font-light text-graphite">
+          {t.deliveryDate} <span className="text-ink">{order.deliveryDate}</span>
+        </p>
+      )}
       <div className="flex items-baseline justify-between border-t border-hairline pt-3">
         <span className="text-xs font-light text-stone">{t.total}</span>
         <span className="text-base font-light text-ink">{chf(order.gross)}</span>

@@ -109,6 +109,7 @@ export default function OrderDrawer({
   advance,
   sendQuote,
   markAccepted,
+  setDeliveryDate,
 }: {
   order: Order;
   t: AdminDict;
@@ -120,6 +121,7 @@ export default function OrderDrawer({
   advance: (ref: string, status: OrderStatus) => void;
   sendQuote: (o: Order, value: number) => void;
   markAccepted: (o: Order) => void;
+  setDeliveryDate: (ref: string, date: string) => void;
 }) {
   const [quote, setQuote] = useState(String(Math.round(order.quotedGross ?? order.gross)));
   const flow = order.kind === "order" ? ORDER_FLOW : QUOTE_FLOW;
@@ -186,24 +188,40 @@ export default function OrderDrawer({
         <div className="flex flex-col gap-3 border border-hairline p-4">
           <StatusSteps status={order.status} flow={flow} labels={statusLabels} />
           {order.kind === "order" ? (
-            <div className="flex gap-2">
-              <button
-                type="button"
-                disabled={idx <= 0}
-                onClick={() => advance(order.ref, flow[idx - 1])}
-                className="border border-hairline px-3 py-1.5 text-[11px] uppercase tracking-[0.12em] text-graphite transition-colors hover:border-graphite disabled:opacity-30"
-              >
-                ‹ {t.orders.stepBack}
-              </button>
-              <button
-                type="button"
-                disabled={idx >= flow.length - 1}
-                onClick={() => advance(order.ref, flow[idx + 1])}
-                className="flex-1 bg-ink px-3 py-1.5 text-[11px] uppercase tracking-[0.12em] text-paper transition-colors hover:bg-graphite disabled:opacity-30"
-              >
-                {t.orders.advance} ›
-              </button>
-            </div>
+            <>
+              {/* Estimated delivery date — the order confirmation carries it,
+                  so confirming stays blocked until staff have entered one. */}
+              <label className="flex items-center gap-3">
+                <span className="text-[10px] uppercase tracking-[0.12em] text-stone">{t.orders.deliveryDate}</span>
+                <input
+                  type="date"
+                  value={order.deliveryDate ?? ""}
+                  onChange={(e) => e.target.value && setDeliveryDate(order.ref, e.target.value)}
+                  className="flex-1 border border-hairline bg-paper px-2 py-1.5 text-sm font-light text-ink outline-none focus:border-graphite"
+                />
+              </label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={idx <= 0}
+                  onClick={() => advance(order.ref, flow[idx - 1])}
+                  className="border border-hairline px-3 py-1.5 text-[11px] uppercase tracking-[0.12em] text-graphite transition-colors hover:border-graphite disabled:opacity-30"
+                >
+                  ‹ {t.orders.stepBack}
+                </button>
+                <button
+                  type="button"
+                  disabled={idx >= flow.length - 1 || (flow[idx + 1] === "confirmed" && !order.deliveryDate)}
+                  onClick={() => advance(order.ref, flow[idx + 1])}
+                  className="flex-1 bg-ink px-3 py-1.5 text-[11px] uppercase tracking-[0.12em] text-paper transition-colors hover:bg-graphite disabled:opacity-30"
+                >
+                  {t.orders.advance} ›
+                </button>
+              </div>
+              {flow[idx + 1] === "confirmed" && !order.deliveryDate && (
+                <p className="text-xs font-light text-alert">{t.orders.deliveryRequired}</p>
+              )}
+            </>
           ) : order.status === "quote_requested" ? (
             <div className="flex items-end gap-2">
               <label className="flex flex-1 flex-col gap-1">

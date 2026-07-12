@@ -42,6 +42,9 @@ model Order {
   lengthM          Float
   gross            Float
   quotedGross      Float?
+  // Estimated delivery date (ISO yyyy-mm-dd), entered by staff before the
+  // order confirmation goes out.
+  deliveryDate     String?
   configJson       String? // RailingConfig snapshot
   priceBookVersion String?
   rulesVersion     String?

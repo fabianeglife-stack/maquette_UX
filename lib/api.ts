@@ -72,7 +72,7 @@ export const api = {
     customer: Order["customer"];
     payment?: string;
   }) => call<{ order: ApiOrder }>("POST", "/api/orders/", payload).then((r) => r.order),
-  patchOrder: (ref: string, patch: { status?: string; quotedGross?: number; accept?: boolean }) =>
+  patchOrder: (ref: string, patch: { status?: string; quotedGross?: number; accept?: boolean; deliveryDate?: string }) =>
     call<{ order: ApiOrder }>("PATCH", `/api/orders/${ref}/`, patch).then((r) => r.order),
 
   listCustomers: () => call<{ customers: CustomerRow[] }>("GET", "/api/customers/").then((r) => r.customers),
