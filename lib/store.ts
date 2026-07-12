@@ -390,12 +390,13 @@ export interface LocalStaff {
   name: string;
   role: "staff" | "admin";
   access: string[];
+  active: boolean;
 }
 
 const seedStaff: LocalStaff[] = [
-  { email: "admin@axioform.ch", name: "AxioForm Admin", role: "admin", access: [] },
-  { email: "production@axioform.ch", name: "Atelier Production", role: "staff", access: ["production"] },
-  { email: "logistique@axioform.ch", name: "Équipe Logistique", role: "staff", access: ["logistics"] },
+  { email: "admin@axioform.ch", name: "AxioForm Admin", role: "admin", access: [], active: true },
+  { email: "production@axioform.ch", name: "Atelier Production", role: "staff", access: ["production"], active: true },
+  { email: "logistique@axioform.ch", name: "Équipe Logistique", role: "staff", access: ["logistics"], active: true },
 ];
 
 export function loadStaff(): LocalStaff[] {

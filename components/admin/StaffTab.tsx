@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { api, hasBackend, type StaffRow } from "@/lib/api";
+import { api, hasBackend, type AuditRow, type StaffRow } from "@/lib/api";
 import { loadStaff, saveStaffMember } from "@/lib/store";
 import { notify } from "@/lib/toast";
 import { inputCls, TabSkeleton, type AdminDict } from "./shared";
@@ -19,16 +19,22 @@ const emptyDraft = { name: "", email: "", password: "", role: "staff" as "staff"
 
 export default function StaffTab({ t }: { t: AdminDict }) {
   const [staff, setStaff] = useState<StaffRow[]>([]);
+  const [audit, setAudit] = useState<AuditRow[]>([]);
   const [ready, setReady] = useState(false);
   const [draft, setDraft] = useState(emptyDraft);
   const [creating, setCreating] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [resetFor, setResetFor] = useState<string | null>(null);
+  const [newPw, setNewPw] = useState("");
 
   const refresh = () => {
     if (hasBackend) {
       api
         .listStaff()
-        .then(setStaff)
+        .then((r) => {
+          setStaff(r.staff);
+          setAudit(r.audit);
+        })
         .catch(() => {
           setStaff([]);
           notify("loadFailed");
@@ -81,6 +87,34 @@ export default function StaffTab({ t }: { t: AdminDict }) {
     }
   };
 
+  const setActive = (member: StaffRow, active: boolean) => {
+    if (hasBackend) {
+      api
+        .patchStaff(member.email, { active })
+        .then(() => {
+          refresh();
+          flash();
+        })
+        .catch(() => notify("saveFailed"));
+    } else {
+      saveStaffMember({ ...member, active });
+      refresh();
+      flash();
+    }
+  };
+
+  const resetPassword = (member: StaffRow) => {
+    api
+      .patchStaff(member.email, { password: newPw })
+      .then(() => {
+        setResetFor(null);
+        setNewPw("");
+        refresh();
+        flash();
+      })
+      .catch(() => notify("saveFailed"));
+  };
+
   const create = () => {
     if (hasBackend) {
       api
@@ -93,7 +127,7 @@ export default function StaffTab({ t }: { t: AdminDict }) {
         })
         .catch(() => notify("saveFailed"));
     } else {
-      saveStaffMember({ email: draft.email, name: draft.name, role: draft.role, access: draft.access });
+      saveStaffMember({ email: draft.email, name: draft.name, role: draft.role, access: draft.access, active: true });
       setDraft(emptyDraft);
       setCreating(false);
       refresh();
@@ -114,21 +148,72 @@ export default function StaffTab({ t }: { t: AdminDict }) {
 
       <div className="flex flex-col gap-3">
         {staff.map((m) => (
-          <div key={m.email} className="flex flex-col gap-3 border border-hairline p-4">
+          <div key={m.email} className={`flex flex-col gap-3 border border-hairline p-4 ${m.active ? "" : "opacity-60"}`}>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
               <span className="min-w-[140px] text-sm text-ink">
                 {m.name}
                 <span className="block text-xs font-light text-stone">{m.email}</span>
               </span>
-              <select
-                value={m.role}
-                onChange={(e) => setRole(m, e.target.value as "staff" | "admin")}
-                className="ml-auto border border-hairline bg-paper px-2 py-1.5 text-xs font-light text-ink outline-none focus:border-graphite"
-              >
-                <option value="staff">{t.staff.roleStaff}</option>
-                <option value="admin">{t.staff.roleAdmin}</option>
-              </select>
+              {!m.active && (
+                <span className="border border-alert/50 px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-alert">
+                  {t.staff.disabled}
+                </span>
+              )}
+              <div className="ml-auto flex flex-wrap items-center gap-3">
+                <select
+                  value={m.role}
+                  onChange={(e) => setRole(m, e.target.value as "staff" | "admin")}
+                  className="border border-hairline bg-paper px-2 py-1.5 text-xs font-light text-ink outline-none focus:border-graphite"
+                >
+                  <option value="staff">{t.staff.roleStaff}</option>
+                  <option value="admin">{t.staff.roleAdmin}</option>
+                </select>
+                {hasBackend && m.active && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setResetFor(resetFor === m.email ? null : m.email);
+                      setNewPw("");
+                    }}
+                    className="text-[11px] uppercase tracking-[0.12em] text-graphite underline-offset-2 hover:text-ink hover:underline"
+                  >
+                    {t.staff.reset}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setActive(m, !m.active)}
+                  className={`text-[11px] uppercase tracking-[0.12em] underline-offset-2 hover:underline ${
+                    m.active ? "text-alert" : "text-ink"
+                  }`}
+                >
+                  {m.active ? t.staff.disable : t.staff.enable}
+                </button>
+              </div>
             </div>
+            {resetFor === m.email && (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  resetPassword(m);
+                }}
+                className="flex flex-wrap items-center gap-2"
+              >
+                <input
+                  required
+                  type="password"
+                  minLength={8}
+                  autoFocus
+                  placeholder={t.staff.newPassword}
+                  value={newPw}
+                  onChange={(e) => setNewPw(e.target.value)}
+                  className={`${inputCls} max-w-xs`}
+                />
+                <button type="submit" className="text-xs uppercase tracking-[0.14em] text-ink underline underline-offset-4">
+                  {t.staff.apply}
+                </button>
+              </form>
+            )}
             {m.role === "staff" && (
               <div className="flex flex-wrap gap-x-5 gap-y-2">
                 {AREAS.map((a) => (
@@ -214,6 +299,34 @@ export default function StaffTab({ t }: { t: AdminDict }) {
         >
           + {t.staff.create}
         </button>
+      )}
+
+      {/* access-rights trail (server mode) */}
+      {hasBackend && audit.length > 0 && (
+        <div className="flex flex-col gap-2 border-t border-ink/50 pt-4">
+          <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone">{t.staff.audit}</span>
+          <ol className="flex flex-col">
+            {audit.map((e, i) => (
+              <li key={i} className="flex gap-3">
+                <div className="flex flex-col items-center">
+                  <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${i === 0 ? "bg-ink" : "bg-stone"}`} />
+                  {i < audit.length - 1 && <span className="w-px flex-1 bg-hairline" />}
+                </div>
+                <div className="pb-3">
+                  <p className="text-[13px] font-light text-graphite">
+                    {t.staff.auditActions[e.action as keyof typeof t.staff.auditActions] ?? e.action}
+                    {" — "}
+                    <span className="text-ink">{e.target}</span>
+                    {e.detail && <span className="text-stone"> · {e.detail}</span>}
+                  </p>
+                  <p className="text-xs text-stone">
+                    {e.at} · {e.actor}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </div>
       )}
     </div>
   );

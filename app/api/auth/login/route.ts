@@ -10,6 +10,7 @@ export async function POST(req: Request) {
   if (!user || !(await bcrypt.compare(String(password ?? ""), user.passwordHash))) {
     return NextResponse.json({ error: "invalid_credentials" }, { status: 401 });
   }
+  if (!user.active) return NextResponse.json({ error: "account_disabled" }, { status: 403 });
   await createSession(user.id);
   return NextResponse.json({ email: user.email, name: user.name, role: user.role, tier: user.tier, access: parseAccess(user.access) });
 }
