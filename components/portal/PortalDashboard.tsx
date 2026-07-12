@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import DrawingSVG from "@/components/configurator/DrawingSVG";
 import { downloadDrawingPdf } from "@/components/configurator/pdf";
 import { downloadInvoicePdf } from "./invoice";
+import { downloadConfirmationPdf } from "./confirmation";
 import { deriveRailing } from "@/lib/engine/geometry";
 import { chf } from "@/lib/engine/pricing";
 import {
@@ -106,6 +107,17 @@ function OrderCard({
             className="text-xs uppercase tracking-[0.12em] text-graphite underline-offset-4 hover:text-ink hover:underline"
           >
             ↓ {t.drawingPdf}
+          </button>
+        )}
+        {order.kind === "order" && order.status !== "new" && (
+          <button
+            type="button"
+            onClick={() =>
+              downloadConfirmationPdf(order, t.confirmation, cfgDict.payTerms, order.system === "glass" ? cfgDict.systemGlass : cfgDict.systemBars)
+            }
+            className="text-xs uppercase tracking-[0.12em] text-graphite underline-offset-4 hover:text-ink hover:underline"
+          >
+            ↓ {t.confirmationPdf}
           </button>
         )}
         {order.kind === "order" && (
