@@ -350,6 +350,7 @@ const de = {
     newCfg: "Neue Konfiguration",
     date: "Datum",
     total: "Total",
+    deliveryDate: "Liefertermin (geschätzt):",
     statusL: "Status",
     status: {
       new: "Eingegangen",
@@ -514,6 +515,8 @@ const de = {
       invoicePdf: "Rechnung (PDF)",
       markAccepted: "Als angenommen markieren",
       advance: "Weiter", stepBack: "Zurück", close: "Schliessen",
+      deliveryDate: "Liefertermin (geschätzt)",
+      deliveryRequired: "Geschätzten Liefertermin erfassen, bevor die Bestellung bestätigt wird — er steht in der Auftragsbestätigung.",
       empty: "Keine Einträge für diese Filter.",
     },
     dash: {
@@ -1088,6 +1091,7 @@ const fr: Dict = {
     newCfg: "Nouvelle configuration",
     date: "Date",
     total: "Total",
+    deliveryDate: "Livraison estimée :",
     statusL: "Statut",
     status: {
       new: "Reçue",
@@ -1252,6 +1256,8 @@ const fr: Dict = {
       invoicePdf: "Facture (PDF)",
       markAccepted: "Marquer comme acceptée",
       advance: "Suivant", stepBack: "Retour", close: "Fermer",
+      deliveryDate: "Livraison estimée",
+      deliveryRequired: "Saisissez la date de livraison estimée avant de confirmer — elle figure dans la confirmation de commande.",
       empty: "Aucune entrée pour ces filtres.",
     },
     dash: {
@@ -1824,6 +1830,7 @@ const en: Dict = {
     newCfg: "New configuration",
     date: "Date",
     total: "Total",
+    deliveryDate: "Estimated delivery:",
     statusL: "Status",
     status: {
       new: "Received",
@@ -1988,6 +1995,8 @@ const en: Dict = {
       invoicePdf: "Invoice (PDF)",
       markAccepted: "Mark as accepted",
       advance: "Advance", stepBack: "Back", close: "Close",
+      deliveryDate: "Estimated delivery",
+      deliveryRequired: "Enter the estimated delivery date before confirming — it goes into the order confirmation.",
       empty: "No entries for these filters.",
     },
     dash: {

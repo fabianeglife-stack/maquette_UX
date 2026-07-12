@@ -42,6 +42,8 @@ export interface Order {
   gross: number;
   /** Binding price set by the admin when quoting; becomes `gross` on acceptance. */
   quotedGross?: number;
+  /** Estimated delivery date (ISO yyyy-mm-dd), entered by staff before confirmation. */
+  deliveryDate?: string;
   config?: RailingConfig;
   seeded?: boolean;
 }

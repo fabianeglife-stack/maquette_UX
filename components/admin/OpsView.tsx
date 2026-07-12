@@ -32,7 +32,7 @@ export default function OpsView({
   accent: string;
   hint: string;
 }) {
-  const { orders, ready, advance, sendQuote, markAccepted } = useOrders();
+  const { orders, ready, advance, sendQuote, markAccepted, setDeliveryDate } = useOrders();
   const [openRef, setOpenRef] = useState<string | null>(null);
 
   if (!ready) return <TabSkeleton />;
@@ -76,8 +76,11 @@ export default function OpsView({
                 {next && (
                   <button
                     type="button"
+                    // Confirming requires the estimated delivery date (set in the drawer).
+                    disabled={next === "confirmed" && !o.deliveryDate}
+                    title={next === "confirmed" && !o.deliveryDate ? t.orders.deliveryRequired : undefined}
                     onClick={() => advance(o.ref, next)}
-                    className="rounded-md px-3 py-1.5 text-[11px] font-semibold text-white transition-opacity hover:opacity-85"
+                    className="rounded-md px-3 py-1.5 text-[11px] font-semibold text-white transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-40"
                     style={{ background: accent }}
                   >
                     {statusLabels[next]} ›
@@ -108,6 +111,7 @@ export default function OpsView({
           advance={advance}
           sendQuote={sendQuote}
           markAccepted={markAccepted}
+          setDeliveryDate={setDeliveryDate}
         />
       )}
     </div>

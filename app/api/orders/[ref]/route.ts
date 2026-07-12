@@ -56,11 +56,41 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ ref: s
     return NextResponse.json({ order: toClientOrder(updated) });
   }
 
+  // Estimated delivery date, entered by staff (alone or together with a
+  // status change). ISO yyyy-mm-dd, must be a real calendar date.
+  let deliveryDate: string | undefined;
+  if (body.deliveryDate !== undefined) {
+    if (!canHandle) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    const d = String(body.deliveryDate);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || Number.isNaN(Date.parse(d))) {
+      return NextResponse.json({ error: "invalid_input" }, { status: 400 });
+    }
+    deliveryDate = d;
+  }
+
   if (typeof body.status === "string" && ORDER_STATUSES.includes(body.status)) {
     if (!canHandle) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    // The order confirmation always carries the estimated delivery date, so
+    // confirming requires one (either already stored or set in this request).
+    if (body.status === "confirmed" && !deliveryDate && !order.deliveryDate) {
+      return NextResponse.json({ error: "delivery_date_required" }, { status: 409 });
+    }
     const updated = await db.order.update({
       where: { ref },
-      data: { status: body.status, events: { create: { type: body.status, emailTo: order.email } } },
+      data: {
+        status: body.status,
+        ...(deliveryDate ? { deliveryDate } : {}),
+        events: { create: { type: body.status, emailTo: order.email } },
+      },
+      include: { events: { orderBy: { at: "asc" } } },
+    });
+    return NextResponse.json({ order: toClientOrder(updated) });
+  }
+
+  if (deliveryDate) {
+    const updated = await db.order.update({
+      where: { ref },
+      data: { deliveryDate },
       include: { events: { orderBy: { at: "asc" } } },
     });
     return NextResponse.json({ order: toClientOrder(updated) });

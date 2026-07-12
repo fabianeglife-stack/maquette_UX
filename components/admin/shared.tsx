@@ -156,5 +156,15 @@ export function useOrders() {
     refresh();
   };
 
-  return { orders, ready, refresh, advance, sendQuote, markAccepted };
+  // Estimated delivery date, required before an order can be confirmed.
+  const setDeliveryDate = (ref: string, deliveryDate: string) => {
+    if (hasBackend) {
+      api.patchOrder(ref, { deliveryDate }).then(refresh).catch(() => notify("saveFailed"));
+      return;
+    }
+    updateOrder(ref, { deliveryDate });
+    refresh();
+  };
+
+  return { orders, ready, refresh, advance, sendQuote, markAccepted, setDeliveryDate };
 }
