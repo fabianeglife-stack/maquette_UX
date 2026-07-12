@@ -1,5 +1,6 @@
 import ConfiguratorApp from "@/components/configurator/ConfiguratorApp";
 import Reveal from "@/components/Reveal";
+import Toasts from "@/components/Toasts";
 import { getDict, locales } from "@/lib/i18n";
 
 export const dynamicParams = false;
@@ -31,6 +32,7 @@ export default async function Configurator({ params }: { params: Promise<{ local
       <section className="mx-auto max-w-[1400px] px-6 pb-24">
         <ConfiguratorApp t={d.cfg} locale={locale} />
       </section>
+      <Toasts labels={d.common} />
     </>
   );
 }
