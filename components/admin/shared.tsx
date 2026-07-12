@@ -126,13 +126,23 @@ export function useOrders() {
   }, []);
   useEffect(refresh, [refresh]);
 
-  const advance = (ref: string, status: OrderStatus) => {
+  /** Resolves true when the transition was applied (drives success notices). */
+  const advance = (ref: string, status: OrderStatus): Promise<boolean> => {
     if (hasBackend) {
-      api.patchOrder(ref, { status }).then(refresh).catch(() => notify("saveFailed"));
-      return;
+      return api
+        .patchOrder(ref, { status })
+        .then(() => {
+          refresh();
+          return true;
+        })
+        .catch(() => {
+          notify("saveFailed");
+          return false;
+        });
     }
     updateOrderStatus(ref, status);
     refresh();
+    return Promise.resolve(true);
   };
 
   const sendQuote = (o: Order, value: number) => {

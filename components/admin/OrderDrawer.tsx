@@ -118,12 +118,15 @@ export default function OrderDrawer({
   invoiceDict: Dict["portal"]["invoice"];
   locale?: string;
   onClose: () => void;
-  advance: (ref: string, status: OrderStatus) => void;
+  advance: (ref: string, status: OrderStatus) => Promise<boolean>;
   sendQuote: (o: Order, value: number) => void;
   markAccepted: (o: Order) => void;
   setDeliveryDate: (ref: string, date: string) => void;
 }) {
   const [quote, setQuote] = useState(String(Math.round(order.quotedGross ?? order.gross)));
+  // Set right after a successful confirm: the order confirmation went out to
+  // this address (the transactional-email hook fired with the delivery date).
+  const [sentTo, setSentTo] = useState<string | null>(null);
   const flow = order.kind === "order" ? ORDER_FLOW : QUOTE_FLOW;
   const idx = flow.indexOf(order.status);
   // Instalments for the internal review / order confirmation (≤ threshold:
@@ -212,7 +215,12 @@ export default function OrderDrawer({
                 <button
                   type="button"
                   disabled={idx >= flow.length - 1 || (flow[idx + 1] === "confirmed" && !order.deliveryDate)}
-                  onClick={() => advance(order.ref, flow[idx + 1])}
+                  onClick={() => {
+                    const next = flow[idx + 1];
+                    void advance(order.ref, next).then((ok) => {
+                      if (ok && next === "confirmed") setSentTo(order.customer.email);
+                    });
+                  }}
                   className="flex-1 bg-ink px-3 py-1.5 text-[11px] uppercase tracking-[0.12em] text-paper transition-colors hover:bg-graphite disabled:opacity-30"
                 >
                   {t.orders.advance} ›
@@ -220,6 +228,11 @@ export default function OrderDrawer({
               </div>
               {flow[idx + 1] === "confirmed" && !order.deliveryDate && (
                 <p className="text-xs font-light text-alert">{t.orders.deliveryRequired}</p>
+              )}
+              {sentTo && (
+                <p role="status" className="border-l-2 border-steel bg-mist/70 p-3 text-sm font-light text-graphite">
+                  {fmt(t.orders.confirmationSent, { email: sentTo })}
+                </p>
               )}
             </>
           ) : order.status === "quote_requested" ? (

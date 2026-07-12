@@ -28,6 +28,10 @@ export function invoiceNoFor(ref: string): string {
 export function deliveryNoFor(ref: string): string {
   return "LS-" + ref.replace(/^AX-/, "");
 }
+/** Deterministic order-confirmation number for an order. */
+export function confirmationNoFor(ref: string): string {
+  return "AB-" + ref.replace(/^AX-/, "");
+}
 export const QUOTE_FLOW: OrderStatus[] = ["quote_requested", "quoted"];
 
 export interface Order {
