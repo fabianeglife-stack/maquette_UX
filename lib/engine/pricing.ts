@@ -39,6 +39,12 @@ export interface PriceBook {
   shippingFlat: number;
   freeShippingFrom: number;
   vatRate: number;
+  /**
+   * Payment terms: orders up to `fullUpfrontMax` (gross) are paid 100 % at
+   * order; above it a `depositPct` deposit is due at order and the balance at
+   * delivery. Every instalment is payable net within `netDays` days.
+   */
+  paymentTerms: { fullUpfrontMax: number; depositPct: number; netDays: number };
 }
 
 export const defaultPriceBook: PriceBook = {
@@ -60,6 +66,7 @@ export const defaultPriceBook: PriceBook = {
   shippingFlat: 89,
   freeShippingFrom: 3000,
   vatRate: 0.081,
+  paymentTerms: { fullUpfrontMax: 2000, depositPct: 0.5, netDays: 30 },
 };
 
 export interface PriceLine {
@@ -161,6 +168,26 @@ export function priceRailing(
   const net = r2(netBeforeShipping + shipping);
   const vat = r2(net * pb.vatRate);
   return { lines, net, vat, gross: r2(net + vat), version: pb.version };
+}
+
+export interface PaymentPlan {
+  /** Amount due at order (100 % or the deposit). */
+  deposit: number;
+  /** Amount due at delivery (0 when paid fully upfront). */
+  balance: number;
+  /** Whether the order is split into deposit + delivery instalments. */
+  split: boolean;
+  netDays: number;
+}
+
+/** Derive the instalment plan for a gross order total from the price book. */
+export function paymentPlan(gross: number, pb: PriceBook = defaultPriceBook): PaymentPlan {
+  const terms = pb.paymentTerms ?? defaultPriceBook.paymentTerms;
+  if (gross <= terms.fullUpfrontMax) {
+    return { deposit: r2(gross), balance: 0, split: false, netDays: terms.netDays };
+  }
+  const deposit = r2(gross * terms.depositPct);
+  return { deposit, balance: r2(gross - deposit), split: true, netDays: terms.netDays };
 }
 
 export function chf(n: number): string {

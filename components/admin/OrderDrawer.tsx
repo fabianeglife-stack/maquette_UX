@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { chf } from "@/lib/engine/pricing";
+import { chf, paymentPlan } from "@/lib/engine/pricing";
 import { deriveRailing } from "@/lib/engine/geometry";
 import { buildBom } from "@/lib/engine/bom";
 import type { TypeProfile } from "@/lib/engine/types";
@@ -21,7 +21,7 @@ import {
   type OrderStatus,
 } from "@/lib/store";
 import { fetchAllTypes, resolveType } from "@/lib/data";
-import type { Dict } from "@/lib/i18n";
+import { fmt, type Dict } from "@/lib/i18n";
 import { api, hasBackend, type ApiOrder } from "@/lib/api";
 import StatusSteps from "@/components/StatusSteps";
 import { downloadInvoicePdf } from "@/components/portal/invoice";
@@ -124,6 +124,9 @@ export default function OrderDrawer({
   const [quote, setQuote] = useState(String(Math.round(order.quotedGross ?? order.gross)));
   const flow = order.kind === "order" ? ORDER_FLOW : QUOTE_FLOW;
   const idx = flow.indexOf(order.status);
+  // Instalments for the internal review / order confirmation (≤ threshold:
+  // 100 % at order; above: deposit + delivery balance; net 30).
+  const plan = paymentPlan(order.quotedGross ?? order.gross);
 
   // Engine output for the production/logistics documents.
   const svgRef = useRef<SVGSVGElement>(null);
@@ -250,6 +253,19 @@ export default function OrderDrawer({
             <span className="text-ink">{chf(order.gross)}</span>
           </div>
         </div>
+
+        {/* payment terms for the order confirmation */}
+        {order.kind === "order" && (
+          <div className="flex flex-col gap-1 border border-hairline p-4">
+            <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone">{cfgDict.payTerms.title}</span>
+            <p className="text-[13px] font-light text-graphite">
+              {plan.split
+                ? fmt(cfgDict.payTerms.split, { deposit: chf(plan.deposit), balance: chf(plan.balance) })
+                : fmt(cfgDict.payTerms.fullUpfront, { amount: chf(plan.deposit) })}
+            </p>
+            <p className="text-xs font-light text-stone">{fmt(cfgDict.payTerms.net, { days: plan.netDays })}</p>
+          </div>
+        )}
 
         {/* customer */}
         <div>

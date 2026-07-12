@@ -60,9 +60,10 @@ export async function POST(req: Request) {
   if (!isValidConfig(body.config)) {
     return NextResponse.json({ error: "invalid_config" }, { status: 400 });
   }
-  // Launch policy: direct orders are disabled — everything runs through a
-  // reviewed quote. Set ALLOW_DIRECT_ORDERS=1 to re-enable.
-  if (body.kind === "order" && process.env.ALLOW_DIRECT_ORDERS !== "1") {
+  // Direct orders are accepted and land in internal review (status "new");
+  // the confirmation goes out when the admin advances them to "confirmed".
+  // Set ALLOW_DIRECT_ORDERS=0 to fall back to the quote-only launch policy.
+  if (body.kind === "order" && process.env.ALLOW_DIRECT_ORDERS === "0") {
     return NextResponse.json({ error: "quote_only" }, { status: 403 });
   }
   const cfg = body.config as RailingConfig;

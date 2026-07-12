@@ -6,7 +6,7 @@ import DrawingSVG from "./DrawingSVG";
 import { downloadDrawingPdf } from "./pdf";
 import { deriveRailing } from "@/lib/engine/geometry";
 import { evaluateSia, siaSummary } from "@/lib/engine/sia";
-import { chf, defaultPriceBook, priceRailing, type PriceBook } from "@/lib/engine/pricing";
+import { chf, defaultPriceBook, paymentPlan, priceRailing, type PriceBook } from "@/lib/engine/pricing";
 import {
   builtinTypes,
   defaultConfig,
@@ -32,6 +32,7 @@ import {
 } from "@/lib/store";
 import { addSavedConfig, fetchAllTypes, fetchPageContent, fetchPriceBook } from "@/lib/data";
 import { api, hasBackend } from "@/lib/api";
+import { notify } from "@/lib/toast";
 import {
   FinishIcon,
   IconCards,
@@ -58,9 +59,10 @@ type CfgDict = Dict["cfg"];
 
 const STORAGE_KEY = "axioform-config-v1";
 
-// Launch mode: everything goes through a reviewed quote — no direct orders.
-// Set NEXT_PUBLIC_QUOTE_ONLY=0 to re-enable direct ordering later.
-const QUOTE_ONLY = process.env.NEXT_PUBLIC_QUOTE_ONLY !== "0";
+// Direct ordering is live: the order is reviewed internally (status "new")
+// before the order confirmation goes out. Set NEXT_PUBLIC_QUOTE_ONLY=1 to
+// fall back to the quote-only launch mode.
+const QUOTE_ONLY = process.env.NEXT_PUBLIC_QUOTE_ONLY === "1";
 
 /* ---------- small form primitives ---------- */
 
@@ -141,6 +143,7 @@ function CheckoutForm({
   t,
   kind,
   summary,
+  terms,
   onSubmit,
   onCancel,
 }: {
@@ -148,6 +151,8 @@ function CheckoutForm({
   kind: "order" | "quote";
   /** One-line context: what is being requested (type · length · Richtpreis). */
   summary: string;
+  /** Payment-terms lines shown for direct orders. */
+  terms?: string[];
   onSubmit: (customer: Order["customer"], payment: "card" | "twint" | "invoice") => void;
   onCancel: () => void;
 }) {
@@ -201,6 +206,16 @@ function CheckoutForm({
               </button>
             ))}
           </div>
+        </div>
+      )}
+      {kind === "order" && terms && terms.length > 0 && (
+        <div className="flex flex-col gap-1 border-l-2 border-steel bg-mist/60 px-3 py-2">
+          <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-stone">{t.payTerms.title}</span>
+          {terms.map((s, i) => (
+            <p key={i} className="text-[13px] font-light leading-relaxed text-graphite">
+              {s}
+            </p>
+          ))}
         </div>
       )}
       <div className="flex gap-3 pt-1">
@@ -310,6 +325,15 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
   const sia = useMemo(() => evaluateSia(cfg, derived, tp), [cfg, derived, tp]);
   const overall = siaSummary(sia);
   const price = useMemo(() => priceRailing(cfg, derived, pb, tp, discount), [cfg, derived, pb, tp, discount]);
+  // Payment terms for direct orders: 100 % upfront up to the threshold,
+  // deposit + delivery balance above it (defaults: CHF 2000 / 50 % / net 30).
+  const plan = useMemo(() => paymentPlan(price.gross, pb), [price.gross, pb]);
+  const termsLines = [
+    plan.split
+      ? fmt(t.payTerms.split, { deposit: chf(plan.deposit), balance: chf(plan.balance) })
+      : fmt(t.payTerms.fullUpfront, { amount: chf(plan.deposit) }),
+    fmt(t.payTerms.net, { days: plan.netDays }),
+  ];
 
   // Brief highlight on the Richtpreis whenever the total changes.
   const [pulse, setPulse] = useState(false);
@@ -812,6 +836,7 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
                 t={t}
                 kind={checkout}
                 summary={`${cfg.system === "glass" ? t.systemGlass : t.systemBars} · ${(derived.totalLength / 1000).toLocaleString("de-CH")} m · ${chf(price.gross)}`}
+                terms={termsLines}
                 onCancel={() => setCheckout(null)}
                 onSubmit={(customer, payment) => {
                   if (hasBackend) {
@@ -823,7 +848,7 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
                         setCheckout(null);
                         setPanel({ kind: checkout, ref: order.ref });
                       })
-                      .catch(() => setPanel(null));
+                      .catch(() => notify("saveFailed"));
                     return;
                   }
                   const ref = newRef();
@@ -854,6 +879,12 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
                 <p className="text-sm font-light leading-relaxed text-graphite">
                   {fmt(panel.kind === "order" ? t.orderText : t.quoteText, { ref: panel.ref })}
                 </p>
+                {panel.kind === "order" && (
+                  <>
+                    <p className="text-sm font-light leading-relaxed text-graphite">{t.payTerms.review}</p>
+                    <p className="text-xs font-light leading-relaxed text-stone">{termsLines.join(" — ")}</p>
+                  </>
+                )}
                 <Link
                   href={`/${locale}/portal/`}
                   className="self-start text-xs uppercase tracking-[0.14em] text-ink underline underline-offset-4"

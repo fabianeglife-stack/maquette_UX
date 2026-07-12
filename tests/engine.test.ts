@@ -6,7 +6,7 @@
 import { describe, expect, it } from "vitest";
 import { deriveRailing } from "../lib/engine/geometry";
 import { evaluateSia, siaSummary } from "../lib/engine/sia";
-import { defaultPriceBook, priceRailing } from "../lib/engine/pricing";
+import { defaultPriceBook, paymentPlan, priceRailing } from "../lib/engine/pricing";
 import { buildBom } from "../lib/engine/bom";
 import {
   builtinTypes,
@@ -505,6 +505,29 @@ describe("pricing engine", () => {
     cfg.segments = [{ ...cfg.segments[0], length: 6000 }, { ...cfg.segments[1], length: 6000 }, { ...cfg.segments[1], id: "s3", length: 6000 }];
     const p = priceRailing(cfg, deriveRailing(cfg, barsType), defaultPriceBook, barsType);
     expect(p.lines.find((l) => l.id === "shipping")?.total).toBe(0);
+  });
+});
+
+describe("payment terms", () => {
+  it("takes 100 % at order up to the CHF 2000 threshold", () => {
+    expect(paymentPlan(2000)).toEqual({ deposit: 2000, balance: 0, split: false, netDays: 30 });
+    expect(paymentPlan(150.5)).toEqual({ deposit: 150.5, balance: 0, split: false, netDays: 30 });
+  });
+
+  it("splits 50/50 between order and delivery above the threshold", () => {
+    expect(paymentPlan(3000)).toEqual({ deposit: 1500, balance: 1500, split: true, netDays: 30 });
+    // Odd cents: the two instalments always reconcile to the gross total.
+    const p = paymentPlan(2500.55);
+    expect(p.deposit).toBe(1250.28);
+    expect(p.balance).toBe(1250.27);
+    expect(p.deposit + p.balance).toBeCloseTo(2500.55, 10);
+  });
+
+  it("follows the price book's configured terms", () => {
+    const pb = { ...defaultPriceBook, paymentTerms: { fullUpfrontMax: 5000, depositPct: 0.3, netDays: 10 } };
+    expect(paymentPlan(3000, pb).split).toBe(false);
+    const p = paymentPlan(10000, pb);
+    expect(p).toEqual({ deposit: 3000, balance: 7000, split: true, netDays: 10 });
   });
 });
 
