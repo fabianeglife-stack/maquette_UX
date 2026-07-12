@@ -142,7 +142,7 @@ export default function PortalDashboard({
   t: Dict["portal"];
   cfgDict: Dict["cfg"];
 }) {
-  const [session, setSess] = useState<{ email: string } | null>(null);
+  const [session, setSess] = useState<{ email: string; role?: string } | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [saved, setSaved] = useState<SavedConfig[]>([]);
   const [ready, setReady] = useState(false);
@@ -153,7 +153,7 @@ export default function PortalDashboard({
       api
         .me()
         .then(async (u) => {
-          setSess(u ? { email: u.email } : null);
+          setSess(u ? { email: u.email, role: u.role } : null);
           if (u) setOrders(await api.listOrders());
         })
         .catch(() => {
@@ -210,9 +210,11 @@ export default function PortalDashboard({
           <Link href={`/${locale}/configurator/`} className="text-xs uppercase tracking-[0.14em] text-graphite underline-offset-4 hover:text-ink hover:underline">
             + {t.newCfg}
           </Link>
-          <Link href={`/${locale}/admin/`} className="text-xs uppercase tracking-[0.14em] text-graphite underline-offset-4 hover:text-ink hover:underline">
-            {t.adminLink}
-          </Link>
+          {(!hasBackend || (session.role && session.role !== "customer")) && (
+            <Link href={`/${locale}/admin/`} className="text-xs uppercase tracking-[0.14em] text-graphite underline-offset-4 hover:text-ink hover:underline">
+              {t.adminLink}
+            </Link>
+          )}
           <button
             type="button"
             onClick={() => {

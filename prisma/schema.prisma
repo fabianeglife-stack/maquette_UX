@@ -16,7 +16,9 @@ model User {
   email        String   @unique
   name         String
   passwordHash String
-  role         String   @default("customer") // customer | admin
+  role         String   @default("customer") // customer | staff | admin
+  // Company-portal areas granted to staff accounts (JSON array of area ids).
+  access       String   @default("[]")
   tier         String   @default("standard") // standard | partner | pro
   createdAt    DateTime @default(now())
   orders       Order[]

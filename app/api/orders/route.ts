@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/server/db";
 import { sessionUser } from "@/lib/server/auth";
+import { isCompany } from "@/lib/server/authz";
 import { toClientOrder } from "@/lib/server/serialize";
 import { deriveRailing } from "@/lib/engine/geometry";
 import { evaluateSia, siaSummary, SIA_RULES_VERSION } from "@/lib/engine/sia";
@@ -42,9 +43,10 @@ export async function GET() {
   const user = await sessionUser();
   if (!user) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
   // Tenancy keys on the immutable userId, not the (client-supplied, spoofable)
-  // email — so an order carrying someone else's email can't leak into their list.
+  // email — so an order carrying someone else's email can't leak into their
+  // list. Company accounts (staff with a station, admins) see the whole book.
   const orders = await db.order.findMany({
-    where: user.role === "admin" ? {} : { userId: user.id },
+    where: isCompany(user) ? {} : { userId: user.id },
     include: { events: { orderBy: { at: "asc" } } },
     orderBy: { createdAt: "desc" },
   });

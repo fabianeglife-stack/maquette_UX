@@ -27,7 +27,8 @@ export default function LoginForm({ dict, locale }: { dict: Dict["login"]; local
     try {
       const session = mode === "signup" ? await api.signup(email, password, name) : await api.login(email, password);
       setSession(session.email);
-      router.push(`/${locale}/portal/`);
+      // Company accounts land on the company portal, customers on theirs.
+      router.push(`/${locale}/${session.role === "customer" ? "portal" : "admin"}/`);
     } catch (e) {
       setError((e as Error).message);
       setBusy(false);

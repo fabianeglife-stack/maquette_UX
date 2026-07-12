@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/server/db";
 import { sessionUser } from "@/lib/server/auth";
+import { hasArea } from "@/lib/server/authz";
 import { toClientOrder } from "@/lib/server/serialize";
 
 const ORDER_STATUSES = ["new", "confirmed", "production", "shipped", "invoiced", "paid"];
@@ -19,7 +20,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ ref: s
       return NextResponse.json({ error: "not_acceptable" }, { status: 409 });
     }
     // Ownership is the immutable userId link, not the mutable email field.
-    if (user.role !== "admin" && order.userId !== user.id) {
+    // Sales staff (orders area) may accept on the customer's behalf.
+    if (!hasArea(user, "orders") && order.userId !== user.id) {
       return NextResponse.json({ error: "forbidden" }, { status: 403 });
     }
     const updated = await db.order.update({
@@ -36,10 +38,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ ref: s
     return NextResponse.json({ order: toClientOrder(updated) });
   }
 
-  // Admin actions: advance status or send a binding quote.
-  if (user.role !== "admin") return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  // Company actions: advance status (any order-handling station) or send a
+  // binding quote (sales/orders area).
+  const canHandle = (["orders", "production", "logistics", "invoices"] as const).some((a) => hasArea(user, a));
 
   if (typeof body.quotedGross === "number" && body.quotedGross > 0) {
+    if (!hasArea(user, "orders")) return NextResponse.json({ error: "forbidden" }, { status: 403 });
     const updated = await db.order.update({
       where: { ref },
       data: {
@@ -53,6 +57,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ ref: s
   }
 
   if (typeof body.status === "string" && ORDER_STATUSES.includes(body.status)) {
+    if (!canHandle) return NextResponse.json({ error: "forbidden" }, { status: 403 });
     const updated = await db.order.update({
       where: { ref },
       data: { status: body.status, events: { create: { type: body.status, emailTo: order.email } } },

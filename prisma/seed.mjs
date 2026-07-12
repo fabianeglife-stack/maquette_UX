@@ -36,12 +36,19 @@ async function main() {
   const users = [
     { email: "admin@axioform.ch", name: "AxioForm Admin", role: "admin", tier: "standard", password: "axioform-admin" },
     { email: "m.keller@example.ch", name: "M. Keller", role: "customer", tier: "standard", password: "demo1234" },
+    // Company-portal collaborators, scoped to their stations.
+    { email: "production@axioform.ch", name: "Atelier Production", role: "staff", tier: "standard", password: "axioform-prod", access: ["production"] },
+    { email: "logistique@axioform.ch", name: "Équipe Logistique", role: "staff", tier: "standard", password: "axioform-log", access: ["logistics"] },
   ];
   for (const u of users) {
     await db.user.upsert({
       where: { email: u.email },
       update: {},
-      create: { email: u.email, name: u.name, role: u.role, tier: u.tier, passwordHash: await bcrypt.hash(u.password, 10) },
+      create: {
+        email: u.email, name: u.name, role: u.role, tier: u.tier,
+        access: JSON.stringify(u.access ?? []),
+        passwordHash: await bcrypt.hash(u.password, 10),
+      },
     });
   }
 
