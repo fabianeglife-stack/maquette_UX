@@ -39,6 +39,7 @@ export default function AdminApp({
   refsDict,
   aboutDict,
   invoiceDict,
+  confirmationDict,
   locale,
 }: {
   t: AdminDict;
@@ -47,6 +48,7 @@ export default function AdminApp({
   refsDict: Dict["references"];
   aboutDict: Dict["about"];
   invoiceDict: Dict["portal"]["invoice"];
+  confirmationDict: Dict["portal"]["confirmation"];
   locale: string;
 }) {
   const [tab, setTab] = useState<Tab>("dashboard");
@@ -183,13 +185,14 @@ export default function AdminApp({
       {/* workspace — the only scrolling region in the full-screen console */}
       <main className="min-w-0 flex-1 overflow-auto p-4 md:p-6">
         {tab === "dashboard" && <DashboardTab t={t} statusLabels={statusLabels} cfgDict={cfgDict} />}
-        {tab === "orders" && <OrdersTab t={t} statusLabels={statusLabels} cfgDict={cfgDict} invoiceDict={invoiceDict} locale={locale} />}
+        {tab === "orders" && <OrdersTab t={t} statusLabels={statusLabels} cfgDict={cfgDict} invoiceDict={invoiceDict} confirmationDict={confirmationDict} locale={locale} />}
         {tab === "production" && (
           <OpsView
             t={t}
             statusLabels={statusLabels}
             cfgDict={cfgDict}
             invoiceDict={invoiceDict}
+            confirmationDict={confirmationDict}
             locale={locale}
             statuses={["new", "confirmed", "production"]}
             accent="#ea580c"
@@ -202,6 +205,7 @@ export default function AdminApp({
             statusLabels={statusLabels}
             cfgDict={cfgDict}
             invoiceDict={invoiceDict}
+            confirmationDict={confirmationDict}
             locale={locale}
             statuses={["confirmed", "production", "shipped"]}
             accent="#0d9488"
@@ -214,6 +218,7 @@ export default function AdminApp({
             statusLabels={statusLabels}
             cfgDict={cfgDict}
             invoiceDict={invoiceDict}
+            confirmationDict={confirmationDict}
             locale={locale}
             statuses={["shipped", "invoiced", "paid"]}
             accent="#4f46e5"

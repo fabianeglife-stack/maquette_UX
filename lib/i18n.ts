@@ -664,9 +664,11 @@ const de = {
     },
     docs: {
       title: "Dokumente",
+      confirmation: "Auftragsbestätigung (PDF)",
       fabrication: "Werkstattauftrag (PDF)",
       picking: "Kommissionierliste (PDF)",
       delivery: "Lieferschein (PDF)",
+      invoice: "Rechnung (PDF)",
       needConfig: "Werkstattauftrag & Kommissionierung benötigen Konfigurationsdaten.",
       fab: {
         title: "WERKSTATTAUFTRAG",
@@ -1420,9 +1422,11 @@ const fr: Dict = {
     },
     docs: {
       title: "Documents",
+      confirmation: "Confirmation de commande (PDF)",
       fabrication: "Ordre de fabrication (PDF)",
       picking: "Liste de préparation (PDF)",
       delivery: "Bulletin de livraison (PDF)",
+      invoice: "Facture (PDF)",
       needConfig: "L'ordre de fabrication et la préparation nécessitent les données de configuration.",
       fab: {
         title: "ORDRE DE FABRICATION",
@@ -2174,9 +2178,11 @@ const en: Dict = {
     },
     docs: {
       title: "Documents",
+      confirmation: "Order confirmation (PDF)",
       fabrication: "Fabrication order (PDF)",
       picking: "Picking list (PDF)",
       delivery: "Delivery note (PDF)",
+      invoice: "Invoice (PDF)",
       needConfig: "Fabrication order and picking list require configuration data.",
       fab: {
         title: "FABRICATION ORDER",
