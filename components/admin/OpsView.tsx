@@ -18,6 +18,7 @@ export default function OpsView({
   statusLabels,
   cfgDict,
   invoiceDict,
+  confirmationDict,
   locale,
   statuses,
   accent,
@@ -27,6 +28,7 @@ export default function OpsView({
   statusLabels: Dict["portal"]["status"];
   cfgDict: Dict["cfg"];
   invoiceDict: Dict["portal"]["invoice"];
+  confirmationDict: Dict["portal"]["confirmation"];
   locale?: string;
   statuses: OrderStatus[];
   accent: string;
@@ -106,6 +108,7 @@ export default function OpsView({
           statusLabels={statusLabels}
           cfgDict={cfgDict}
           invoiceDict={invoiceDict}
+          confirmationDict={confirmationDict}
           locale={locale}
           onClose={() => setOpenRef(null)}
           advance={advance}

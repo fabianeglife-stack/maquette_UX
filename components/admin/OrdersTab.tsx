@@ -100,7 +100,7 @@ function KanbanBoard({
   );
 }
 
-export default function OrdersTab({ t, statusLabels, cfgDict, invoiceDict, locale }: { t: AdminDict; statusLabels: Dict["portal"]["status"]; cfgDict: Dict["cfg"]; invoiceDict: Dict["portal"]["invoice"]; locale?: string }) {
+export default function OrdersTab({ t, statusLabels, cfgDict, invoiceDict, confirmationDict, locale }: { t: AdminDict; statusLabels: Dict["portal"]["status"]; cfgDict: Dict["cfg"]; invoiceDict: Dict["portal"]["invoice"]; confirmationDict: Dict["portal"]["confirmation"]; locale?: string }) {
   const { orders, ready, advance, sendQuote, markAccepted, setDeliveryDate } = useOrders();
   const [openRef, setOpenRef] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -280,6 +280,7 @@ export default function OrdersTab({ t, statusLabels, cfgDict, invoiceDict, local
           statusLabels={statusLabels}
           cfgDict={cfgDict}
           invoiceDict={invoiceDict}
+          confirmationDict={confirmationDict}
           locale={locale}
           onClose={() => setOpenRef(null)}
           advance={advance}

@@ -12,7 +12,6 @@ import { deriveRailing } from "@/lib/engine/geometry";
 import { buildBom } from "@/lib/engine/bom";
 import type { TypeProfile } from "@/lib/engine/types";
 import {
-  invoiceNoFor,
   loadEvents,
   ORDER_FLOW,
   QUOTE_FLOW,
@@ -25,6 +24,7 @@ import { fmt, type Dict } from "@/lib/i18n";
 import { api, hasBackend, type ApiOrder } from "@/lib/api";
 import StatusSteps from "@/components/StatusSteps";
 import { downloadInvoicePdf } from "@/components/portal/invoice";
+import { downloadConfirmationPdf } from "@/components/portal/confirmation";
 import { downloadDeliveryPdf, downloadFabricationPdf, downloadPickingPdf } from "./docs";
 import DrawingSVG from "@/components/configurator/DrawingSVG";
 import type { AdminDict } from "./shared";
@@ -104,6 +104,7 @@ export default function OrderDrawer({
   statusLabels,
   cfgDict,
   invoiceDict,
+  confirmationDict,
   locale,
   onClose,
   advance,
@@ -116,6 +117,7 @@ export default function OrderDrawer({
   statusLabels: Dict["portal"]["status"];
   cfgDict: Dict["cfg"];
   invoiceDict: Dict["portal"]["invoice"];
+  confirmationDict: Dict["portal"]["confirmation"];
   locale?: string;
   onClose: () => void;
   advance: (ref: string, status: OrderStatus) => Promise<boolean>;
@@ -308,29 +310,23 @@ export default function OrderDrawer({
           {order.payment && <p className="pt-1 text-xs font-light uppercase text-stone">{t.bom.payment}: {order.payment}</p>}
         </div>
 
-        {order.kind === "order" && (order.status === "invoiced" || order.status === "paid") && (
-          <div className="flex flex-wrap items-center justify-between gap-3 border border-hairline p-4">
-            <div>
-              <span className="block text-[10px] uppercase tracking-[0.12em] text-stone">{t.orders.invoiceNo}</span>
-              <span className="text-sm text-ink">{invoiceNoFor(order.ref)}</span>
-            </div>
-            <button
-              type="button"
-              onClick={() =>
-                downloadInvoicePdf(order, invoiceDict, order.system === "glass" ? cfgDict.systemGlass : cfgDict.systemBars)
-              }
-              className="bg-ink px-3 py-2 text-[11px] uppercase tracking-[0.12em] text-paper transition-colors hover:bg-graphite"
-            >
-              ↓ {t.orders.invoicePdf}
-            </button>
-          </div>
-        )}
-
-        {/* production / logistics / transport documents */}
+        {/* all client + production documents in one place */}
         {order.kind === "order" && (
           <div className="flex flex-col gap-2 border border-hairline p-4">
             <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone">{t.docs.title}</span>
             <div className="flex flex-col gap-2">
+              {/* Order confirmation — available once the order is confirmed. */}
+              {order.status !== "new" && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    downloadConfirmationPdf(order, confirmationDict, cfgDict.payTerms, order.system === "glass" ? cfgDict.systemGlass : cfgDict.systemBars)
+                  }
+                  className="border border-hairline px-3 py-2 text-left text-[11px] uppercase tracking-[0.12em] text-graphite transition-colors hover:border-graphite hover:text-ink"
+                >
+                  ↓ {t.docs.confirmation}
+                </button>
+              )}
               <button
                 type="button"
                 disabled={!order.config || !tp || !derived || !bom}
@@ -360,6 +356,18 @@ export default function OrderDrawer({
               >
                 ↓ {t.docs.delivery}
               </button>
+              {/* Invoice — once the order has been invoiced. */}
+              {(order.status === "invoiced" || order.status === "paid") && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    downloadInvoicePdf(order, invoiceDict, order.system === "glass" ? cfgDict.systemGlass : cfgDict.systemBars)
+                  }
+                  className="border border-hairline px-3 py-2 text-left text-[11px] uppercase tracking-[0.12em] text-graphite transition-colors hover:border-graphite hover:text-ink"
+                >
+                  ↓ {t.docs.invoice}
+                </button>
+              )}
             </div>
             {!order.config && <p className="text-xs font-light text-stone">{t.docs.needConfig}</p>}
           </div>
