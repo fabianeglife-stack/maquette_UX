@@ -315,18 +315,21 @@ export default function OrderDrawer({
           <div className="flex flex-col gap-2 border border-hairline p-4">
             <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone">{t.docs.title}</span>
             <div className="flex flex-col gap-2">
-              {/* Order confirmation — available once the order is confirmed. */}
-              {order.status !== "new" && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    downloadConfirmationPdf(order, confirmationDict, cfgDict.payTerms, order.system === "glass" ? cfgDict.systemGlass : cfgDict.systemBars)
-                  }
-                  className="border border-hairline px-3 py-2 text-left text-[11px] uppercase tracking-[0.12em] text-graphite transition-colors hover:border-graphite hover:text-ink"
-                >
-                  ↓ {t.docs.confirmation}
-                </button>
-              )}
+              {/* Order confirmation — previewable as soon as the estimated
+                  delivery date is set, so staff can check the document during
+                  review before confirming and sending it to the customer. */}
+              <button
+                type="button"
+                disabled={!order.deliveryDate}
+                title={!order.deliveryDate ? t.orders.deliveryRequired : undefined}
+                onClick={() =>
+                  order.deliveryDate &&
+                  downloadConfirmationPdf(order, confirmationDict, cfgDict.payTerms, order.system === "glass" ? cfgDict.systemGlass : cfgDict.systemBars)
+                }
+                className="border border-hairline px-3 py-2 text-left text-[11px] uppercase tracking-[0.12em] text-graphite transition-colors hover:border-graphite hover:text-ink disabled:opacity-35"
+              >
+                ↓ {t.docs.confirmation}
+              </button>
               <button
                 type="button"
                 disabled={!order.config || !tp || !derived || !bom}
