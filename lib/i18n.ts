@@ -351,6 +351,7 @@ const de = {
     date: "Datum",
     total: "Total",
     deliveryDate: "Liefertermin (geschätzt):",
+    confirmedTitle: "Auftrag bestätigt",
     statusL: "Status",
     status: {
       new: "Eingegangen",
@@ -1106,6 +1107,7 @@ const fr: Dict = {
     date: "Date",
     total: "Total",
     deliveryDate: "Livraison estimée :",
+    confirmedTitle: "Commande confirmée",
     statusL: "Statut",
     status: {
       new: "Reçue",
@@ -1859,6 +1861,7 @@ const en: Dict = {
     date: "Date",
     total: "Total",
     deliveryDate: "Estimated delivery:",
+    confirmedTitle: "Order confirmed",
     statusL: "Status",
     status: {
       new: "Received",

@@ -95,7 +95,7 @@ export default function AdminApp({
 
   if (gate !== "ok") {
     return (
-      <div className="flex min-h-[320px] items-center justify-center rounded-xl border border-hairline bg-paper p-8">
+      <div className="flex h-full items-center justify-center p-8">
         {gate === "loading" ? (
           <div className="h-6 w-40 animate-pulse rounded bg-mist" aria-busy="true" aria-label="…" />
         ) : (
@@ -150,12 +150,12 @@ export default function AdminApp({
     .filter((g) => g.items.length > 0);
 
   return (
-    <div className="flex min-h-[760px] flex-col overflow-hidden rounded-xl border border-[#1c212b] bg-[#f3f4f6] shadow-2xl md:flex-row">
+    <div className="flex h-full w-full flex-col overflow-hidden bg-[#f3f4f6] md:flex-row">
       {/* ERP sidebar */}
-      <aside className="flex w-full shrink-0 flex-col gap-5 bg-[#151a23] px-3 py-5 md:w-56">
-        <span className="px-3 text-[13px] font-semibold tracking-[0.18em] text-white">
+      <aside className="flex w-full shrink-0 flex-col gap-5 overflow-y-auto bg-[#151a23] px-3 py-5 md:w-56">
+        <Link href={`/${locale}/`} className="px-3 text-[13px] font-semibold tracking-[0.18em] text-white transition-opacity hover:opacity-80">
           AXIOFORM <span className="rounded bg-[#2563eb] px-1.5 py-0.5 text-[9px] font-bold tracking-[0.1em]">ERP</span>
-        </span>
+        </Link>
         <nav className="flex flex-col gap-4">
           {groups.map((g) => (
             <div key={g.label} className="flex flex-col gap-0.5">
@@ -180,8 +180,8 @@ export default function AdminApp({
         </nav>
       </aside>
 
-      {/* workspace */}
-      <main className="min-w-0 flex-1 overflow-x-auto p-4 md:p-6">
+      {/* workspace — the only scrolling region in the full-screen console */}
+      <main className="min-w-0 flex-1 overflow-auto p-4 md:p-6">
         {tab === "dashboard" && <DashboardTab t={t} statusLabels={statusLabels} cfgDict={cfgDict} />}
         {tab === "orders" && <OrdersTab t={t} statusLabels={statusLabels} cfgDict={cfgDict} invoiceDict={invoiceDict} locale={locale} />}
         {tab === "production" && (
