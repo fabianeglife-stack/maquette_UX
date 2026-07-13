@@ -1,0 +1,21 @@
+{
+  "name": "AxioForm (full backend)",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:22",
+  // One-time setup: create the local env, install deps (postinstall runs
+  // `prisma generate`), apply the existing migrations non-interactively and
+  // seed the demo accounts + fixture orders. After this, run `npm run dev`.
+  "postCreateCommand": "cp -n .env.example .env && npm install && npx prisma migrate deploy && npm run db:seed",
+  // Next.js dev server. Codespaces forwards it and offers a public URL.
+  "forwardPorts": [3000],
+  "portsAttributes": {
+    "3000": {
+      "label": "AxioForm",
+      "onAutoForward": "openBrowser"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": ["Prisma.prisma", "dbaeumer.vscode-eslint"]
+    }
+  }
+}
