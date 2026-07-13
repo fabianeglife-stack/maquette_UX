@@ -8,6 +8,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { chf, paymentPlan } from "@/lib/engine/pricing";
+import { invoicesFor } from "@/lib/engine/invoicing";
 import { deriveRailing } from "@/lib/engine/geometry";
 import { buildBom } from "@/lib/engine/bom";
 import type { TypeProfile } from "@/lib/engine/types";
@@ -32,8 +33,22 @@ import type { AdminDict } from "./shared";
 /** Vertical event timeline (order lifecycle + transactional-email hooks). */
 function EventTimeline({ order, t, statusLabels }: { order: Order; t: AdminDict; statusLabels: Dict["portal"]["status"] }) {
   const events = hasBackend ? ((order as ApiOrder).events ?? []) : loadEvents(order.ref);
-  const label = (e: OrderEvent) =>
-    e.type === "created" ? t.events.created : e.type === "quote_accepted" ? t.events.quote_accepted : statusLabels[e.type];
+  const label = (e: OrderEvent) => {
+    switch (e.type) {
+      case "created":
+        return t.events.created;
+      case "quote_accepted":
+        return t.events.quote_accepted;
+      case "deposit_sent":
+        return t.events.deposit_sent;
+      case "balance_sent":
+        return t.events.balance_sent;
+      case "invoice_sent":
+        return t.events.invoice_sent;
+      default:
+        return statusLabels[e.type];
+    }
+  };
 
   return (
     <div className="flex flex-col gap-2">
@@ -359,18 +374,20 @@ export default function OrderDrawer({
               >
                 ↓ {t.docs.delivery}
               </button>
-              {/* Invoice — once the order has been invoiced. */}
-              {(order.status === "invoiced" || order.status === "paid") && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    downloadInvoicePdf(order, invoiceDict, order.system === "glass" ? cfgDict.systemGlass : cfgDict.systemBars)
-                  }
-                  className="border border-hairline px-3 py-2 text-left text-[11px] uppercase tracking-[0.12em] text-graphite transition-colors hover:border-graphite hover:text-ink"
-                >
-                  ↓ {t.docs.invoice}
-                </button>
-              )}
+              {/* Invoices — deposit at confirmation, balance at delivery, or a
+                  single full invoice for a small order. Only issued ones show. */}
+              {invoicesFor(order, hasBackend ? ((order as ApiOrder).events ?? []) : loadEvents(order.ref))
+                .filter((inv) => inv.state !== "pending")
+                .map((inv) => (
+                  <button
+                    key={inv.kind}
+                    type="button"
+                    onClick={() => downloadInvoicePdf(order, invoiceDict, order.system === "glass" ? cfgDict.systemGlass : cfgDict.systemBars, inv)}
+                    className="border border-hairline px-3 py-2 text-left text-[11px] uppercase tracking-[0.12em] text-graphite transition-colors hover:border-graphite hover:text-ink"
+                  >
+                    ↓ {t.finance.types[inv.kind]}
+                  </button>
+                ))}
             </div>
             {!order.config && <p className="text-xs font-light text-stone">{t.docs.needConfig}</p>}
           </div>
