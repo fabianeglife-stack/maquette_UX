@@ -11,6 +11,7 @@ import { chf } from "@/lib/engine/pricing";
 import {
   acceptQuote,
   clearSession,
+  confirmationNoFor,
   encodeConfig,
   getSession,
   loadOrders,
@@ -67,11 +68,6 @@ function OrderCard({
         {order.system === "glass" ? cfgDict.systemGlass : cfgDict.systemBars} · {order.lengthM.toLocaleString("de-CH")} m
       </p>
       <StatusSteps status={order.status} flow={flow} labels={t.status} />
-      {order.kind === "order" && order.deliveryDate && order.status !== "new" && (
-        <p className="text-sm font-light text-graphite">
-          {t.deliveryDate} <span className="text-ink">{order.deliveryDate}</span>
-        </p>
-      )}
       <div className="flex items-baseline justify-between border-t border-hairline pt-3">
         <span className="text-xs font-light text-stone">{t.total}</span>
         <span className="text-base font-light text-ink">{chf(order.gross)}</span>
@@ -99,6 +95,31 @@ function OrderCard({
           <p className="text-[11px] font-light leading-relaxed text-stone">{t.acceptNote}</p>
         </div>
       )}
+      {/* Order confirmation: visible as soon as the order leaves internal review. */}
+      {order.kind === "order" && order.status !== "new" && (
+        <div className="flex flex-col gap-2 border-l-2 border-steel bg-mist/70 p-3">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-steel">{t.confirmedTitle}</span>
+            <span className="text-xs font-light text-stone">
+              {t.confirmation.no} {confirmationNoFor(order.ref)}
+            </span>
+          </div>
+          {order.deliveryDate && (
+            <p className="text-sm font-light text-graphite">
+              {t.deliveryDate} <span className="text-ink">{order.deliveryDate}</span>
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={() =>
+              downloadConfirmationPdf(order, t.confirmation, cfgDict.payTerms, order.system === "glass" ? cfgDict.systemGlass : cfgDict.systemBars)
+            }
+            className="self-start bg-ink px-4 py-2.5 text-[11px] font-medium uppercase tracking-[0.14em] text-paper transition-colors hover:bg-graphite"
+          >
+            ↓ {t.confirmationPdf}
+          </button>
+        </div>
+      )}
       <div className="flex flex-wrap gap-x-5 gap-y-1">
         {order.config && derived && (
           <button
@@ -107,17 +128,6 @@ function OrderCard({
             className="text-xs uppercase tracking-[0.12em] text-graphite underline-offset-4 hover:text-ink hover:underline"
           >
             ↓ {t.drawingPdf}
-          </button>
-        )}
-        {order.kind === "order" && order.status !== "new" && (
-          <button
-            type="button"
-            onClick={() =>
-              downloadConfirmationPdf(order, t.confirmation, cfgDict.payTerms, order.system === "glass" ? cfgDict.systemGlass : cfgDict.systemBars)
-            }
-            className="text-xs uppercase tracking-[0.12em] text-graphite underline-offset-4 hover:text-ink hover:underline"
-          >
-            ↓ {t.confirmationPdf}
           </button>
         )}
         {order.kind === "order" && (

@@ -1,5 +1,4 @@
 import AdminApp from "@/components/admin/AdminApp";
-import Reveal from "@/components/Reveal";
 import Toasts from "@/components/Toasts";
 import { getDict, locales } from "@/lib/i18n";
 
@@ -20,16 +19,11 @@ export default async function Admin({ params }: { params: Promise<{ locale: stri
 
   return (
     <>
-      <section className="mx-auto max-w-6xl px-6 pb-10 pt-32 md:pt-40">
-        <Reveal className="flex max-w-3xl flex-col gap-5">
-          <span className="label">{d.admin.kicker}</span>
-          <h1 className="text-3xl font-light leading-[1.12] tracking-tight text-ink md:text-4xl">{d.admin.title}</h1>
-          <p className="text-base font-light leading-relaxed text-graphite">{d.admin.lead}</p>
-        </Reveal>
-      </section>
-      <section className="mx-auto max-w-[1500px] px-4 pb-24 md:px-6">
+      {/* Standalone full-screen back-office: the fixed layer covers the site
+          header (z-50) and footer, so the ERP owns the whole window. */}
+      <div className="fixed inset-0 z-[60] bg-[#f3f4f6]">
         <AdminApp t={d.admin} statusLabels={d.portal.status} cfgDict={d.cfg} refsDict={d.references} aboutDict={d.about} invoiceDict={d.portal.invoice} locale={locale} />
-      </section>
+      </div>
       <Toasts labels={d.common} />
     </>
   );
