@@ -12,8 +12,9 @@ import { loadStaff, saveStaffMember } from "@/lib/store";
 import { notify } from "@/lib/toast";
 import { inputCls, TabSkeleton, type AdminDict } from "./shared";
 
-/** Grantable stations, labelled via the existing tab names. */
-const AREAS = ["dashboard", "orders", "invoices", "production", "logistics", "customers"] as const;
+/** Grantable stations, labelled via the existing tab names. ERP stations plus
+ *  the Studio stations (site & configurator management). */
+const AREAS = ["dashboard", "orders", "invoices", "production", "logistics", "customers", "products", "pricing", "content"] as const;
 
 const emptyDraft = { name: "", email: "", password: "", role: "staff" as "staff" | "admin", access: [] as string[] };
 

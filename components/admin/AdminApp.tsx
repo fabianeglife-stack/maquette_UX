@@ -1,12 +1,15 @@
 "use client";
 
 /*
- * Company-portal shell: access gate, sidebar navigation and lazy tab dispatch.
- * Staff accounts only see the stations granted in their access list; admins
- * see everything plus the administration group (catalog, content, staff).
- * Each tab lives in its own module and is code-split via next/dynamic, so a
- * station only pays for the view it opens (the type designer's 3D chunk, for
- * instance, loads only with the products tab).
+ * Company back-office shell, rendered as one of two full-screen consoles:
+ *   - "erp"    — the operational business system (control, sales, finance,
+ *                operations);
+ *   - "studio" — site & configurator management (guardrail types, price book,
+ *                website content).
+ * Both share this shell: the access gate, the sidebar, the console switcher
+ * and the lazy tab dispatch. A shared "settings" group (staff & access rights)
+ * is admin-only and appears in both. Staff accounts only see the stations they
+ * were granted, so a content editor can be given the Studio alone.
  */
 
 import dynamic from "next/dynamic";
@@ -18,9 +21,14 @@ import { api, hasBackend, type SessionInfo } from "@/lib/api";
 import { NavIcon, TabSkeleton, type AdminDict } from "./shared";
 
 type Tab = "dashboard" | "orders" | "invoices" | "production" | "logistics" | "customers" | "pricing" | "products" | "content" | "staff";
+export type Console = "erp" | "studio";
 
-/** The administration group is reserved to admins regardless of area grants. */
-const ADMIN_ONLY: Tab[] = ["products", "pricing", "content", "staff"];
+/** Stations owned by each console (settings/staff is shared, admin-only). */
+const ERP_TABS: Tab[] = ["dashboard", "orders", "customers", "invoices", "production", "logistics"];
+const STUDIO_TABS: Tab[] = ["products", "pricing", "content"];
+
+/** Reserved to admins regardless of area grants (the shared settings group). */
+const ADMIN_ONLY: Tab[] = ["staff"];
 
 // next/dynamic requires inline object literals (statically analyzed).
 const DashboardTab = dynamic(() => import("./DashboardTab"), { loading: () => <TabSkeleton /> });
@@ -34,6 +42,7 @@ const ContentTab = dynamic(() => import("./ContentTab"), { loading: () => <TabSk
 const StaffTab = dynamic(() => import("./StaffTab"), { loading: () => <TabSkeleton /> });
 
 export default function AdminApp({
+  variant,
   t,
   statusLabels,
   cfgDict,
@@ -43,6 +52,7 @@ export default function AdminApp({
   confirmationDict,
   locale,
 }: {
+  variant: Console;
   t: AdminDict;
   statusLabels: Dict["portal"]["status"];
   cfgDict: Dict["cfg"];
@@ -52,13 +62,15 @@ export default function AdminApp({
   confirmationDict: Dict["portal"]["confirmation"];
   locale: string;
 }) {
-  const [tab, setTab] = useState<Tab>("dashboard");
+  const consoleTabs = variant === "erp" ? ERP_TABS : STUDIO_TABS;
+  const [tab, setTab] = useState<Tab>(consoleTabs[0]);
 
-  // Access gate. In the server build the session carries a role + area grants:
-  // admins get everything, staff get their stations, customers are refused. In
-  // the static prototype the local session has no role, so a signed-in visitor
-  // sees the full demo portal.
-  const [gate, setGate] = useState<"loading" | "ok" | "anon" | "forbidden">("loading");
+  // Access gate. The server session carries a role + area grants: admins get
+  // everything, staff get their stations, customers are refused. "wrongConsole"
+  // means a staff member is signed in but has no station in this console (yet
+  // may have access to the other). The static prototype has no role, so a
+  // signed-in visitor sees the full demo.
+  const [gate, setGate] = useState<"loading" | "ok" | "anon" | "forbidden" | "wrongConsole">("loading");
   const [session, setSess] = useState<SessionInfo | null>(null);
   useEffect(() => {
     let alive = true;
@@ -68,8 +80,11 @@ export default function AdminApp({
         .then((u) => {
           if (!alive) return;
           setSess(u);
-          const company = u && (u.role === "admin" || (u.role === "staff" && (u.access?.length ?? 0) > 0));
-          setGate(!u ? "anon" : company ? "ok" : "forbidden");
+          if (!u) return setGate("anon");
+          const company = u.role === "admin" || (u.role === "staff" && (u.access?.length ?? 0) > 0);
+          if (!company) return setGate("forbidden");
+          const canThis = u.role === "admin" || consoleTabs.some((v) => u.access?.includes(v));
+          setGate(canThis ? "ok" : "wrongConsole");
         })
         .catch(() => alive && setGate("anon"));
     } else {
@@ -78,7 +93,7 @@ export default function AdminApp({
     return () => {
       alive = false;
     };
-  }, []);
+  }, [consoleTabs]);
 
   // Which tabs this account may open. Static demo: everything.
   const allowed = (v: Tab): boolean => {
@@ -86,17 +101,25 @@ export default function AdminApp({
     if (ADMIN_ONLY.includes(v)) return false;
     return session?.access?.includes(v) ?? false;
   };
+  const canConsole = (c: Console): boolean => {
+    if (!hasBackend || session?.role === "admin") return true;
+    const tabs = c === "erp" ? ERP_TABS : STUDIO_TABS;
+    return tabs.some((v) => session?.access?.includes(v));
+  };
 
-  // Land on the first permitted station once the gate resolves.
+  // Land on the first permitted station in this console once the gate resolves.
   useEffect(() => {
     if (gate !== "ok" || allowed(tab)) return;
-    const order: Tab[] = ["dashboard", "orders", "invoices", "production", "logistics", "customers", "products", "pricing", "content"];
-    const first = order.find(allowed);
+    const first = [...consoleTabs, "staff" as Tab].find(allowed);
     if (first) setTab(first);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gate, session]);
 
   if (gate !== "ok") {
+    // Where a wrong-console staff member can actually go.
+    const other: Console = variant === "erp" ? "studio" : "erp";
+    const otherHref = `/${locale}/${other === "erp" ? "admin" : "studio"}/`;
+    const otherLabel = other === "erp" ? t.erp.consoleErp : t.erp.consoleStudio;
     return (
       <div className="flex h-full items-center justify-center p-8">
         {gate === "loading" ? (
@@ -104,64 +127,80 @@ export default function AdminApp({
         ) : (
           <div className="flex flex-col items-start gap-5">
             <p className="text-sm font-light text-graphite">
-              {gate === "forbidden" ? t.gate.forbidden : t.gate.needLogin}
+              {gate === "anon" ? t.gate.needLogin : gate === "wrongConsole" ? t.gate.wrongConsole : t.gate.forbidden}
             </p>
-            {gate === "anon" && (
+            {gate === "anon" ? (
               <Link
                 href={`/${locale}/login/`}
                 className="inline-flex items-center justify-center bg-ink px-6 py-3 text-xs font-medium uppercase tracking-[0.16em] text-paper transition-colors hover:bg-graphite"
               >
                 {t.gate.toLogin}
               </Link>
-            )}
+            ) : gate === "wrongConsole" && canConsole(other) ? (
+              <Link
+                href={otherHref}
+                className="inline-flex items-center justify-center bg-ink px-6 py-3 text-xs font-medium uppercase tracking-[0.16em] text-paper transition-colors hover:bg-graphite"
+              >
+                {t.gate.goTo} {otherLabel}
+              </Link>
+            ) : null}
           </div>
         )}
       </div>
     );
   }
 
-  const allGroups: { label: string; items: { v: Tab; icon: string }[] }[] = [
+  const erpGroups: { label: string; items: { v: Tab; icon: string }[] }[] = [
     { label: t.erp.control, items: [{ v: "dashboard", icon: "dashboard" }] },
-    {
-      label: t.erp.sales,
-      items: [
-        { v: "orders", icon: "orders" },
-        { v: "customers", icon: "customers" },
-      ],
-    },
-    {
-      label: t.erp.finance,
-      items: [{ v: "invoices", icon: "invoices" }],
-    },
-    {
-      label: t.erp.operations,
-      items: [
-        { v: "production", icon: "production" },
-        { v: "logistics", icon: "logistics" },
-      ],
-    },
-    {
-      label: t.erp.catalog,
-      items: [
-        { v: "products", icon: "products" },
-        { v: "pricing", icon: "pricing" },
-        { v: "content", icon: "content" },
-        { v: "staff", icon: "customers" },
-      ],
-    },
+    { label: t.erp.sales, items: [{ v: "orders", icon: "orders" }, { v: "customers", icon: "customers" }] },
+    { label: t.erp.finance, items: [{ v: "invoices", icon: "invoices" }] },
+    { label: t.erp.operations, items: [{ v: "production", icon: "production" }, { v: "logistics", icon: "logistics" }] },
   ];
+  const studioGroups: { label: string; items: { v: Tab; icon: string }[] }[] = [
+    { label: t.erp.studio, items: [{ v: "products", icon: "products" }, { v: "pricing", icon: "pricing" }, { v: "content", icon: "content" }] },
+  ];
+  const settingsGroup = { label: t.erp.settings, items: [{ v: "staff" as Tab, icon: "customers" }] };
+  const allGroups = [...(variant === "erp" ? erpGroups : studioGroups), settingsGroup];
   // A collaborator only sees the stations they were granted.
   const groups = allGroups
     .map((g) => ({ ...g, items: g.items.filter((i) => allowed(i.v)) }))
     .filter((g) => g.items.length > 0);
 
+  const brand = variant === "erp" ? t.erp.consoleErp : t.erp.consoleStudio;
+  const brandHue = variant === "erp" ? "#2563eb" : "#7c3aed";
+  const showSwitch = canConsole("erp") && canConsole("studio");
+  const switchLink = (c: Console) => {
+    const active = c === variant;
+    const href = `/${locale}/${c === "erp" ? "admin" : "studio"}/`;
+    const label = c === "erp" ? t.erp.consoleErp : t.erp.consoleStudio;
+    return (
+      <Link
+        key={c}
+        href={href}
+        className={`flex-1 rounded px-2 py-1 text-center text-[10px] font-semibold uppercase tracking-[0.1em] transition-colors ${
+          active ? "bg-[#2b3342] text-white" : "text-[#9aa1ac] hover:text-white"
+        }`}
+      >
+        {label}
+      </Link>
+    );
+  };
+
   return (
     <div className="flex h-full w-full flex-col overflow-hidden bg-[#f3f4f6] md:flex-row">
-      {/* ERP sidebar */}
+      {/* sidebar */}
       <aside className="flex w-full shrink-0 flex-col gap-5 overflow-y-auto bg-[#151a23] px-3 py-5 md:w-56">
-        <Link href={`/${locale}/`} className="px-3 text-[13px] font-semibold tracking-[0.18em] text-white transition-opacity hover:opacity-80">
-          AXIOFORM <span className="rounded bg-[#2563eb] px-1.5 py-0.5 text-[9px] font-bold tracking-[0.1em]">ERP</span>
-        </Link>
+        <div className="flex flex-col gap-2 px-3">
+          <Link href={`/${locale}/`} className="text-[13px] font-semibold tracking-[0.18em] text-white transition-opacity hover:opacity-80">
+            AXIOFORM <span className="rounded px-1.5 py-0.5 text-[9px] font-bold tracking-[0.1em] text-white" style={{ background: brandHue }}>{brand}</span>
+          </Link>
+          {showSwitch && (
+            <div className="flex gap-0.5 rounded-md bg-[#0f131b] p-0.5">
+              {switchLink("erp")}
+              {switchLink("studio")}
+            </div>
+          )}
+        </div>
         <nav className="flex flex-col gap-4">
           {groups.map((g) => (
             <div key={g.label} className="flex flex-col gap-0.5">
