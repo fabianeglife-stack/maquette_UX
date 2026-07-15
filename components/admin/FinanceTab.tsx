@@ -46,6 +46,7 @@ export default function FinanceTab({
   cfgDict,
   invoiceDict,
   confirmationDict,
+  quoteDict,
   locale,
 }: {
   t: AdminDict;
@@ -53,9 +54,10 @@ export default function FinanceTab({
   cfgDict: Dict["cfg"];
   invoiceDict: Dict["portal"]["invoice"];
   confirmationDict: Dict["portal"]["confirmation"];
+  quoteDict: Dict["portal"]["quote"];
   locale?: string;
 }) {
-  const { orders, ready, advance, sendQuote, markAccepted, setDeliveryDate, markPaid } = useOrders();
+  const { orders, ready, advance, sendQuote, markAccepted, setDeliveryDate, markPaid, cancel } = useOrders();
   const [openRef, setOpenRef] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
 
@@ -208,12 +210,14 @@ export default function FinanceTab({
           cfgDict={cfgDict}
           invoiceDict={invoiceDict}
           confirmationDict={confirmationDict}
+          quoteDict={quoteDict}
           locale={locale}
           onClose={() => setOpenRef(null)}
           advance={advance}
           sendQuote={sendQuote}
           markAccepted={markAccepted}
           setDeliveryDate={setDeliveryDate}
+          cancel={cancel}
         />
       )}
     </div>

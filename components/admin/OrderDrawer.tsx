@@ -13,6 +13,7 @@ import { deriveRailing } from "@/lib/engine/geometry";
 import { buildBom } from "@/lib/engine/bom";
 import type { TypeProfile } from "@/lib/engine/types";
 import {
+  isQuoteExpired,
   loadEvents,
   ORDER_FLOW,
   QUOTE_FLOW,
@@ -26,6 +27,7 @@ import { api, hasBackend, type ApiOrder } from "@/lib/api";
 import StatusSteps from "@/components/StatusSteps";
 import { downloadInvoicePdf } from "@/components/portal/invoice";
 import { downloadConfirmationPdf } from "@/components/portal/confirmation";
+import { downloadQuotePdf } from "@/components/portal/quote";
 import { downloadDeliveryPdf, downloadFabricationPdf, downloadPickingPdf } from "./docs";
 import DrawingSVG from "@/components/configurator/DrawingSVG";
 import type { AdminDict } from "./shared";
@@ -120,12 +122,14 @@ export default function OrderDrawer({
   cfgDict,
   invoiceDict,
   confirmationDict,
+  quoteDict,
   locale,
   onClose,
   advance,
   sendQuote,
   markAccepted,
   setDeliveryDate,
+  cancel,
 }: {
   order: Order;
   t: AdminDict;
@@ -133,12 +137,14 @@ export default function OrderDrawer({
   cfgDict: Dict["cfg"];
   invoiceDict: Dict["portal"]["invoice"];
   confirmationDict: Dict["portal"]["confirmation"];
+  quoteDict: Dict["portal"]["quote"];
   locale?: string;
   onClose: () => void;
   advance: (ref: string, status: OrderStatus) => Promise<boolean>;
   sendQuote: (o: Order, value: number) => void;
   markAccepted: (o: Order) => void;
   setDeliveryDate: (ref: string, date: string) => void;
+  cancel: (o: Order) => void;
 }) {
   const [quote, setQuote] = useState(String(Math.round(order.quotedGross ?? order.gross)));
   // Set right after a successful confirm: the order confirmation went out to
@@ -207,7 +213,7 @@ export default function OrderDrawer({
         {/* status pipeline + action */}
         <div className="flex flex-col gap-3 border border-hairline p-4">
           <StatusSteps status={order.status} flow={flow} labels={statusLabels} />
-          {order.kind === "order" ? (
+          {order.status === "cancelled" ? null : order.kind === "order" ? (
             <>
               {/* Estimated delivery date — the order confirmation carries it,
                   so confirming stays blocked until staff have entered one. */}
@@ -273,20 +279,48 @@ export default function OrderDrawer({
               </button>
             </div>
           ) : (
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-sm font-light text-graphite">
-                {statusLabels[order.status]} · <span className="text-ink">{chf(order.quotedGross ?? order.gross)}</span>
-              </p>
+            <>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm font-light text-graphite">
+                  {statusLabels[order.status]} · <span className="text-ink">{chf(order.quotedGross ?? order.gross)}</span>
+                </p>
+                {order.status === "quoted" && !isQuoteExpired(order) && (
+                  <button
+                    type="button"
+                    onClick={() => markAccepted(order)}
+                    className="border border-ink/40 px-3 py-1.5 text-[11px] uppercase tracking-[0.12em] text-ink transition-colors hover:border-ink hover:bg-ink hover:text-paper"
+                  >
+                    {t.orders.markAccepted}
+                  </button>
+                )}
+              </div>
+              {order.status === "quoted" && order.validUntil && (
+                <p className={`text-xs font-light ${isQuoteExpired(order) ? "text-alert" : "text-stone"}`}>
+                  {quoteDict.validUntil}: {order.validUntil}
+                </p>
+              )}
               {order.status === "quoted" && (
                 <button
                   type="button"
-                  onClick={() => markAccepted(order)}
-                  className="border border-ink/40 px-3 py-1.5 text-[11px] uppercase tracking-[0.12em] text-ink transition-colors hover:border-ink hover:bg-ink hover:text-paper"
+                  onClick={() => downloadQuotePdf(order, quoteDict, order.system === "glass" ? cfgDict.systemGlass : cfgDict.systemBars)}
+                  className="self-start border border-hairline px-3 py-1.5 text-[11px] uppercase tracking-[0.12em] text-graphite transition-colors hover:border-graphite hover:text-ink"
                 >
-                  {t.orders.markAccepted}
+                  ↓ {quoteDict.title} (PDF)
                 </button>
               )}
-            </div>
+            </>
+          )}
+          {/* Terminal exit: withdraw an order in review / a confirmed order, or an open quote. */}
+          {(order.kind === "order"
+            ? order.status === "new" || order.status === "confirmed"
+            : order.status === "quote_requested" || order.status === "quoted") && (
+            <button
+              type="button"
+              onClick={() => window.confirm(t.orders.cancelConfirm) && cancel(order)}
+              className="self-start text-[11px] uppercase tracking-[0.12em] text-stone underline-offset-4 transition-colors hover:text-alert hover:underline"
+            >
+              {t.orders.cancel}
+            </button>
           )}
         </div>
 

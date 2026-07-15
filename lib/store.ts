@@ -16,7 +16,11 @@ export type OrderStatus =
   | "invoiced"
   | "paid"
   | "quote_requested"
-  | "quoted";
+  | "quoted"
+  // Terminal state outside the linear flows: a withdrawn order or declined
+  // quote. Orders can be cancelled while new (customer) or new/confirmed
+  // (staff); later stages are committed to production.
+  | "cancelled";
 
 export const ORDER_FLOW: OrderStatus[] = ["new", "confirmed", "production", "shipped", "invoiced", "paid"];
 
@@ -32,6 +36,16 @@ export function deliveryNoFor(ref: string): string {
 export function confirmationNoFor(ref: string): string {
   return "AB-" + ref.replace(/^AX-/, "");
 }
+/** Deterministic quote/offer number for a request. */
+export function quoteNoFor(ref: string): string {
+  return "OF-" + ref.replace(/^AX-/, "");
+}
+/** Days a binding quote stays valid after it is sent. */
+export const QUOTE_VALID_DAYS = 30;
+/** Whether a binding quote has passed its validity date. */
+export function isQuoteExpired(o: Pick<Order, "validUntil">, today: string = new Date().toISOString().slice(0, 10)): boolean {
+  return Boolean(o.validUntil && today > o.validUntil);
+}
 export const QUOTE_FLOW: OrderStatus[] = ["quote_requested", "quoted"];
 
 export interface Order {
@@ -46,6 +60,8 @@ export interface Order {
   gross: number;
   /** Binding price set by the admin when quoting; becomes `gross` on acceptance. */
   quotedGross?: number;
+  /** Last day (ISO yyyy-mm-dd) a binding quote can be accepted. */
+  validUntil?: string;
   /** Estimated delivery date (ISO yyyy-mm-dd), entered by staff before confirmation. */
   deliveryDate?: string;
   /** Payment markers (ISO yyyy-mm-dd) for the deposit/full and balance invoices. */
@@ -132,9 +148,17 @@ export function updateOrderStatus(ref: string, status: OrderStatus): void {
 /** Customer accepts a binding quote: it converts into a confirmed order. */
 export function acceptQuote(ref: string): void {
   const q = loadOrders().find((o) => o.ref === ref);
-  if (!q || q.kind !== "quote") return;
+  if (!q || q.kind !== "quote" || isQuoteExpired(q)) return;
   updateOrder(ref, { kind: "order", status: "confirmed", gross: q.quotedGross ?? q.gross, payment: "invoice" });
   logEvent(ref, "quote_accepted", q.customer.email);
+}
+
+/** Withdraw an order (while still in review) or decline a quote. */
+export function cancelOrder(ref: string): void {
+  const o = loadOrders().find((x) => x.ref === ref);
+  if (!o || o.status === "cancelled") return;
+  updateOrder(ref, { status: "cancelled" });
+  logEvent(ref, "cancelled", o.customer.email);
 }
 
 export function dedupeOrders(orders: Order[]): Order[] {

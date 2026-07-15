@@ -1,5 +1,5 @@
-# Quality gate: typecheck + engine unit tests on every push and PR.
-# Deployment to Pages stays in static.yml (main only).
+# Quality gate: typecheck + engine unit tests + server build on every push
+# and PR. Deployment to Pages stays in static.yml (main only).
 name: CI
 
 on:
@@ -23,3 +23,7 @@ jobs:
         run: npm run typecheck
       - name: Engine unit tests
         run: npm test
+      # Server build (Prisma + API routes) — catches build-only breakage the
+      # typecheck can't see (next/dynamic constraints, route exports, …).
+      - name: Production build
+        run: npm run build

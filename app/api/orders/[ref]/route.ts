@@ -4,6 +4,7 @@ import { sessionUser } from "@/lib/server/auth";
 import { hasArea } from "@/lib/server/authz";
 import { toClientOrder } from "@/lib/server/serialize";
 import { paymentPlan } from "@/lib/engine/pricing";
+import { QUOTE_VALID_DAYS } from "@/lib/store";
 
 const ORDER_STATUSES = ["new", "confirmed", "production", "shipped", "invoiced", "paid"];
 const ORDER_RANK = ["new", "confirmed", "production", "shipped", "invoiced", "paid"];
@@ -22,6 +23,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ ref: s
     if (order.kind !== "quote" || order.status !== "quoted") {
       return NextResponse.json({ error: "not_acceptable" }, { status: 409 });
     }
+    // A binding quote is only acceptable within its validity window.
+    if (order.validUntil && todayISO() > order.validUntil) {
+      return NextResponse.json({ error: "quote_expired" }, { status: 409 });
+    }
     // Ownership is the immutable userId link, not the mutable email field.
     // Sales staff (orders area) may accept on the customer's behalf.
     if (!hasArea(user, "orders") && order.userId !== user.id) {
@@ -36,6 +41,27 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ ref: s
         payment: "invoice",
         events: { create: { type: "quote_accepted", emailTo: order.email } },
       },
+      include: { events: { orderBy: { at: "asc" } } },
+    });
+    return NextResponse.json({ order: toClientOrder(updated) });
+  }
+
+  // Cancel: a customer may withdraw their own order while it is still in
+  // review, or decline their quote; sales staff may additionally cancel a
+  // confirmed order. Later stages are committed to production.
+  if (body.cancel === true) {
+    const isStaff = hasArea(user, "orders");
+    if (!isStaff && order.userId !== user.id) {
+      return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
+    const cancellable =
+      order.kind === "quote"
+        ? order.status === "quote_requested" || order.status === "quoted"
+        : order.status === "new" || (isStaff && order.status === "confirmed");
+    if (!cancellable) return NextResponse.json({ error: "not_cancellable" }, { status: 409 });
+    const updated = await db.order.update({
+      where: { ref },
+      data: { status: "cancelled", events: { create: { type: "cancelled", emailTo: order.email } } },
       include: { events: { orderBy: { at: "asc" } } },
     });
     return NextResponse.json({ order: toClientOrder(updated) });
@@ -72,11 +98,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ ref: s
 
   if (typeof body.quotedGross === "number" && body.quotedGross > 0) {
     if (!hasArea(user, "orders")) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    // The binding quote carries a validity window from the day it is sent.
+    const validUntil = new Date(Date.now() + QUOTE_VALID_DAYS * 86400000).toISOString().slice(0, 10);
     const updated = await db.order.update({
       where: { ref },
       data: {
         status: "quoted",
         quotedGross: body.quotedGross,
+        validUntil,
         events: { create: { type: "quoted", emailTo: order.email } },
       },
       include: { events: { orderBy: { at: "asc" } } },

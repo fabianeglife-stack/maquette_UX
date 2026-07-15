@@ -22,7 +22,7 @@ export default async function Admin({ params }: { params: Promise<{ locale: stri
       {/* Standalone full-screen back-office: the fixed layer covers the site
           header (z-50) and footer, so the ERP owns the whole window. */}
       <div className="fixed inset-0 z-[60] bg-[#f3f4f6]">
-        <AdminApp variant="erp" t={d.admin} statusLabels={d.portal.status} cfgDict={d.cfg} refsDict={d.references} aboutDict={d.about} invoiceDict={d.portal.invoice} confirmationDict={d.portal.confirmation} locale={locale} />
+        <AdminApp variant="erp" t={d.admin} statusLabels={d.portal.status} cfgDict={d.cfg} refsDict={d.references} aboutDict={d.about} invoiceDict={d.portal.invoice} confirmationDict={d.portal.confirmation} quoteDict={d.portal.quote} locale={locale} />
       </div>
       <Toasts labels={d.common} />
     </>

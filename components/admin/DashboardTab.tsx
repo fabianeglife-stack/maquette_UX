@@ -71,8 +71,9 @@ export default function DashboardTab({
   const { orders, ready } = useOrders();
   if (!ready) return <TabSkeleton />;
 
-  const real = orders.filter((o) => o.kind === "order");
-  const quotes = orders.filter((o) => o.kind === "quote");
+  // Cancelled records carry no business value: out of every figure.
+  const real = orders.filter((o) => o.kind === "order" && o.status !== "cancelled");
+  const quotes = orders.filter((o) => o.kind === "quote" && o.status !== "cancelled");
   const revenue = real.reduce((s, o) => s + o.gross, 0);
   const openOrders = real.filter((o) => !["shipped", "invoiced", "paid"].includes(o.status)).length;
 

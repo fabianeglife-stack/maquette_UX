@@ -11,9 +11,11 @@ import { api, hasBackend } from "@/lib/api";
 import { notify } from "@/lib/toast";
 import {
   acceptQuote,
+  cancelOrder,
   loadOrders,
   logEvent,
   ORDER_FLOW,
+  QUOTE_VALID_DAYS,
   updateOrder,
   updateOrderStatus,
   type Order,
@@ -40,6 +42,7 @@ export const STATUS_HUES: Record<OrderStatus, string> = {
   shipped: "#0d9488",
   invoiced: "#4f46e5",
   paid: "#16a34a",
+  cancelled: "#6b7280",
 };
 
 export function StatusChip({ status, label }: { status: OrderStatus; label: string }) {
@@ -161,8 +164,20 @@ export function useOrders() {
       api.patchOrder(o.ref, { quotedGross: value }).then(refresh).catch(() => notify("saveFailed"));
       return;
     }
-    updateOrder(o.ref, { status: "quoted", quotedGross: value });
+    // The binding quote carries a validity window from the day it is sent.
+    const validUntil = new Date(Date.now() + QUOTE_VALID_DAYS * 86400000).toISOString().slice(0, 10);
+    updateOrder(o.ref, { status: "quoted", quotedGross: value, validUntil });
     logEvent(o.ref, "quoted", o.customer.email);
+    refresh();
+  };
+
+  // Withdraw an order in review / decline a quote (terminal "cancelled").
+  const cancel = (o: Order) => {
+    if (hasBackend) {
+      api.patchOrder(o.ref, { cancel: true }).then(refresh).catch(() => notify("saveFailed"));
+      return;
+    }
+    cancelOrder(o.ref);
     refresh();
   };
 
@@ -206,5 +221,5 @@ export function useOrders() {
     refresh();
   };
 
-  return { orders, ready, refresh, advance, sendQuote, markAccepted, setDeliveryDate, markPaid };
+  return { orders, ready, refresh, advance, sendQuote, markAccepted, setDeliveryDate, markPaid, cancel };
 }

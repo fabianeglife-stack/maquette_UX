@@ -1,31 +1,23 @@
 /*
- * Client-side order-confirmation PDF (A4). Mirrors the invoice layout and
- * works from the order snapshot alone; carries the payment terms and the
- * staff-entered estimated delivery date.
+ * Client-side quote/offer PDF (A4). Renders the binding price set by the
+ * sales team, with its validity date — the document a customer can file or
+ * forward before deciding. Mirrors the invoice layout.
  */
 
 import { jsPDF } from "jspdf";
-import { chf, defaultPriceBook, paymentPlan } from "@/lib/engine/pricing";
-import { confirmationNoFor, type Order } from "@/lib/store";
+import { chf, defaultPriceBook } from "@/lib/engine/pricing";
+import { quoteNoFor, type Order } from "@/lib/store";
 import { fmt, type Dict } from "@/lib/i18n";
 
-// Single source of truth for the VAT rate (see the price book).
-const VAT_RATE = defaultPriceBook.vatRate;
-
-export function downloadConfirmationPdf(
-  order: Order,
-  t: Dict["portal"]["confirmation"],
-  payTerms: Dict["cfg"]["payTerms"],
-  systemName: string,
-): void {
+export function downloadQuotePdf(order: Order, t: Dict["portal"]["quote"], systemName: string): void {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const right = 190;
   const left = 20;
 
-  const gross = order.quotedGross ?? order.gross;
-  const net = gross / (1 + VAT_RATE);
-  const vat = gross - net;
-  const plan = paymentPlan(gross);
+  const amount = order.quotedGross ?? order.gross;
+  const net = amount / (1 + defaultPriceBook.vatRate);
+  const vat = amount - net;
+  const no = quoteNoFor(order.ref);
 
   // header
   doc.setFont("helvetica", "bold");
@@ -50,11 +42,11 @@ export function downloadConfirmationPdf(
 
   // meta block
   const meta: [string, string][] = [
-    [t.no, confirmationNoFor(order.ref)],
+    [t.no, no],
     [t.ref, order.ref],
     [t.date, order.createdAt],
   ];
-  if (order.deliveryDate) meta.push([t.delivery, order.deliveryDate]);
+  if (order.validUntil) meta.push([t.validUntil, order.validUntil]);
   meta.forEach(([k, v], i) => {
     doc.setTextColor(130);
     doc.text(k, right - 45, y + i * 5);
@@ -88,27 +80,16 @@ export function downloadConfirmationPdf(
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
   doc.text(t.total, left, y);
-  doc.text(chf(gross), right, y, { align: "right" });
-
-  // payment terms
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  y += 16;
-  doc.setTextColor(0);
-  doc.setFontSize(10);
-  doc.text(t.payTitle, left, y);
-  doc.setFontSize(9);
-  doc.setTextColor(90);
-  const planLine = plan.split
-    ? fmt(payTerms.split, { deposit: chf(plan.deposit), balance: chf(plan.balance) })
-    : fmt(payTerms.fullUpfront, { amount: chf(plan.deposit) });
-  doc.text(planLine, left, y + 6);
-  doc.text(fmt(payTerms.net, { days: plan.netDays }), left, y + 11);
+  doc.text(chf(amount), right, y, { align: "right" });
 
   // footer
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(90);
+  if (order.validUntil) doc.text(fmt(t.validNote, { date: order.validUntil }), left, y + 16);
   doc.setTextColor(160);
   doc.setFontSize(8);
   doc.text(t.demo, left, 280);
 
-  doc.save(`axioform-confirmation-${order.ref}.pdf`);
+  doc.save(`axioform-quote-${no}.pdf`);
 }

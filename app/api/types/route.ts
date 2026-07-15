@@ -23,6 +23,11 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: "builtin_readonly" }, { status: 400 });
   }
   const data = { json: JSON.stringify({ ...tp, builtin: false }), active: tp.active !== false };
+  // A type profile is parameters + names; cap the row so an embedded blob
+  // can't bloat the database.
+  if (data.json.length > 2_000_000) {
+    return NextResponse.json({ error: "payload_too_large" }, { status: 413 });
+  }
   await db.guardrailType.upsert({ where: { id: tp.id }, create: { id: tp.id, ...data }, update: data });
   return NextResponse.json({ ok: true });
 }

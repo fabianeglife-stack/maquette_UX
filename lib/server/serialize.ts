@@ -14,6 +14,7 @@ export function toClientOrder(o: DbOrder & { events?: DbEvent[] }) {
     lengthM: o.lengthM,
     gross: o.gross,
     quotedGross: o.quotedGross ?? undefined,
+    validUntil: o.validUntil ?? undefined,
     deliveryDate: o.deliveryDate ?? undefined,
     depositPaidAt: o.depositPaidAt ?? undefined,
     balancePaidAt: o.balancePaidAt ?? undefined,

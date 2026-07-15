@@ -42,6 +42,8 @@ model Order {
   lengthM          Float
   gross            Float
   quotedGross      Float?
+  // Last day (ISO yyyy-mm-dd) a binding quote can be accepted.
+  validUntil       String?
   // Estimated delivery date (ISO yyyy-mm-dd), entered by staff before the
   // order confirmation goes out.
   deliveryDate     String?

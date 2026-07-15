@@ -144,6 +144,7 @@ function CheckoutForm({
   kind,
   summary,
   terms,
+  termsHref,
   onSubmit,
   onCancel,
 }: {
@@ -153,6 +154,8 @@ function CheckoutForm({
   summary: string;
   /** Payment-terms lines shown for direct orders. */
   terms?: string[];
+  /** Link target of the general-terms page (CGV). */
+  termsHref: string;
   onSubmit: (customer: Order["customer"], payment: "card" | "twint" | "invoice") => void;
   onCancel: () => void;
 }) {
@@ -161,6 +164,9 @@ function CheckoutForm({
   const [street, setStreet] = useState("");
   const [city, setCity] = useState("");
   const [payment, setPayment] = useState<"card" | "twint" | "invoice">("card");
+  // Placing an order requires accepting the general terms; a quote request
+  // commits to nothing yet.
+  const [accepted, setAccepted] = useState(false);
 
   const inputCls =
     "w-full border border-hairline bg-paper px-3 py-2.5 text-sm font-light text-ink outline-none transition-colors placeholder:text-stone focus:border-graphite";
@@ -218,10 +224,27 @@ function CheckoutForm({
           ))}
         </div>
       )}
+      {kind === "order" && (
+        <label className="flex items-start gap-2.5 text-[13px] font-light text-graphite">
+          <input
+            type="checkbox"
+            checked={accepted}
+            onChange={(e) => setAccepted(e.target.checked)}
+            className="mt-0.5 h-4 w-4 accent-ink"
+          />
+          <span>
+            {t.checkout.acceptTerms}{" "}
+            <a href={termsHref} target="_blank" rel="noreferrer" className="text-ink underline underline-offset-4">
+              {t.checkout.acceptTermsLink}
+            </a>
+          </span>
+        </label>
+      )}
       <div className="flex gap-3 pt-1">
         <button
           type="submit"
-          className="inline-flex items-center justify-center bg-ink px-5 py-3 text-xs font-medium uppercase tracking-[0.14em] text-paper transition-colors hover:bg-graphite"
+          disabled={kind === "order" && !accepted}
+          className="inline-flex items-center justify-center bg-ink px-5 py-3 text-xs font-medium uppercase tracking-[0.14em] text-paper transition-colors hover:bg-graphite disabled:cursor-not-allowed disabled:opacity-40"
         >
           {kind === "order" ? t.checkout.submitOrder : t.checkout.submitQuote}
         </button>
@@ -837,6 +860,7 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
                 kind={checkout}
                 summary={`${cfg.system === "glass" ? t.systemGlass : t.systemBars} · ${(derived.totalLength / 1000).toLocaleString("de-CH")} m · ${chf(price.gross)}`}
                 terms={termsLines}
+                termsHref={`/${locale}/terms/`}
                 onCancel={() => setCheckout(null)}
                 onSubmit={(customer, payment) => {
                   if (hasBackend) {

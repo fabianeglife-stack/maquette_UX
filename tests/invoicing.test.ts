@@ -36,6 +36,10 @@ describe("invoicesFor", () => {
     expect(invoicesFor(order({ kind: "quote", status: "quote_requested", gross: 5000 }), [], undefined, NOW)).toEqual([]);
   });
 
+  it("returns nothing for a cancelled order", () => {
+    expect(invoicesFor(order({ status: "cancelled", gross: 6412.35 }), [ev("confirmed", "2026-07-01 09:00")], undefined, NOW)).toEqual([]);
+  });
+
   it("bills a small order (<= threshold) in full at confirmation", () => {
     const inv = invoicesFor(order({ status: "confirmed", gross: 1493.6 }), [ev("confirmed", "2026-07-01 09:00")], undefined, NOW);
     expect(inv).toHaveLength(1);

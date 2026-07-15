@@ -42,7 +42,9 @@ export default function LoginForm({ dict, locale }: { dict: Dict["login"]; local
         ? dict.errInput
         : code === "account_disabled"
           ? dict.errDisabled
-          : dict.errCredentials;
+          : code === "too_many_attempts"
+            ? dict.errThrottled
+            : dict.errCredentials;
 
   const inputCls =
     "w-full border border-hairline bg-paper px-4 py-3 text-sm font-light text-ink outline-none transition-colors placeholder:text-stone focus:border-graphite";

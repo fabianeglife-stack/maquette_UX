@@ -100,8 +100,8 @@ function KanbanBoard({
   );
 }
 
-export default function OrdersTab({ t, statusLabels, cfgDict, invoiceDict, confirmationDict, locale }: { t: AdminDict; statusLabels: Dict["portal"]["status"]; cfgDict: Dict["cfg"]; invoiceDict: Dict["portal"]["invoice"]; confirmationDict: Dict["portal"]["confirmation"]; locale?: string }) {
-  const { orders, ready, advance, sendQuote, markAccepted, setDeliveryDate } = useOrders();
+export default function OrdersTab({ t, statusLabels, cfgDict, invoiceDict, confirmationDict, quoteDict, locale }: { t: AdminDict; statusLabels: Dict["portal"]["status"]; cfgDict: Dict["cfg"]; invoiceDict: Dict["portal"]["invoice"]; confirmationDict: Dict["portal"]["confirmation"]; quoteDict: Dict["portal"]["quote"]; locale?: string }) {
+  const { orders, ready, advance, sendQuote, markAccepted, setDeliveryDate, cancel } = useOrders();
   const [openRef, setOpenRef] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [view, setView] = useState<OrdersViewMode>("kanban");
@@ -111,9 +111,10 @@ export default function OrdersTab({ t, statusLabels, cfgDict, invoiceDict, confi
 
   if (!ready) return <TabSkeleton />;
 
-  // summary metrics over all orders (independent of the active filter)
-  const orderList = orders.filter((o) => o.kind === "order");
-  const quoteList = orders.filter((o) => o.kind === "quote");
+  // summary metrics over all orders (independent of the active filter);
+  // cancelled records don't count towards workload or pipeline value
+  const orderList = orders.filter((o) => o.kind === "order" && o.status !== "cancelled");
+  const quoteList = orders.filter((o) => o.kind === "quote" && o.status !== "cancelled");
   const done = new Set(["shipped", "invoiced", "paid"]);
   const stats = {
     open: orderList.filter((o) => !done.has(o.status)).length,
@@ -134,7 +135,7 @@ export default function OrdersTab({ t, statusLabels, cfgDict, invoiceDict, confi
     )
     .sort((a, b) => (sort === "value" ? b.gross - a.gross : a.createdAt < b.createdAt ? 1 : -1));
 
-  const allStatuses = [...ORDER_FLOW, ...QUOTE_FLOW];
+  const allStatuses: OrderStatus[] = [...ORDER_FLOW, ...QUOTE_FLOW, "cancelled"];
   const selected = orders.find((o) => o.ref === openRef) ?? null;
 
   return (
@@ -281,12 +282,14 @@ export default function OrdersTab({ t, statusLabels, cfgDict, invoiceDict, confi
           cfgDict={cfgDict}
           invoiceDict={invoiceDict}
           confirmationDict={confirmationDict}
+          quoteDict={quoteDict}
           locale={locale}
           onClose={() => setOpenRef(null)}
           advance={advance}
           sendQuote={sendQuote}
           markAccepted={markAccepted}
           setDeliveryDate={setDeliveryDate}
+          cancel={cancel}
         />
       )}
     </div>

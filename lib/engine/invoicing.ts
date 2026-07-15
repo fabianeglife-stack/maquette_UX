@@ -63,7 +63,8 @@ export function invoicesFor(
   pb?: PriceBook,
   now: Date = new Date(),
 ): Instalment[] {
-  if (order.kind !== "order") return [];
+  // Quotes carry no invoices; a cancelled order never bills.
+  if (order.kind !== "order" || order.status === "cancelled") return [];
   const plan = paymentPlan(order.quotedGross ?? order.gross, pb);
   const base = invoiceNoFor(order.ref);
   const today = now.toISOString().slice(0, 10);

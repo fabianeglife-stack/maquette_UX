@@ -4,12 +4,13 @@
  */
 
 import { jsPDF } from "jspdf";
-import { chf } from "@/lib/engine/pricing";
+import { chf, defaultPriceBook } from "@/lib/engine/pricing";
 import { invoiceNoFor, type Order } from "@/lib/store";
 import type { Instalment } from "@/lib/engine/invoicing";
 import { fmt, type Dict } from "@/lib/i18n";
 
-const VAT_RATE = 0.081;
+// Single source of truth for the VAT rate (see the price book).
+const VAT_RATE = defaultPriceBook.vatRate;
 
 /**
  * Invoice PDF (A4). Without an `instalment` it bills the full order; with one
