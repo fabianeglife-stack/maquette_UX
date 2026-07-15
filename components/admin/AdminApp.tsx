@@ -26,6 +26,7 @@ const ADMIN_ONLY: Tab[] = ["products", "pricing", "content", "staff"];
 const DashboardTab = dynamic(() => import("./DashboardTab"), { loading: () => <TabSkeleton /> });
 const OrdersTab = dynamic(() => import("./OrdersTab"), { loading: () => <TabSkeleton /> });
 const OpsView = dynamic(() => import("./OpsView"), { loading: () => <TabSkeleton /> });
+const FinanceTab = dynamic(() => import("./FinanceTab"), { loading: () => <TabSkeleton /> });
 const CustomersTab = dynamic(() => import("./CustomersTab"), { loading: () => <TabSkeleton /> });
 const PricingTab = dynamic(() => import("./PricingTab"), { loading: () => <TabSkeleton /> });
 const ProductsTab = dynamic(() => import("./ProductsTab"), { loading: () => <TabSkeleton /> });
@@ -125,9 +126,12 @@ export default function AdminApp({
       label: t.erp.sales,
       items: [
         { v: "orders", icon: "orders" },
-        { v: "invoices", icon: "invoices" },
         { v: "customers", icon: "customers" },
       ],
+    },
+    {
+      label: t.erp.finance,
+      items: [{ v: "invoices", icon: "invoices" }],
     },
     {
       label: t.erp.operations,
@@ -213,16 +217,13 @@ export default function AdminApp({
           />
         )}
         {tab === "invoices" && (
-          <OpsView
+          <FinanceTab
             t={t}
             statusLabels={statusLabels}
             cfgDict={cfgDict}
             invoiceDict={invoiceDict}
             confirmationDict={confirmationDict}
             locale={locale}
-            statuses={["shipped", "invoiced", "paid"]}
-            accent="#4f46e5"
-            hint={t.ops.invoicesHint}
           />
         )}
         {tab === "customers" && <CustomersTab t={t} />}

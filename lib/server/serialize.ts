@@ -15,6 +15,8 @@ export function toClientOrder(o: DbOrder & { events?: DbEvent[] }) {
     gross: o.gross,
     quotedGross: o.quotedGross ?? undefined,
     deliveryDate: o.deliveryDate ?? undefined,
+    depositPaidAt: o.depositPaidAt ?? undefined,
+    balancePaidAt: o.balancePaidAt ?? undefined,
     config: safeParse(o.configJson),
     events: o.events?.map((e) => ({
       ref: e.orderRef,

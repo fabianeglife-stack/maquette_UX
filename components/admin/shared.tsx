@@ -13,11 +13,14 @@ import {
   acceptQuote,
   loadOrders,
   logEvent,
+  ORDER_FLOW,
   updateOrder,
   updateOrderStatus,
   type Order,
   type OrderStatus,
 } from "@/lib/store";
+import { paymentPlan } from "@/lib/engine/pricing";
+import { paidField } from "@/lib/engine/invoicing";
 import type { Dict } from "@/lib/i18n";
 
 export type AdminDict = Dict["admin"];
@@ -140,7 +143,14 @@ export function useOrders() {
           return false;
         });
     }
+    const o = loadOrders().find((x) => x.ref === ref);
     updateOrderStatus(ref, status);
+    // Mirror the backend's invoice-dispatch hooks in the static prototype.
+    if (o && o.kind === "order") {
+      const split = paymentPlan(o.quotedGross ?? o.gross).split;
+      if (status === "confirmed") logEvent(ref, split ? "deposit_sent" : "invoice_sent", o.customer.email);
+      if (status === "shipped" && split) logEvent(ref, "balance_sent", o.customer.email);
+    }
     refresh();
     return Promise.resolve(true);
   };
@@ -176,5 +186,25 @@ export function useOrders() {
     refresh();
   };
 
-  return { orders, ready, refresh, advance, sendQuote, markAccepted, setDeliveryDate };
+  // Record a payment on the deposit/full or balance invoice; once fully
+  // collected and delivered, the order reaches "paid".
+  const markPaid = (o: Order, which: "deposit" | "balance") => {
+    if (hasBackend) {
+      api.patchOrder(o.ref, { markPaid: which }).then(refresh).catch(() => notify("saveFailed"));
+      return;
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    const patch: Partial<Order> = { [paidField(which)]: today };
+    const split = paymentPlan(o.quotedGross ?? o.gross).split;
+    const allPaid = split
+      ? (which === "deposit" || Boolean(o.depositPaidAt)) && (which === "balance" || Boolean(o.balancePaidAt))
+      : which === "deposit" || Boolean(o.depositPaidAt);
+    const delivered = ORDER_FLOW.indexOf(o.status) >= ORDER_FLOW.indexOf("shipped");
+    if (allPaid && delivered) patch.status = "paid";
+    updateOrder(o.ref, patch);
+    if (allPaid && delivered) logEvent(o.ref, "paid", o.customer.email);
+    refresh();
+  };
+
+  return { orders, ready, refresh, advance, sendQuote, markAccepted, setDeliveryDate, markPaid };
 }

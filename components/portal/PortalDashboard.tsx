@@ -8,12 +8,14 @@ import { downloadInvoicePdf } from "./invoice";
 import { downloadConfirmationPdf } from "./confirmation";
 import { deriveRailing } from "@/lib/engine/geometry";
 import { chf } from "@/lib/engine/pricing";
+import { invoicesFor } from "@/lib/engine/invoicing";
 import {
   acceptQuote,
   clearSession,
   confirmationNoFor,
   encodeConfig,
   getSession,
+  loadEvents,
   loadOrders,
   ORDER_FLOW,
   QUOTE_FLOW,
@@ -23,7 +25,7 @@ import {
 import { fetchAllTypes, fetchSavedConfigs, removeSavedConfig, resolveType } from "@/lib/data";
 import type { TypeProfile } from "@/lib/engine/types";
 import type { Dict } from "@/lib/i18n";
-import { api, hasBackend } from "@/lib/api";
+import { api, hasBackend, type ApiOrder } from "@/lib/api";
 import { notify } from "@/lib/toast";
 import StatusSteps from "@/components/StatusSteps";
 import { PlanSketch } from "@/components/configurator/visual";
@@ -120,8 +122,45 @@ function OrderCard({
           </button>
         </div>
       )}
-      <div className="flex flex-wrap gap-x-5 gap-y-1">
-        {order.config && derived && (
+      {/* Invoices: deposit after confirmation, balance after delivery (or a
+          single full invoice for a small order). Only issued ones show. */}
+      {order.kind === "order" &&
+        (() => {
+          const events = hasBackend ? ((order as ApiOrder).events ?? []) : loadEvents(order.ref);
+          const invs = invoicesFor(order, events).filter((i) => i.state !== "pending");
+          const systemName = order.system === "glass" ? cfgDict.systemGlass : cfgDict.systemBars;
+          if (invs.length === 0) return null;
+          return (
+            <div className="flex flex-col gap-1.5 border-t border-hairline pt-3">
+              {invs.map((inv) => {
+                const label = inv.kind === "deposit" ? t.invoice.deposit : inv.kind === "balance" ? t.invoice.balance : t.invoice.title;
+                return (
+                  <div key={inv.kind} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                    <div className="flex items-baseline gap-2">
+                      <button
+                        type="button"
+                        onClick={() => downloadInvoicePdf(order, t.invoice, systemName, inv)}
+                        className="text-xs uppercase tracking-[0.12em] text-graphite underline-offset-4 hover:text-ink hover:underline"
+                      >
+                        ↓ {label}
+                      </button>
+                      <span className="text-xs text-ink">{chf(inv.amount)}</span>
+                    </div>
+                    {inv.state === "paid" ? (
+                      <span className="text-[10px] font-medium uppercase tracking-[0.1em] text-[#16a34a]">✓ {t.status.paid}</span>
+                    ) : inv.dueDate ? (
+                      <span className={`text-[11px] font-light ${inv.state === "overdue" ? "text-alert" : "text-stone"}`}>
+                        {t.invoice.due} {inv.dueDate}
+                      </span>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
+      {order.config && derived && (
+        <div className="flex flex-wrap gap-x-5 gap-y-1">
           <button
             type="button"
             onClick={() => svgRef.current && downloadDrawingPdf(svgRef.current, `axioform-${order.ref}.pdf`)}
@@ -129,19 +168,8 @@ function OrderCard({
           >
             ↓ {t.drawingPdf}
           </button>
-        )}
-        {order.kind === "order" && (
-          <button
-            type="button"
-            onClick={() =>
-              downloadInvoicePdf(order, t.invoice, order.system === "glass" ? cfgDict.systemGlass : cfgDict.systemBars)
-            }
-            className="text-xs uppercase tracking-[0.12em] text-graphite underline-offset-4 hover:text-ink hover:underline"
-          >
-            ↓ {t.invoicePdf}
-          </button>
-        )}
-      </div>
+        </div>
+      )}
       {order.config && derived && (
         <div className="hidden">
           <DrawingSVG

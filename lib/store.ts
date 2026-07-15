@@ -48,6 +48,9 @@ export interface Order {
   quotedGross?: number;
   /** Estimated delivery date (ISO yyyy-mm-dd), entered by staff before confirmation. */
   deliveryDate?: string;
+  /** Payment markers (ISO yyyy-mm-dd) for the deposit/full and balance invoices. */
+  depositPaidAt?: string;
+  balancePaidAt?: string;
   config?: RailingConfig;
   seeded?: boolean;
 }
@@ -201,7 +204,15 @@ export function deleteCustomType(id: string): void {
 
 const EVENTS_KEY = "axioform-events-v1";
 
-export type OrderEventType = OrderStatus | "created" | "quote_accepted";
+export type OrderEventType =
+  | OrderStatus
+  | "created"
+  | "quote_accepted"
+  // Invoice dispatch hooks: the deposit/full invoice goes out at confirmation,
+  // the balance invoice at delivery (shipping).
+  | "deposit_sent"
+  | "balance_sent"
+  | "invoice_sent";
 
 export interface OrderEvent {
   ref: string;

@@ -45,6 +45,9 @@ model Order {
   // Estimated delivery date (ISO yyyy-mm-dd), entered by staff before the
   // order confirmation goes out.
   deliveryDate     String?
+  // Payment markers (ISO yyyy-mm-dd) for the deposit/full and balance invoices.
+  depositPaidAt    String?
+  balancePaidAt    String?
   configJson       String? // RailingConfig snapshot
   priceBookVersion String?
   rulesVersion     String?
