@@ -413,6 +413,8 @@ const de = {
       needLogin: "Das Unternehmensportal ist geschützt. Bitte melden Sie sich an.",
       toLogin: "Anmelden",
       forbidden: "Dieses Konto hat keinen Zugang zum Unternehmensportal.",
+      wrongConsole: "Dieses Konto hat keinen Zugang zu dieser Konsole.",
+      goTo: "Wechseln zu",
     },
     staff: {
       hint: "Mitarbeitende und ihre Zugriffsrechte: jede Station wird pro Person freigeschaltet. Admins sehen alles inklusive Administration.",
@@ -451,7 +453,7 @@ const de = {
       content: "Inhalte",
       staff: "Mitarbeitende",
     },
-    erp: { control: "Steuerung", sales: "Verkauf", finance: "Finanzen", operations: "Betrieb", catalog: "Administration" },
+    erp: { control: "Steuerung", sales: "Verkauf", finance: "Finanzen", operations: "Betrieb", catalog: "Administration", studio: "Website & Konfigurator", settings: "Einstellungen", consoleErp: "ERP", consoleStudio: "Studio" },
     ops: {
       count: "Aufträge",
       value: "Auftragswert",
@@ -1201,6 +1203,8 @@ const fr: Dict = {
       needLogin: "Le portail entreprise est protégé. Veuillez vous connecter.",
       toLogin: "Se connecter",
       forbidden: "Ce compte n'a pas accès au portail entreprise.",
+      wrongConsole: "Ce compte n'a pas accès à cette console.",
+      goTo: "Aller vers",
     },
     staff: {
       hint: "Les collaborateurs et leurs droits d'accès : chaque station s'active par personne. Les admins voient tout, y compris l'administration.",
@@ -1239,7 +1243,7 @@ const fr: Dict = {
       content: "Contenus",
       staff: "Collaborateurs",
     },
-    erp: { control: "Pilotage", sales: "Ventes", finance: "Finance", operations: "Exploitation", catalog: "Administration" },
+    erp: { control: "Pilotage", sales: "Ventes", finance: "Finance", operations: "Exploitation", catalog: "Administration", studio: "Site & configurateur", settings: "Réglages", consoleErp: "ERP", consoleStudio: "Studio" },
     ops: {
       count: "commandes",
       value: "Valeur",
@@ -1987,6 +1991,8 @@ const en: Dict = {
       needLogin: "The company portal is protected. Please sign in.",
       toLogin: "Sign in",
       forbidden: "This account has no access to the company portal.",
+      wrongConsole: "This account has no access to this console.",
+      goTo: "Go to",
     },
     staff: {
       hint: "Collaborators and their access rights: each station is granted per person. Admins see everything including administration.",
@@ -2025,7 +2031,7 @@ const en: Dict = {
       content: "Content",
       staff: "Staff",
     },
-    erp: { control: "Control", sales: "Sales", finance: "Finance", operations: "Operations", catalog: "Administration" },
+    erp: { control: "Control", sales: "Sales", finance: "Finance", operations: "Operations", catalog: "Administration", studio: "Site & configurator", settings: "Settings", consoleErp: "ERP", consoleStudio: "Studio" },
     ops: {
       count: "orders",
       value: "Order value",
