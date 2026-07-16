@@ -53,7 +53,17 @@ export interface Order {
   kind: OrderKind;
   createdAt: string; // ISO date
   status: OrderStatus;
-  customer: { name: string; email: string; street: string; city: string };
+  customer: {
+    name: string;
+    email: string;
+    street: string;
+    city: string;
+    /** Contact number for delivery/installation coordination. */
+    phone?: string;
+    /** Delivery/site address when it differs from the billing address. */
+    deliveryStreet?: string;
+    deliveryCity?: string;
+  };
   payment?: "card" | "twint" | "invoice";
   system: "bars" | "glass";
   lengthM: number;
@@ -67,6 +77,8 @@ export interface Order {
   /** Payment markers (ISO yyyy-mm-dd) for the deposit/full and balance invoices. */
   depositPaidAt?: string;
   balancePaidAt?: string;
+  /** Dunning trail: reminder dates (ISO) per instalment. */
+  reminders?: { deposit?: string[]; balance?: string[] };
   config?: RailingConfig;
   seeded?: boolean;
 }
@@ -236,7 +248,11 @@ export type OrderEventType =
   // the balance invoice at delivery (shipping).
   | "deposit_sent"
   | "balance_sent"
-  | "invoice_sent";
+  | "invoice_sent"
+  // Online payment received with the order (deposit or full amount).
+  | "deposit_paid"
+  // Dunning: a payment reminder went out for an unpaid instalment.
+  | "reminder_sent";
 
 export interface OrderEvent {
   ref: string;
@@ -313,20 +329,30 @@ export interface HomeContent {
 }
 
 /**
- * Admin-uploaded principle drawings per guardrail type and fixing situation
- * (bottom = mounted on the slab, side = lateral). Values are PDF data-URLs
- * (prototype) or hosted URLs; the type's built-in planUrl is the fallback.
+ * Admin-uploaded principle drawings per guardrail type, wall situation
+ * (substrate) and fixing (top = on the slab, side = lateral). The canonical
+ * key is the combination "substrate|mounting"; bare-substrate and bare-mounting
+ * keys are legacy uploads kept as fallbacks. Values are PDF data-URLs
+ * (prototype) or hosted URLs; the type's built-in planUrl is the last resort.
  */
-export type TypePlans = Record<string, Partial<Record<Substrate | "top" | "side", string>>>;
+export type Mounting = "top" | "side";
+export type PlanKey = `${Substrate}|${Mounting}` | Substrate | Mounting;
+export type TypePlans = Record<string, Partial<Record<PlanKey, string>>>;
 
 /**
- * Plan resolution: exact substrate → legacy mounting-level upload
- * ("top"/"side", kept for plans stored before the per-substrate matrix) →
- * the type's built-in planUrl.
+ * Plan resolution: exact substrate|mounting combination → bare substrate
+ * (legacy) → bare mounting (legacy) → the type's built-in planUrl.
  */
-export function planFor(plans: TypePlans, typeId: string, substrate: Substrate, fallback?: string): string | undefined {
+export function planFor(
+  plans: TypePlans,
+  typeId: string,
+  substrate: Substrate,
+  mounting?: Mounting,
+  fallback?: string,
+): string | undefined {
   const entry = plans[typeId];
-  return entry?.[substrate] ?? entry?.[SUBSTRATE_MOUNTING[substrate]] ?? fallback;
+  const m = mounting ?? SUBSTRATE_MOUNTING[substrate];
+  return entry?.[`${substrate}|${m}`] ?? entry?.[substrate] ?? entry?.[m] ?? fallback;
 }
 
 export function loadPageContent<T>(id: string, empty: T): T {

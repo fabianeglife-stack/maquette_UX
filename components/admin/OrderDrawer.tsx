@@ -26,7 +26,7 @@ import { fmt, type Dict } from "@/lib/i18n";
 import { api, hasBackend, type ApiOrder } from "@/lib/api";
 import StatusSteps from "@/components/StatusSteps";
 import { downloadInvoicePdf } from "@/components/portal/invoice";
-import { downloadConfirmationPdf } from "@/components/portal/confirmation";
+import { confirmationSummary, downloadConfirmationPdf } from "@/components/portal/confirmation";
 import { downloadQuotePdf } from "@/components/portal/quote";
 import { downloadDeliveryPdf, downloadFabricationPdf, downloadPickingPdf } from "./docs";
 import DrawingSVG from "@/components/configurator/DrawingSVG";
@@ -47,6 +47,10 @@ function EventTimeline({ order, t, statusLabels }: { order: Order; t: AdminDict;
         return t.events.balance_sent;
       case "invoice_sent":
         return t.events.invoice_sent;
+      case "deposit_paid":
+        return t.events.deposit_paid;
+      case "reminder_sent":
+        return t.events.reminder_sent;
       default:
         return statusLabels[e.type];
     }
@@ -143,7 +147,7 @@ export default function OrderDrawer({
   advance: (ref: string, status: OrderStatus) => Promise<boolean>;
   sendQuote: (o: Order, value: number) => void;
   markAccepted: (o: Order) => void;
-  setDeliveryDate: (ref: string, date: string) => void;
+  setDeliveryDate: (ref: string, date: string) => Promise<boolean>;
   cancel: (o: Order) => void;
 }) {
   const [quote, setQuote] = useState(String(Math.round(order.quotedGross ?? order.gross)));
@@ -215,14 +219,19 @@ export default function OrderDrawer({
           <StatusSteps status={order.status} flow={flow} labels={statusLabels} />
           {order.status === "cancelled" ? null : order.kind === "order" ? (
             <>
-              {/* Estimated delivery date — the order confirmation carries it,
-                  so confirming stays blocked until staff have entered one. */}
+              {/* Estimated delivery date — entering it on an order in review
+                  confirms the order and sends the confirmation right away. */}
               <label className="flex items-center gap-3">
                 <span className="text-[10px] uppercase tracking-[0.12em] text-stone">{t.orders.deliveryDate}</span>
                 <input
                   type="date"
                   value={order.deliveryDate ?? ""}
-                  onChange={(e) => e.target.value && setDeliveryDate(order.ref, e.target.value)}
+                  onChange={(e) =>
+                    e.target.value &&
+                    void setDeliveryDate(order.ref, e.target.value).then((sent) => {
+                      if (sent) setSentTo(order.customer.email);
+                    })
+                  }
                   className="flex-1 border border-hairline bg-paper px-2 py-1.5 text-sm font-light text-ink outline-none focus:border-graphite"
                 />
               </label>
@@ -373,7 +382,10 @@ export default function OrderDrawer({
                 title={!order.deliveryDate ? t.orders.deliveryRequired : undefined}
                 onClick={() =>
                   order.deliveryDate &&
-                  downloadConfirmationPdf(order, confirmationDict, cfgDict.payTerms, order.system === "glass" ? cfgDict.systemGlass : cfgDict.systemBars)
+                  void downloadConfirmationPdf(order, confirmationDict, cfgDict.payTerms, order.system === "glass" ? cfgDict.systemGlass : cfgDict.systemBars, {
+                    svg: svgRef.current,
+                    summary: confirmationSummary(order, cfgDict, typeName),
+                  })
                 }
                 className="border border-hairline px-3 py-2 text-left text-[11px] uppercase tracking-[0.12em] text-graphite transition-colors hover:border-graphite hover:text-ink disabled:opacity-35"
               >

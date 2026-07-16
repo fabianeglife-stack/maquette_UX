@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import DrawingSVG from "@/components/configurator/DrawingSVG";
 import { downloadDrawingPdf } from "@/components/configurator/pdf";
 import { downloadInvoicePdf } from "./invoice";
-import { downloadConfirmationPdf } from "./confirmation";
+import { confirmationSummary, downloadConfirmationPdf } from "./confirmation";
 import { downloadQuotePdf } from "./quote";
 import { deriveRailing } from "@/lib/engine/geometry";
 import { chf } from "@/lib/engine/pricing";
@@ -136,9 +136,13 @@ function OrderCard({
           )}
           <button
             type="button"
-            onClick={() =>
-              downloadConfirmationPdf(order, t.confirmation, cfgDict.payTerms, order.system === "glass" ? cfgDict.systemGlass : cfgDict.systemBars)
-            }
+            onClick={() => {
+              const systemName = order.system === "glass" ? cfgDict.systemGlass : cfgDict.systemBars;
+              void downloadConfirmationPdf(order, t.confirmation, cfgDict.payTerms, systemName, {
+                svg: svgRef.current,
+                summary: confirmationSummary(order, cfgDict, tp?.name?.de ?? systemName),
+              });
+            }}
             className="self-start bg-ink px-4 py-2.5 text-[11px] font-medium uppercase tracking-[0.14em] text-paper transition-colors hover:bg-graphite"
           >
             ↓ {t.confirmationPdf}

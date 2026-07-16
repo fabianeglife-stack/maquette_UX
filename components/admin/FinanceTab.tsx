@@ -10,7 +10,7 @@
 
 import { useMemo, useState } from "react";
 import { chf } from "@/lib/engine/pricing";
-import { invoicesFor, type Instalment, type InstalmentState } from "@/lib/engine/invoicing";
+import { invoicesFor, reminderLevel, type Instalment, type InstalmentState } from "@/lib/engine/invoicing";
 import { loadEvents, type Order, type OrderEvent } from "@/lib/store";
 import { hasBackend, type ApiOrder } from "@/lib/api";
 import type { Dict } from "@/lib/i18n";
@@ -57,7 +57,7 @@ export default function FinanceTab({
   quoteDict: Dict["portal"]["quote"];
   locale?: string;
 }) {
-  const { orders, ready, advance, sendQuote, markAccepted, setDeliveryDate, markPaid, cancel } = useOrders();
+  const { orders, ready, advance, sendQuote, markAccepted, setDeliveryDate, markPaid, cancel, remind } = useOrders();
   const [openRef, setOpenRef] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
 
@@ -148,6 +148,7 @@ export default function FinanceTab({
                 <th className="py-2 pr-3 text-right font-medium">{t.finance.colAmount}</th>
                 <th className="hidden py-2 pr-3 font-medium sm:table-cell">{t.finance.colIssued}</th>
                 <th className="py-2 pr-3 font-medium">{t.finance.colDue}</th>
+                <th className="py-2 pr-3 font-medium">{t.finance.colReminders}</th>
                 <th className="py-2 font-medium">{t.finance.colActions}</th>
               </tr>
             </thead>
@@ -174,6 +175,24 @@ export default function FinanceTab({
                   <td className={`py-2.5 pr-3 whitespace-nowrap font-light ${inv.state === "overdue" ? "text-[#dc2626]" : "text-stone"}`}>
                     {inv.dueDate ?? "—"}
                   </td>
+                  <td className="py-2.5 pr-3 whitespace-nowrap">
+                    {inv.reminders.length === 0 ? (
+                      <span className="text-stone">—</span>
+                    ) : (
+                      <span
+                        className="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em]"
+                        style={{
+                          color: reminderLevel(inv.reminders) >= 3 ? "#dc2626" : "#d97706",
+                          borderColor: reminderLevel(inv.reminders) >= 3 ? "#dc262655" : "#d9770655",
+                          background: reminderLevel(inv.reminders) >= 3 ? "#dc262614" : "#d9770614",
+                        }}
+                        title={inv.reminders.join(" · ")}
+                      >
+                        {t.finance.reminderLevels[reminderLevel(inv.reminders) as 1 | 2 | 3]}
+                        <span className="font-normal normal-case text-[#8a8f98]">{inv.reminders[inv.reminders.length - 1]}</span>
+                      </span>
+                    )}
+                  </td>
                   <td className="py-2.5">
                     <div className="flex items-center gap-2">
                       <button
@@ -185,13 +204,24 @@ export default function FinanceTab({
                         ↓ {t.finance.download}
                       </button>
                       {(inv.state === "sent" || inv.state === "overdue") && (
-                        <button
-                          type="button"
-                          onClick={() => markPaid(order, inv.kind === "balance" ? "balance" : "deposit")}
-                          className="border border-[#16a34a]/50 px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] text-[#16a34a] transition-colors hover:bg-[#16a34a] hover:text-white"
-                        >
-                          ✓ {t.finance.markPaid}
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => markPaid(order, inv.kind === "balance" ? "balance" : "deposit")}
+                            className="border border-[#16a34a]/50 px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] text-[#16a34a] transition-colors hover:bg-[#16a34a] hover:text-white"
+                          >
+                            ✓ {t.finance.markPaid}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              window.confirm(t.finance.remindConfirm) && remind(order, inv.kind === "balance" ? "balance" : "deposit")
+                            }
+                            className="border border-[#d97706]/50 px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] text-[#d97706] transition-colors hover:bg-[#d97706] hover:text-white"
+                          >
+                            ✉ {t.finance.remind}
+                          </button>
+                        </>
                       )}
                     </div>
                   </td>

@@ -3,7 +3,7 @@
  */
 
 import { beforeEach, describe, expect, it } from "vitest";
-import { isQuoteExpired } from "../lib/store";
+import { isQuoteExpired, planFor, type TypePlans } from "../lib/store";
 import { isBlocked, recordFailure, recordSuccess, resetAll } from "../lib/server/ratelimit";
 
 describe("isQuoteExpired", () => {
@@ -16,6 +16,34 @@ describe("isQuoteExpired", () => {
   });
   it("never expires without a validity date (legacy quotes)", () => {
     expect(isQuoteExpired({}, "2099-01-01")).toBe(false);
+  });
+});
+
+describe("planFor (type × substrate × mounting resolution)", () => {
+  const plans: TypePlans = {
+    bars: {
+      "concrete_side|top": "combo.pdf",
+      concrete_side: "substrate-legacy.pdf",
+      side: "mounting-legacy.pdf",
+    },
+  };
+
+  it("prefers the exact substrate|mounting combination", () => {
+    expect(planFor(plans, "bars", "concrete_side", "top", "builtin.pdf")).toBe("combo.pdf");
+  });
+  it("falls back to the bare-substrate legacy upload", () => {
+    expect(planFor(plans, "bars", "concrete_side", "side", "builtin.pdf")).toBe("substrate-legacy.pdf");
+  });
+  it("then to the bare-mounting legacy upload", () => {
+    expect(planFor(plans, "bars", "wood_side", "side", "builtin.pdf")).toBe("mounting-legacy.pdf");
+  });
+  it("and finally to the type's built-in plan", () => {
+    expect(planFor(plans, "bars", "stone_top", "top", "builtin.pdf")).toBe("builtin.pdf");
+    expect(planFor(plans, "glass", "concrete_side", "top", undefined)).toBeUndefined();
+  });
+  it("derives the mounting from the substrate when omitted", () => {
+    // concrete_side implies "side" → bare-substrate legacy, not the top combo
+    expect(planFor(plans, "bars", "concrete_side", undefined, "builtin.pdf")).toBe("substrate-legacy.pdf");
   });
 });
 

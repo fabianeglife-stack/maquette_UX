@@ -37,6 +37,10 @@ model Order {
   email            String
   street           String
   city             String
+  // Contact + delivery/site address (falls back to the billing address).
+  phone            String?
+  deliveryStreet   String?
+  deliveryCity     String?
   payment          String?
   system           String // bars | glass
   lengthM          Float
@@ -50,6 +54,8 @@ model Order {
   // Payment markers (ISO yyyy-mm-dd) for the deposit/full and balance invoices.
   depositPaidAt    String?
   balancePaidAt    String?
+  // Dunning trail: JSON { deposit?: string[], balance?: string[] } of reminder dates.
+  remindersJson    String?
   configJson       String? // RailingConfig snapshot
   priceBookVersion String?
   rulesVersion     String?

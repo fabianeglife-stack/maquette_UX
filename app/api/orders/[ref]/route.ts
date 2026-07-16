@@ -3,6 +3,7 @@ import { db } from "@/lib/server/db";
 import { sessionUser } from "@/lib/server/auth";
 import { hasArea } from "@/lib/server/authz";
 import { toClientOrder } from "@/lib/server/serialize";
+import { safeParse } from "@/lib/server/json";
 import { paymentPlan } from "@/lib/engine/pricing";
 import { QUOTE_VALID_DAYS } from "@/lib/store";
 
@@ -40,6 +41,27 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ ref: s
         gross: order.quotedGross ?? order.gross,
         payment: "invoice",
         events: { create: { type: "quote_accepted", emailTo: order.email } },
+      },
+      include: { events: { orderBy: { at: "asc" } } },
+    });
+    return NextResponse.json({ order: toClientOrder(updated) });
+  }
+
+  // Dunning: send a payment reminder for an issued, unpaid instalment
+  // (finance area). Reminder dates accumulate in the order's JSON trail.
+  if (body.remind === "deposit" || body.remind === "balance") {
+    if (!hasArea(user, "invoices")) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    const isBalance = body.remind === "balance";
+    const issued = isBalance ? ORDER_RANK.indexOf(order.status) >= ORDER_RANK.indexOf("shipped") : true;
+    const paid = isBalance ? order.balancePaidAt : order.depositPaidAt;
+    if (!issued || paid) return NextResponse.json({ error: "not_remindable" }, { status: 409 });
+    const reminders = (safeParse(order.remindersJson) ?? {}) as { deposit?: string[]; balance?: string[] };
+    const list = [...(reminders[body.remind as "deposit" | "balance"] ?? []), todayISO()];
+    const updated = await db.order.update({
+      where: { ref },
+      data: {
+        remindersJson: JSON.stringify({ ...reminders, [body.remind]: list }),
+        events: { create: { type: "reminder_sent", emailTo: order.email } },
       },
       include: { events: { orderBy: { at: "asc" } } },
     });
@@ -132,11 +154,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ ref: s
     if (body.status === "confirmed" && !deliveryDate && !order.deliveryDate) {
       return NextResponse.json({ error: "delivery_date_required" }, { status: 409 });
     }
-    // Invoice dispatch hooks: the deposit/full invoice goes out with the order
-    // confirmation, the balance invoice at delivery (shipping).
+    // Invoice dispatch hooks: the deposit/full amount is paid online with the
+    // order itself; only the balance invoice goes out at delivery (shipping).
     const plan = paymentPlan(order.quotedGross ?? order.gross);
     const events: { type: string; emailTo: string }[] = [{ type: body.status, emailTo: order.email }];
-    if (body.status === "confirmed") events.push({ type: plan.split ? "deposit_sent" : "invoice_sent", emailTo: order.email });
     if (body.status === "shipped" && plan.split) events.push({ type: "balance_sent", emailTo: order.email });
     const updated = await db.order.update({
       where: { ref },
@@ -151,9 +172,16 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ ref: s
   }
 
   if (deliveryDate) {
+    // Entering the estimated delivery date on an order in review IS the
+    // confirmation: the order moves to "confirmed" and the confirmation
+    // (summary + principle drawing) goes out to the customer immediately.
+    const confirmNow = order.kind === "order" && order.status === "new";
     const updated = await db.order.update({
       where: { ref },
-      data: { deliveryDate },
+      data: {
+        deliveryDate,
+        ...(confirmNow ? { status: "confirmed", events: { create: { type: "confirmed", emailTo: order.email } } } : {}),
+      },
       include: { events: { orderBy: { at: "asc" } } },
     });
     return NextResponse.json({ order: toClientOrder(updated) });

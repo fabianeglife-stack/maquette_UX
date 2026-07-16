@@ -22,7 +22,9 @@ import {
   decodeConfig,
   encodeConfig,
   getSession,
+  logEvent,
   newRef,
+  QUOTE_VALID_DAYS,
   saveOrder,
   planFor,
   TIER_DISCOUNT,
@@ -30,6 +32,7 @@ import {
   type Order,
   type TypePlans,
 } from "@/lib/store";
+import { downloadQuotePdf } from "@/components/portal/quote";
 import { addSavedConfig, fetchAllTypes, fetchPageContent, fetchPriceBook } from "@/lib/data";
 import { api, hasBackend } from "@/lib/api";
 import { notify } from "@/lib/toast";
@@ -59,10 +62,9 @@ type CfgDict = Dict["cfg"];
 
 const STORAGE_KEY = "axioform-config-v1";
 
-// Direct ordering is live: the order is reviewed internally (status "new")
-// before the order confirmation goes out. Set NEXT_PUBLIC_QUOTE_ONLY=1 to
-// fall back to the quote-only launch mode.
-const QUOTE_ONLY = process.env.NEXT_PUBLIC_QUOTE_ONLY === "1";
+// Direct ordering with online payment: the customer pays the deposit (or the
+// full amount) at checkout, and the order only reaches the ERP once paid.
+// The offer is self-service — a PDF generated straight from the configurator.
 
 /* ---------- small form primitives ---------- */
 
@@ -141,7 +143,6 @@ function Pills<T extends string>({
 
 function CheckoutForm({
   t,
-  kind,
   summary,
   terms,
   termsHref,
@@ -149,23 +150,25 @@ function CheckoutForm({
   onCancel,
 }: {
   t: CfgDict;
-  kind: "order" | "quote";
-  /** One-line context: what is being requested (type · length · Richtpreis). */
+  /** One-line context: what is being ordered (type · length · price). */
   summary: string;
-  /** Payment-terms lines shown for direct orders. */
+  /** Payment-terms lines (100 % or 50/50 depending on the amount). */
   terms?: string[];
   /** Link target of the general-terms page (CGV). */
   termsHref: string;
-  onSubmit: (customer: Order["customer"], payment: "card" | "twint" | "invoice") => void;
+  onSubmit: (customer: Order["customer"]) => void;
   onCancel: () => void;
 }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [street, setStreet] = useState("");
   const [city, setCity] = useState("");
-  const [payment, setPayment] = useState<"card" | "twint" | "invoice">("card");
-  // Placing an order requires accepting the general terms; a quote request
-  // commits to nothing yet.
+  // Delivery/site address: same as billing by default.
+  const [sameAddress, setSameAddress] = useState(true);
+  const [deliveryStreet, setDeliveryStreet] = useState("");
+  const [deliveryCity, setDeliveryCity] = useState("");
+  // Placing an order requires accepting the general terms.
   const [accepted, setAccepted] = useState(false);
 
   const inputCls =
@@ -175,46 +178,54 @@ function CheckoutForm({
     <form
       onSubmit={(e) => {
         e.preventDefault();
-        onSubmit({ name, email, street, city }, payment);
+        onSubmit({
+          name,
+          email,
+          street,
+          city,
+          phone,
+          ...(sameAddress ? {} : { deliveryStreet, deliveryCity }),
+        });
       }}
       className="flex flex-col gap-3 border border-ink/60 p-4"
     >
-      <span className="text-xs font-medium uppercase tracking-[0.16em] text-ink">
-        {kind === "order" ? t.checkout.orderTitle : t.checkout.quoteTitle}
-      </span>
+      <span className="text-xs font-medium uppercase tracking-[0.16em] text-ink">{t.checkout.orderTitle}</span>
       <p className="border-l-2 border-steel bg-mist/60 px-3 py-2 text-[13px] font-light text-graphite">{summary}</p>
       <div className="grid grid-cols-2 gap-3">
         <input required placeholder={t.checkout.name} value={name} onChange={(e) => setName(e.target.value)} className={`${inputCls} col-span-2`} />
-        <input required type="email" placeholder={t.checkout.email} value={email} onChange={(e) => setEmail(e.target.value)} className={`${inputCls} col-span-2`} />
+        <input required type="email" placeholder={t.checkout.email} value={email} onChange={(e) => setEmail(e.target.value)} className={inputCls} />
+        <input required type="tel" placeholder={t.checkout.phone} value={phone} onChange={(e) => setPhone(e.target.value)} className={inputCls} />
         <input required placeholder={t.checkout.street} value={street} onChange={(e) => setStreet(e.target.value)} className={inputCls} />
         <input required placeholder={t.checkout.city} value={city} onChange={(e) => setCity(e.target.value)} className={inputCls} />
       </div>
-      {kind === "order" && (
-        <div className="flex flex-col gap-1.5">
-          <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone">{t.checkout.payment}</span>
-          <div className="flex flex-wrap gap-2">
-            {(
-              [
-                { v: "card", l: t.checkout.payCard },
-                { v: "twint", l: t.checkout.payTwint },
-                { v: "invoice", l: t.checkout.payInvoice },
-              ] as const
-            ).map((o) => (
-              <button
-                key={o.v}
-                type="button"
-                onClick={() => setPayment(o.v)}
-                className={`border px-3.5 py-2 text-xs tracking-[0.06em] transition-colors ${
-                  payment === o.v ? "border-ink bg-ink text-paper" : "border-hairline text-graphite hover:border-graphite"
-                }`}
-              >
-                {o.l}
-              </button>
-            ))}
-          </div>
+      <label className="flex items-start gap-2.5 text-[13px] font-light text-graphite">
+        <input
+          type="checkbox"
+          checked={sameAddress}
+          onChange={(e) => setSameAddress(e.target.checked)}
+          className="mt-0.5 h-4 w-4 accent-ink"
+        />
+        {t.checkout.sameAddress}
+      </label>
+      {!sameAddress && (
+        <div className="grid grid-cols-2 gap-3">
+          <input
+            required
+            placeholder={t.checkout.deliveryStreet}
+            value={deliveryStreet}
+            onChange={(e) => setDeliveryStreet(e.target.value)}
+            className={inputCls}
+          />
+          <input
+            required
+            placeholder={t.checkout.deliveryCity}
+            value={deliveryCity}
+            onChange={(e) => setDeliveryCity(e.target.value)}
+            className={inputCls}
+          />
         </div>
       )}
-      {kind === "order" && terms && terms.length > 0 && (
+      {terms && terms.length > 0 && (
         <div className="flex flex-col gap-1 border-l-2 border-steel bg-mist/60 px-3 py-2">
           <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-stone">{t.payTerms.title}</span>
           {terms.map((s, i) => (
@@ -224,29 +235,27 @@ function CheckoutForm({
           ))}
         </div>
       )}
-      {kind === "order" && (
-        <label className="flex items-start gap-2.5 text-[13px] font-light text-graphite">
-          <input
-            type="checkbox"
-            checked={accepted}
-            onChange={(e) => setAccepted(e.target.checked)}
-            className="mt-0.5 h-4 w-4 accent-ink"
-          />
-          <span>
-            {t.checkout.acceptTerms}{" "}
-            <a href={termsHref} target="_blank" rel="noreferrer" className="text-ink underline underline-offset-4">
-              {t.checkout.acceptTermsLink}
-            </a>
-          </span>
-        </label>
-      )}
+      <label className="flex items-start gap-2.5 text-[13px] font-light text-graphite">
+        <input
+          type="checkbox"
+          checked={accepted}
+          onChange={(e) => setAccepted(e.target.checked)}
+          className="mt-0.5 h-4 w-4 accent-ink"
+        />
+        <span>
+          {t.checkout.acceptTerms}{" "}
+          <a href={termsHref} target="_blank" rel="noreferrer" className="text-ink underline underline-offset-4">
+            {t.checkout.acceptTermsLink}
+          </a>
+        </span>
+      </label>
       <div className="flex gap-3 pt-1">
         <button
           type="submit"
-          disabled={kind === "order" && !accepted}
+          disabled={!accepted}
           className="inline-flex items-center justify-center bg-ink px-5 py-3 text-xs font-medium uppercase tracking-[0.14em] text-paper transition-colors hover:bg-graphite disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {kind === "order" ? t.checkout.submitOrder : t.checkout.submitQuote}
+          {t.checkout.toPayment}
         </button>
         <button
           type="button"
@@ -260,14 +269,106 @@ function CheckoutForm({
   );
 }
 
+/**
+ * Simulated online payment (demo): the deposit (50 %) or full amount is due
+ * with the order — the order is only created once this step succeeds, so the
+ * ERP never sees an unpaid order.
+ */
+function PaymentStep({
+  t,
+  amountNow,
+  totalGross,
+  split,
+  onPaid,
+  onCancel,
+}: {
+  t: CfgDict;
+  amountNow: number;
+  totalGross: number;
+  split: boolean;
+  onPaid: (method: "card" | "twint") => void;
+  onCancel: () => void;
+}) {
+  const [method, setMethod] = useState<"card" | "twint">("card");
+  const [busy, setBusy] = useState(false);
+
+  const inputCls =
+    "w-full border border-hairline bg-paper px-3 py-2.5 text-sm font-light text-ink outline-none transition-colors placeholder:text-stone focus:border-graphite";
+
+  return (
+    <div className="flex flex-col gap-3 border border-ink/60 p-4">
+      <span className="text-xs font-medium uppercase tracking-[0.16em] text-ink">{t.pay.title}</span>
+      <div className="flex items-baseline justify-between border-l-2 border-steel bg-mist/60 px-3 py-2">
+        <span className="text-[13px] font-light text-graphite">
+          {split ? fmt(t.pay.amountDeposit, { total: chf(totalGross) }) : t.pay.amountFull}
+        </span>
+        <span className="text-lg text-ink">{chf(amountNow)}</span>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {(
+          [
+            { v: "card", l: t.checkout.payCard },
+            { v: "twint", l: t.checkout.payTwint },
+          ] as const
+        ).map((o) => (
+          <button
+            key={o.v}
+            type="button"
+            onClick={() => setMethod(o.v)}
+            className={`border px-3.5 py-2 text-xs tracking-[0.06em] transition-colors ${
+              method === o.v ? "border-ink bg-ink text-paper" : "border-hairline text-graphite hover:border-graphite"
+            }`}
+          >
+            {o.l}
+          </button>
+        ))}
+      </div>
+      {method === "card" ? (
+        <div className="grid grid-cols-2 gap-3">
+          <input placeholder="4242 4242 4242 4242" defaultValue="4242 4242 4242 4242" className={`${inputCls} col-span-2`} aria-label={t.pay.cardNo} />
+          <input placeholder="MM/AA" defaultValue="12/28" className={inputCls} aria-label={t.pay.expiry} />
+          <input placeholder="CVC" defaultValue="123" className={inputCls} aria-label="CVC" />
+        </div>
+      ) : (
+        <p className="border border-dashed border-hairline p-3 text-center text-[13px] font-light text-graphite">{t.pay.twintHint}</p>
+      )}
+      <p className="text-[11px] font-light text-stone">{t.pay.demoNote}</p>
+      <div className="flex gap-3 pt-1">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => {
+            setBusy(true);
+            // Simulated processing delay before the order is actually created.
+            setTimeout(() => onPaid(method), 900);
+          }}
+          className="inline-flex items-center justify-center bg-ink px-5 py-3 text-xs font-medium uppercase tracking-[0.14em] text-paper transition-colors hover:bg-graphite disabled:opacity-60"
+        >
+          {busy ? t.pay.processing : fmt(t.pay.payNow, { amount: chf(amountNow) })}
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onCancel}
+          className="inline-flex items-center justify-center border border-hairline px-5 py-3 text-xs font-medium uppercase tracking-[0.14em] text-graphite transition-colors hover:border-graphite disabled:opacity-60"
+        >
+          {t.checkout.cancel}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* ---------- main app ---------- */
 
-export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: string }) {
+export default function ConfiguratorApp({ t, locale, quoteDict }: { t: CfgDict; locale: string; quoteDict: Dict["portal"]["quote"] }) {
   // Start from the default type's as-built defaults (height, bottom gap).
   const [cfg, setCfg] = useState<RailingConfig>(() => normalizeForType(defaultConfig(), builtinTypes[0]));
   const [tab, setTab] = useState<"3d" | "drawing">("3d");
-  const [checkout, setCheckout] = useState<"order" | "quote" | null>(null);
-  const [panel, setPanel] = useState<{ kind: "order" | "quote"; ref: string } | null>(null);
+  const [checkout, setCheckout] = useState(false);
+  // Customer details captured by the checkout form, awaiting online payment.
+  const [payState, setPayState] = useState<Order["customer"] | null>(null);
+  const [panel, setPanel] = useState<{ ref: string } | null>(null);
   const [pb, setPb] = useState<PriceBook>(defaultPriceBook);
   const [types, setTypes] = useState<TypeProfile[]>(builtinTypes);
   const [typePlans, setTypePlans] = useState<TypePlans>({});
@@ -339,7 +440,7 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
       (es) => es.forEach((e) => e.isIntersecting && setActiveStep(Number((e.target as HTMLElement).dataset.step))),
       { rootMargin: "-25% 0px -65% 0px" },
     );
-    ["step-1", "step-2", "step-3", "cta"].forEach((id) => {
+    ["step-1", "step-2", "step-3", "step-4", "step-5", "cta"].forEach((id) => {
       const el = document.getElementById(id);
       if (el) obs.observe(el);
     });
@@ -402,31 +503,53 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
             href="#cta"
             className="inline-flex items-center justify-center whitespace-nowrap bg-ink px-4 py-3 text-xs font-medium uppercase tracking-[0.14em] text-paper"
           >
-            {QUOTE_ONLY ? t.quoteShort : t.buy}
+            {t.buy}
           </a>
         </div>
       </div>
 
       {/* ---------- left: steps ---------- */}
       <div className="flex flex-col gap-10">
-        {/* step rail (desktop): scrollspy over the four sections */}
-        <nav className="sticky top-16 z-30 hidden gap-px self-start bg-hairline lg:flex" aria-label={t.stepsNav}>
-          {[
-            { id: "step-1", n: 1, l: t.stepSystem },
-            { id: "step-2", n: 2, l: t.stepGeometry },
-            { id: "step-3", n: 3, l: t.stepOptions },
-            { id: "cta", n: 4, l: t.stepSummary },
-          ].map((sStep) => (
-            <a
-              key={sStep.id}
-              href={`#${sStep.id}`}
-              className={`px-3 py-2 text-[10px] uppercase tracking-[0.12em] transition-colors ${
-                activeStep === sStep.n ? "bg-ink text-paper" : "bg-paper text-graphite hover:text-ink"
-              }`}
-            >
-              0{sStep.n} {sStep.l}
-            </a>
-          ))}
+        {/* numbered step rail (desktop): progress circles with check marks,
+            scroll-spied over the six sections */}
+        <nav className="sticky top-16 z-30 hidden w-full bg-paper/95 py-2 backdrop-blur-sm lg:block" aria-label={t.stepsNav}>
+          <ol className="flex items-start">
+            {[
+              { id: "step-1", n: 1, l: t.stepSystem },
+              { id: "step-2", n: 2, l: t.stepSituation },
+              { id: "step-3", n: 3, l: t.stepMounting },
+              { id: "step-4", n: 4, l: t.stepGeometry },
+              { id: "step-5", n: 5, l: t.stepOptions },
+              { id: "cta", n: 6, l: t.stepSummary },
+            ].map((sStep, i, arr) => {
+              const done = activeStep > sStep.n;
+              const current = activeStep === sStep.n;
+              return (
+                <li key={sStep.id} className="flex flex-1 flex-col items-center">
+                  <div className="flex w-full items-center">
+                    <span className={`h-px flex-1 ${i === 0 ? "bg-transparent" : done || current ? "bg-ink" : "bg-hairline"}`} />
+                    <a
+                      href={`#${sStep.id}`}
+                      aria-current={current ? "step" : undefined}
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-[12px] transition-colors ${
+                        done
+                          ? "border-ink bg-ink text-paper"
+                          : current
+                            ? "border-ink text-ink ring-2 ring-ink/15"
+                            : "border-hairline bg-paper text-stone hover:border-graphite"
+                      }`}
+                    >
+                      {done ? "✓" : sStep.n}
+                    </a>
+                    <span className={`h-px flex-1 ${i === arr.length - 1 ? "bg-transparent" : done ? "bg-ink" : "bg-hairline"}`} />
+                  </div>
+                  <span className={`mt-1.5 max-w-[100px] truncate text-center text-[9.5px] uppercase tracking-[0.08em] ${current ? "font-medium text-ink" : "text-stone"}`}>
+                    {sStep.l}
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
         </nav>
 
         {/* 1 — system */}
@@ -478,35 +601,55 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
                 );
               })}
           </div>
-          {(() => {
-            // Principle plan for the selected type AND fixing situation:
-            // the admin-uploaded plan for this exact substrate wins, then a
-            // mounting-level upload, then the type's built-in PDF.
-            const substrate = cfg.substrate ?? "concrete_top";
-            const plan = planFor(typePlans, tp.id, substrate, tp.planUrl);
-            if (!plan) return null;
-            const uploaded = plan.startsWith("data:");
-            return (
-              <a
-                href={uploaded ? plan : `${process.env.NEXT_PUBLIC_BASE_PATH || ""}${plan}`}
-                {...(uploaded
-                  ? { download: `axioform-plan-${tp.id}-${substrate}.pdf` }
-                  : { target: "_blank", rel: "noopener" })}
-                className="inline-flex w-fit items-center gap-2 border border-hairline px-3.5 py-2.5 text-[11px] font-medium uppercase tracking-[0.14em] text-graphite transition-colors hover:border-graphite hover:text-ink"
-              >
-                <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" aria-hidden>
-                  <path d="M8 1v9M4.5 6.5 8 10l3.5-3.5M2 13h12" fill="none" stroke="currentColor" strokeWidth="1.4" />
-                </svg>
-                {t.planPdf}
-              </a>
-            );
-          })()}
         </section>
 
-        {/* 2 — geometry */}
+        {/* 2 — wall situation (substrate) */}
         <section id="step-2" data-step="2" className="flex scroll-mt-28 flex-col gap-4">
           <h2 className="flex items-baseline gap-4 border-t border-ink/60 pt-4 text-base font-normal text-ink">
             <span className="text-xs text-stone">02</span>
+            {t.stepSituation}
+          </h2>
+          <IconCards
+            label={t.substrate}
+            value={cfg.substrate ?? "concrete_top"}
+            columns={3}
+            options={(
+              [
+                "concrete_top",
+                "concrete_side",
+                "concrete_side_offset",
+                "concrete_parapet",
+                "wood_side",
+                "stone_top",
+              ] as Substrate[]
+            ).map((v) => ({ v, l: t.substrates[v], icon: <SubstrateIcon kind={v} /> }))}
+            onChange={(v) => set({ substrate: v, mounting: SUBSTRATE_MOUNTING[v] })}
+          />
+        </section>
+
+        {/* 3 — fixing (mounting), defaulted from the situation but the
+            customer's explicit choice — it drives the principle plan */}
+        <section id="step-3" data-step="3" className="flex scroll-mt-28 flex-col gap-4">
+          <h2 className="flex items-baseline gap-4 border-t border-ink/60 pt-4 text-base font-normal text-ink">
+            <span className="text-xs text-stone">03</span>
+            {t.stepMounting}
+          </h2>
+          <Pills
+            label={t.mounting}
+            value={cfg.mounting}
+            options={[
+              { v: "top" as const, l: t.mountingTop },
+              { v: "side" as const, l: t.mountingSide },
+            ]}
+            onChange={(v) => set({ mounting: v })}
+          />
+          <p className="text-xs font-light leading-relaxed text-stone">{t.mountingHint}</p>
+        </section>
+
+        {/* 4 — geometry */}
+        <section id="step-4" data-step="4" className="flex scroll-mt-28 flex-col gap-4">
+          <h2 className="flex items-baseline gap-4 border-t border-ink/60 pt-4 text-base font-normal text-ink">
+            <span className="text-xs text-stone">04</span>
             {t.stepGeometry}
           </h2>
 
@@ -632,27 +775,11 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
         </section>
 
         {/* 3 — options */}
-        <section id="step-3" data-step="3" className="flex scroll-mt-28 flex-col gap-5">
+        <section id="step-5" data-step="5" className="flex scroll-mt-28 flex-col gap-5">
           <h2 className="flex items-baseline gap-4 border-t border-ink/60 pt-4 text-base font-normal text-ink">
-            <span className="text-xs text-stone">03</span>
+            <span className="text-xs text-stone">05</span>
             {t.stepOptions}
           </h2>
-          <IconCards
-            label={t.substrate}
-            value={cfg.substrate ?? "concrete_top"}
-            columns={3}
-            options={(
-              [
-                "concrete_top",
-                "concrete_side",
-                "concrete_side_offset",
-                "concrete_parapet",
-                "wood_side",
-                "stone_top",
-              ] as Substrate[]
-            ).map((v) => ({ v, l: t.substrates[v], icon: <SubstrateIcon kind={v} /> }))}
-            onChange={(v) => set({ substrate: v, mounting: SUBSTRATE_MOUNTING[v] })}
-          />
           <IconCards
             label={t.finish}
             value={cfg.finish ?? "coated"}
@@ -719,9 +846,9 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
         </section>
 
         {/* 4 — SIA + price */}
-        <section id="cta" data-step="4" className="flex scroll-mt-28 flex-col gap-5">
+        <section id="cta" data-step="6" className="flex scroll-mt-28 flex-col gap-5">
           <h2 className="flex items-baseline gap-4 border-t border-ink/60 pt-4 text-base font-normal text-ink">
-            <span className="text-xs text-stone">04</span>
+            <span className="text-xs text-stone">06</span>
             {t.stepSummary}
           </h2>
 
@@ -761,34 +888,80 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
             <p className="pt-1 text-[11px] font-light leading-relaxed text-stone">{t.priceNote}</p>
           </div>
 
+          {/* finalisation — delivery lead time, control-drawing note, the
+              combined principle plan, and the total front and centre */}
+          <div className="flex flex-col gap-3 border border-ink/60 p-4">
+            <span className="text-[11px] font-medium uppercase tracking-[0.16em] text-ink">{t.finalize.title}</span>
+            <p className="text-[13px] font-light leading-relaxed text-graphite">{t.finalize.leadTime}</p>
+            <p className="text-[13px] font-light leading-relaxed text-graphite">{t.finalize.drawingNote}</p>
+            {(() => {
+              const substrate = cfg.substrate ?? "concrete_top";
+              const plan = planFor(typePlans, tp.id, substrate, cfg.mounting, tp.planUrl);
+              if (!plan) return null;
+              const uploaded = plan.startsWith("data:");
+              return (
+                <a
+                  href={uploaded ? plan : `${process.env.NEXT_PUBLIC_BASE_PATH || ""}${plan}`}
+                  {...(uploaded
+                    ? { download: `axioform-plan-${tp.id}-${substrate}-${cfg.mounting}.pdf` }
+                    : { target: "_blank", rel: "noopener" })}
+                  className="inline-flex w-fit items-center gap-2 border border-hairline px-3.5 py-2.5 text-[11px] font-medium uppercase tracking-[0.14em] text-graphite transition-colors hover:border-graphite hover:text-ink"
+                >
+                  <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" aria-hidden>
+                    <path d="M8 1v9M4.5 6.5 8 10l3.5-3.5M2 13h12" fill="none" stroke="currentColor" strokeWidth="1.4" />
+                  </svg>
+                  {t.planPdf}
+                </a>
+              );
+            })()}
+            <div className="flex items-baseline justify-between border-t border-ink/50 bg-mist/50 px-3 py-3">
+              <span className="text-sm text-ink">{t.finalize.total}</span>
+              <span className="text-2xl font-light tracking-tight text-ink">
+                {chf(price.gross)} <span className="text-xs font-normal text-stone">{t.finalize.vatIncl}</span>
+              </span>
+            </div>
+          </div>
+
           <div className="flex flex-col gap-3">
             <div className="flex flex-wrap gap-3">
-              {!QUOTE_ONLY && (
-                <button
-                  type="button"
-                  disabled={overall === "fail"}
-                  onClick={() => {
-                    setPanel(null);
-                    setCheckout("order");
-                  }}
-                  className="inline-flex items-center justify-center bg-ink px-5 py-3.5 text-xs font-medium uppercase tracking-[0.16em] text-paper transition-colors hover:bg-graphite disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  {t.buy}
-                </button>
-              )}
+              <button
+                type="button"
+                disabled={overall === "fail"}
+                onClick={() => {
+                  setPanel(null);
+                  setPayState(null);
+                  setCheckout(true);
+                }}
+                className="inline-flex items-center justify-center bg-ink px-5 py-3.5 text-xs font-medium uppercase tracking-[0.16em] text-paper transition-colors hover:bg-graphite disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {t.buy}
+              </button>
               <button
                 type="button"
                 onClick={() => {
-                  setPanel(null);
-                  setCheckout("quote");
+                  // Self-service offer: the configured price as a binding-offer
+                  // PDF, valid 30 days — no staff round-trip needed.
+                  const validUntil = new Date(Date.now() + QUOTE_VALID_DAYS * 86400000).toISOString().slice(0, 10);
+                  downloadQuotePdf(
+                    {
+                      ref: refNo,
+                      kind: "quote",
+                      createdAt: new Date().toISOString().slice(0, 10),
+                      status: "quoted",
+                      customer: { name: t.quoteSelfName, email: "", street: "—", city: "—" },
+                      system: cfg.system,
+                      lengthM: Math.round(derived.totalLength / 100) / 10,
+                      gross: price.gross,
+                      quotedGross: price.gross,
+                      validUntil,
+                    },
+                    quoteDict,
+                    cfg.system === "glass" ? t.systemGlass : t.systemBars,
+                  );
                 }}
-                className={
-                  QUOTE_ONLY
-                    ? "inline-flex items-center justify-center bg-ink px-5 py-3.5 text-xs font-medium uppercase tracking-[0.16em] text-paper transition-colors hover:bg-graphite"
-                    : "inline-flex items-center justify-center border border-ink/25 px-5 py-3.5 text-xs font-medium uppercase tracking-[0.16em] text-ink transition-colors hover:border-ink"
-                }
+                className="inline-flex items-center justify-center border border-ink/25 px-5 py-3.5 text-xs font-medium uppercase tracking-[0.16em] text-ink transition-colors hover:border-ink"
               >
-                {t.quote}
+                ↓ {t.quote}
               </button>
               <button
                 type="button"
@@ -798,11 +971,7 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
                 ↓ {t.downloadPdf}
               </button>
             </div>
-            {QUOTE_ONLY ? (
-              <p className="text-xs font-light text-stone">{t.quoteOnlyNote}</p>
-            ) : (
-              overall === "fail" && <p className="text-xs font-light text-alert">{t.buyBlocked}</p>
-            )}
+            {overall === "fail" && <p className="text-xs font-light text-alert">{t.buyBlocked}</p>}
 
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
               {saveOpen ? (
@@ -854,23 +1023,35 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
               </p>
             )}
 
-            {checkout && (
+            {checkout && !payState && (
               <CheckoutForm
                 t={t}
-                kind={checkout}
                 summary={`${cfg.system === "glass" ? t.systemGlass : t.systemBars} · ${(derived.totalLength / 1000).toLocaleString("de-CH")} m · ${chf(price.gross)}`}
                 terms={termsLines}
                 termsHref={`/${locale}/terms/`}
-                onCancel={() => setCheckout(null)}
-                onSubmit={(customer, payment) => {
+                onCancel={() => setCheckout(false)}
+                onSubmit={(customer) => setPayState(customer)}
+              />
+            )}
+
+            {checkout && payState && (
+              <PaymentStep
+                t={t}
+                amountNow={paymentPlan(price.gross, pb).deposit}
+                totalGross={price.gross}
+                split={paymentPlan(price.gross, pb).split}
+                onCancel={() => setPayState(null)}
+                onPaid={(method) => {
+                  // Payment succeeded (demo) → only now does the order exist.
                   if (hasBackend) {
                     // The server recomputes geometry, SIA and price — the
                     // client total is display-only.
                     api
-                      .createOrder({ kind: checkout, config: cfg, customer, payment })
+                      .createOrder({ kind: "order", config: cfg, customer: payState, payment: method })
                       .then((order) => {
-                        setCheckout(null);
-                        setPanel({ kind: checkout, ref: order.ref });
+                        setCheckout(false);
+                        setPayState(null);
+                        setPanel({ ref: order.ref });
                       })
                       .catch(() => notify("saveFailed"));
                     return;
@@ -878,37 +1059,31 @@ export default function ConfiguratorApp({ t, locale }: { t: CfgDict; locale: str
                   const ref = newRef();
                   const order: Order = {
                     ref,
-                    kind: checkout,
+                    kind: "order",
                     createdAt: new Date().toISOString().slice(0, 10),
-                    status: checkout === "order" ? "new" : "quote_requested",
-                    customer,
-                    payment: checkout === "order" ? payment : undefined,
+                    status: "new",
+                    customer: payState,
+                    payment: method,
                     system: cfg.system,
                     lengthM: Math.round(derived.totalLength / 100) / 10,
                     gross: price.gross,
+                    depositPaidAt: new Date().toISOString().slice(0, 10),
                     config: cfg,
                   };
                   saveOrder(order);
-                  setCheckout(null);
-                  setPanel({ kind: checkout, ref });
+                  logEvent(ref, "deposit_paid", payState.email);
+                  setCheckout(false);
+                  setPayState(null);
+                  setPanel({ ref });
                 }}
               />
             )}
 
             {panel && (
               <div role="status" className="flex flex-col gap-2 border-l-2 border-steel bg-mist/70 p-4">
-                <span className="text-xs font-medium uppercase tracking-[0.14em] text-steel">
-                  {panel.kind === "order" ? t.orderTitle : t.quoteTitle}
-                </span>
-                <p className="text-sm font-light leading-relaxed text-graphite">
-                  {fmt(panel.kind === "order" ? t.orderText : t.quoteText, { ref: panel.ref })}
-                </p>
-                {panel.kind === "order" && (
-                  <>
-                    <p className="text-sm font-light leading-relaxed text-graphite">{t.payTerms.review}</p>
-                    <p className="text-xs font-light leading-relaxed text-stone">{termsLines.join(" — ")}</p>
-                  </>
-                )}
+                <span className="text-xs font-medium uppercase tracking-[0.14em] text-steel">{t.orderTitle}</span>
+                <p className="text-sm font-light leading-relaxed text-graphite">{fmt(t.orderText, { ref: panel.ref })}</p>
+                <p className="text-xs font-light leading-relaxed text-stone">{termsLines.join(" — ")}</p>
                 <Link
                   href={`/${locale}/portal/`}
                   className="self-start text-xs uppercase tracking-[0.14em] text-ink underline underline-offset-4"

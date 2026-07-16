@@ -4,21 +4,27 @@ import bcrypt from "bcryptjs";
 
 const db = new PrismaClient();
 
+// Orders are born deposit-paid (paid online at checkout). Keller's shipped
+// order deliberately carries an unpaid, overdue balance for the dunning demo.
 const seedOrders = [
   {
     ref: "AX-D8K2F1", kind: "order", createdAt: new Date("2026-06-12"), status: "shipped",
     customerName: "M. Keller", email: "m.keller@example.ch", street: "Seestrasse 41", city: "8802 Kilchberg",
-    payment: "card", system: "glass", lengthM: 12.4, gross: 6412.35,
+    phone: "+41 79 555 01 01", payment: "card", system: "glass", lengthM: 12.4, gross: 6412.35,
+    depositPaidAt: "2026-06-12", deliveryDate: "2026-06-15",
   },
   {
     ref: "AX-E3M9Q7", kind: "order", createdAt: new Date("2026-06-24"), status: "production",
     customerName: "Atelier Brunner AG", email: "bau@brunner.example.ch", street: "Werkhofweg 3", city: "3013 Bern",
-    payment: "invoice", system: "bars", lengthM: 26, gross: 7250.1,
+    phone: "+41 31 555 02 02", payment: "invoice", system: "bars", lengthM: 26, gross: 7250.1,
+    depositPaidAt: "2026-06-24", deliveryDate: "2026-08-15",
+    deliveryStreet: "Chantier Viktoriaplatz 2", deliveryCity: "3013 Bern",
   },
   {
     ref: "AX-F7T2B4", kind: "order", createdAt: new Date("2026-07-01"), status: "confirmed",
     customerName: "S. Aebischer", email: "s.aebischer@example.ch", street: "Lindenweg 8", city: "6300 Zug",
-    payment: "twint", system: "bars", lengthM: 5.2, gross: 1493.6,
+    phone: "+41 41 555 03 03", payment: "twint", system: "bars", lengthM: 5.2, gross: 1493.6,
+    depositPaidAt: "2026-07-01", deliveryDate: "2026-08-01",
   },
   {
     ref: "AX-G1P5R9", kind: "quote", createdAt: new Date("2026-07-03"), status: "quote_requested",

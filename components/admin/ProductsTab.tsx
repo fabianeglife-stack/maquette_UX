@@ -3,8 +3,8 @@
 /* Products tab: parametric type designer + principle plans per type × fixing. */
 
 import { useEffect, useState } from "react";
-import { SUBSTRATE_MOUNTING, type Substrate, type TypeProfile } from "@/lib/engine/types";
-import type { TypePlans } from "@/lib/store";
+import { type Substrate, type TypeProfile } from "@/lib/engine/types";
+import type { Mounting, PlanKey, TypePlans } from "@/lib/store";
 import { fetchAllTypes, fetchPageContent, putPageContent, removeType, saveType } from "@/lib/data";
 import type { Dict } from "@/lib/i18n";
 import { notify } from "@/lib/toast";
@@ -107,7 +107,9 @@ const PLAN_SUBSTRATES: Substrate[] = [
   "stone_top",
 ];
 
-/** Upload one principle drawing (PDF) per type × fixing situation. */
+const MOUNTINGS: Mounting[] = ["top", "side"];
+
+/** Upload one principle drawing (PDF) per type × wall situation × fixing. */
 function PlansSection({ t, cfgDict, types }: { t: AdminDict; cfgDict: Dict["cfg"]; types: TypeProfile[] }) {
   const [plans, setPlans] = useState<TypePlans>({});
   const [saved, setSaved] = useState(false);
@@ -115,15 +117,17 @@ function PlansSection({ t, cfgDict, types }: { t: AdminDict; cfgDict: Dict["cfg"
     fetchPageContent<TypePlans>("typeplans", {}).then(setPlans);
   }, []);
 
-  const set = (typeId: string, slot: Substrate, value?: string) => {
+  const set = (typeId: string, substrate: Substrate, mounting: Mounting, value?: string) => {
+    const key: PlanKey = `${substrate}|${mounting}`;
     const entry = { ...(plans[typeId] ?? {}) };
     if (value) {
-      entry[slot] = value;
-    } else if (entry[slot]) {
-      delete entry[slot];
+      entry[key] = value;
+    } else if (entry[key]) {
+      delete entry[key];
     } else {
-      // The cell displayed an inherited mounting-level plan — remove that.
-      delete entry[SUBSTRATE_MOUNTING[slot]];
+      // The cell displayed an inherited legacy plan — remove those instead.
+      delete entry[substrate];
+      delete entry[mounting];
     }
     const next = { ...plans, [typeId]: entry };
     setPlans(next);
@@ -137,7 +141,7 @@ function PlansSection({ t, cfgDict, types }: { t: AdminDict; cfgDict: Dict["cfg"
 
   const active = types.filter((x) => x.active);
   return (
-    <div className="flex max-w-3xl flex-col gap-4 border border-hairline p-5">
+    <div className="flex max-w-4xl flex-col gap-4 border border-hairline p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <span className="text-xs font-medium uppercase tracking-[0.16em] text-ink">{t.plans.title}</span>
         {saved && (
@@ -150,18 +154,25 @@ function PlansSection({ t, cfgDict, types }: { t: AdminDict; cfgDict: Dict["cfg"
       {active.map((x) => (
         <div key={x.id} className="flex flex-col gap-2.5 border-t border-hairline/70 pt-3">
           <span className="text-sm text-ink">{x.name?.de ?? x.id}</span>
-          <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-2.5 sm:grid-cols-2">
             {PLAN_SUBSTRATES.map((s) => (
-              <PlanCell
-                key={s}
-                t={t}
-                typeId={x.id}
-                slot={s}
-                label={cfgDict.substrates[s]}
-                current={plans[x.id]?.[s] ?? plans[x.id]?.[SUBSTRATE_MOUNTING[s]]}
-                hasDefault={!!x.planUrl}
-                onChange={(v) => set(x.id, s, v)}
-              />
+              <div key={s} className="flex flex-col gap-1.5 rounded-md border border-hairline/70 p-3">
+                <span className="text-[10px] font-medium uppercase tracking-[0.1em] text-graphite">{cfgDict.substrates[s]}</span>
+                <div className="grid gap-1.5 sm:grid-cols-2">
+                  {MOUNTINGS.map((m) => (
+                    <PlanCell
+                      key={m}
+                      t={t}
+                      typeId={x.id}
+                      slot={`${s}|${m}`}
+                      label={m === "top" ? cfgDict.mountingTop : cfgDict.mountingSide}
+                      current={plans[x.id]?.[`${s}|${m}`] ?? plans[x.id]?.[s] ?? plans[x.id]?.[m]}
+                      hasDefault={!!x.planUrl}
+                      onChange={(v) => set(x.id, s, m, v)}
+                    />
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
         </div>

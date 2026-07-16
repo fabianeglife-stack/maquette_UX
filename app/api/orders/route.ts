@@ -82,16 +82,24 @@ export async function POST(req: Request) {
   const price = priceRailing(cfg, derived, await activePriceBook(), tp, TIER_DISCOUNT[tier] ?? 0);
 
   const email = (user?.email ?? cap(body.customer.email, 200)).toLowerCase();
+  // An order only reaches the ERP once its first instalment (deposit or full
+  // amount) has been paid online at checkout — so it is born deposit-paid,
+  // with the payment receipt in its event trail.
+  const isOrder = body.kind === "order";
+  const today = new Date().toISOString().slice(0, 10);
   const data = {
     kind: body.kind,
-    status: body.kind === "order" ? "new" : "quote_requested",
+    status: isOrder ? "new" : "quote_requested",
     customerName: cap(body.customer.name, 200),
     // Authenticated orders are always attributed to the session account; the
     // body email is only trusted for anonymous saves.
     email,
     street: cap(body.customer.street, 200),
     city: cap(body.customer.city, 120),
-    payment: body.kind === "order" ? cap(body.payment || "card", 20) : null,
+    phone: body.customer.phone ? cap(body.customer.phone, 40) : null,
+    deliveryStreet: body.customer.deliveryStreet ? cap(body.customer.deliveryStreet, 200) : null,
+    deliveryCity: body.customer.deliveryCity ? cap(body.customer.deliveryCity, 120) : null,
+    payment: isOrder ? cap(body.payment || "card", 20) : null,
     system: cfg.system,
     lengthM: Math.round(derived.totalLength / 100) / 10,
     gross: price.gross,
@@ -99,7 +107,15 @@ export async function POST(req: Request) {
     priceBookVersion: price.version,
     rulesVersion: SIA_RULES_VERSION,
     userId: user?.id ?? null,
-    events: { create: { type: "created", emailTo: email } },
+    depositPaidAt: isOrder ? today : null,
+    events: {
+      create: isOrder
+        ? [
+            { type: "created", emailTo: email },
+            { type: "deposit_paid", emailTo: email },
+          ]
+        : [{ type: "created", emailTo: email }],
+    },
   };
 
   // Retry on the (astronomically unlikely) ref collision instead of 500ing.

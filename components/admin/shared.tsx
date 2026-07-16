@@ -191,14 +191,28 @@ export function useOrders() {
     refresh();
   };
 
-  // Estimated delivery date, required before an order can be confirmed.
-  const setDeliveryDate = (ref: string, deliveryDate: string) => {
+  // Estimated delivery date. Entering it on an order in review IS the
+  // confirmation: the order moves to "confirmed" and the confirmation goes
+  // out to the customer. Resolves true when that dispatch happened.
+  const setDeliveryDate = (ref: string, deliveryDate: string): Promise<boolean> => {
+    const o = orders.find((x) => x.ref === ref);
+    const confirmNow = o?.kind === "order" && o.status === "new";
     if (hasBackend) {
-      api.patchOrder(ref, { deliveryDate }).then(refresh).catch(() => notify("saveFailed"));
-      return;
+      return api
+        .patchOrder(ref, { deliveryDate })
+        .then(() => {
+          refresh();
+          return confirmNow ?? false;
+        })
+        .catch(() => {
+          notify("saveFailed");
+          return false;
+        });
     }
-    updateOrder(ref, { deliveryDate });
+    updateOrder(ref, { deliveryDate, ...(confirmNow ? { status: "confirmed" as OrderStatus } : {}) });
+    if (confirmNow && o) logEvent(ref, "confirmed", o.customer.email);
     refresh();
+    return Promise.resolve(confirmNow ?? false);
   };
 
   // Record a payment on the deposit/full or balance invoice; once fully
@@ -221,5 +235,18 @@ export function useOrders() {
     refresh();
   };
 
-  return { orders, ready, refresh, advance, sendQuote, markAccepted, setDeliveryDate, markPaid, cancel };
+  // Dunning: record a payment reminder for an issued, unpaid instalment.
+  const remind = (o: Order, which: "deposit" | "balance") => {
+    if (hasBackend) {
+      api.patchOrder(o.ref, { remind: which }).then(refresh).catch(() => notify("saveFailed"));
+      return;
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    const reminders = { ...o.reminders, [which]: [...(o.reminders?.[which] ?? []), today] };
+    updateOrder(o.ref, { reminders });
+    logEvent(o.ref, "reminder_sent", o.customer.email);
+    refresh();
+  };
+
+  return { orders, ready, refresh, advance, sendQuote, markAccepted, setDeliveryDate, markPaid, cancel, remind };
 }

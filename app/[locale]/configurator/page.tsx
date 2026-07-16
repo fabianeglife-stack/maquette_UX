@@ -30,7 +30,7 @@ export default async function Configurator({ params }: { params: Promise<{ local
       </section>
 
       <section className="mx-auto max-w-[1400px] px-6 pb-24">
-        <ConfiguratorApp t={d.cfg} locale={locale} />
+        <ConfiguratorApp t={d.cfg} locale={locale} quoteDict={d.portal.quote} />
       </section>
       <Toasts labels={d.common} />
     </>

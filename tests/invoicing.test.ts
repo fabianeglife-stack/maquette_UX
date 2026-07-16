@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { addDays, invoicesFor } from "../lib/engine/invoicing";
+import { addDays, invoicesFor, reminderLevel } from "../lib/engine/invoicing";
 import type { Order, OrderEvent, OrderStatus } from "../lib/store";
 
 const NOW = new Date("2026-07-13T12:00:00Z");
@@ -40,8 +40,8 @@ describe("invoicesFor", () => {
     expect(invoicesFor(order({ status: "cancelled", gross: 6412.35 }), [ev("confirmed", "2026-07-01 09:00")], undefined, NOW)).toEqual([]);
   });
 
-  it("bills a small order (<= threshold) in full at confirmation", () => {
-    const inv = invoicesFor(order({ status: "confirmed", gross: 1493.6 }), [ev("confirmed", "2026-07-01 09:00")], undefined, NOW);
+  it("bills a small order (<= threshold) in full from the order date", () => {
+    const inv = invoicesFor(order({ status: "confirmed", gross: 1493.6, createdAt: "2026-07-01" }), [ev("created", "2026-07-01 09:00")], undefined, NOW);
     expect(inv).toHaveLength(1);
     expect(inv[0].kind).toBe("full");
     expect(inv[0].no).toBe("RE-TEST01");
@@ -52,22 +52,22 @@ describe("invoicesFor", () => {
   });
 
   it("splits a large order into deposit + balance summing to gross", () => {
-    const inv = invoicesFor(order({ status: "new", gross: 6412.35 }), [], undefined, NOW);
+    const inv = invoicesFor(order({ status: "new", gross: 6412.35, createdAt: "2026-07-10", depositPaidAt: "2026-07-10" }), [], undefined, NOW);
     expect(inv.map((i) => i.kind)).toEqual(["deposit", "balance"]);
     expect(inv[0].no).toBe("RE-TEST01-A");
     expect(inv[1].no).toBe("RE-TEST01-B");
     expect(inv[0].amount + inv[1].amount).toBeCloseTo(6412.35, 2);
     expect(inv[0].amount).toBe(3206.18);
     expect(inv[1].amount).toBe(3206.17);
-    // A "new" order has issued neither invoice yet.
-    expect(inv[0].state).toBe("pending");
+    // The deposit is paid online with the order; the balance is not issued yet.
+    expect(inv[0].state).toBe("paid");
     expect(inv[1].state).toBe("pending");
   });
 
-  it("issues the deposit at confirmation, balance still pending", () => {
+  it("issues the deposit with the order itself, balance still pending", () => {
     const inv = invoicesFor(
-      order({ status: "confirmed", gross: 6412.35, deliveryDate: "2026-08-28" }),
-      [ev("confirmed", "2026-07-05 10:00")],
+      order({ status: "confirmed", gross: 6412.35, createdAt: "2026-07-05", deliveryDate: "2026-08-28" }),
+      [ev("created", "2026-07-05 10:00"), ev("confirmed", "2026-07-06 10:00")],
       undefined,
       NOW,
     );
@@ -104,15 +104,36 @@ describe("invoicesFor", () => {
   });
 
   it("flags an issued, unpaid, past-due invoice as overdue", () => {
-    // confirmed long ago, deposit due before NOW, unpaid
+    // ordered long ago, deposit due before NOW, never paid (legacy record)
     const inv = invoicesFor(
-      order({ status: "confirmed", gross: 6412.35, deliveryDate: "2026-08-28" }),
-      [ev("confirmed", "2026-05-01 10:00")],
+      order({ status: "confirmed", gross: 6412.35, createdAt: "2026-05-01", deliveryDate: "2026-08-28" }),
+      [ev("created", "2026-05-01 10:00")],
       undefined,
       NOW,
     );
     expect(inv[0].dueDate).toBe("2026-05-31");
     expect(inv[0].state).toBe("overdue");
+  });
+
+  it("carries the dunning trail per instalment", () => {
+    const inv = invoicesFor(
+      order({
+        status: "shipped",
+        gross: 6412.35,
+        createdAt: "2026-05-01",
+        deliveryDate: "2026-06-01",
+        depositPaidAt: "2026-05-01",
+        reminders: { balance: ["2026-07-05", "2026-07-12"] },
+      }),
+      [ev("created", "2026-05-01 10:00"), ev("shipped", "2026-06-01 10:00")],
+      undefined,
+      NOW,
+    );
+    expect(inv[0].reminders).toEqual([]);
+    expect(inv[1].reminders).toEqual(["2026-07-05", "2026-07-12"]);
+    expect(reminderLevel(inv[1].reminders)).toBe(2);
+    expect(reminderLevel([])).toBe(0);
+    expect(reminderLevel(["a", "b", "c", "d"])).toBe(3);
   });
 
   it("falls back to the order date when a confirmed order has no event trail", () => {
