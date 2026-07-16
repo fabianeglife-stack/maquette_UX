@@ -5,16 +5,19 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import DrawingSVG from "@/components/configurator/DrawingSVG";
 import { downloadDrawingPdf } from "@/components/configurator/pdf";
 import { downloadInvoicePdf } from "./invoice";
-import { downloadConfirmationPdf } from "./confirmation";
+import { confirmationSummary, downloadConfirmationPdf } from "./confirmation";
+import { downloadQuotePdf } from "./quote";
 import { deriveRailing } from "@/lib/engine/geometry";
 import { chf } from "@/lib/engine/pricing";
 import { invoicesFor } from "@/lib/engine/invoicing";
 import {
   acceptQuote,
+  cancelOrder,
   clearSession,
   confirmationNoFor,
   encodeConfig,
   getSession,
+  isQuoteExpired,
   loadEvents,
   loadOrders,
   ORDER_FLOW,
@@ -80,21 +83,41 @@ function OrderCard({
             <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-steel">{t.quotedPrice}</span>
             <span className="text-base text-ink">{chf(order.quotedGross ?? order.gross)}</span>
           </div>
+          {order.validUntil && (
+            <p className={`text-xs font-light ${isQuoteExpired(order) ? "text-alert" : "text-stone"}`}>
+              {t.validUntil} {order.validUntil}
+            </p>
+          )}
+          {isQuoteExpired(order) ? (
+            <p className="text-[11px] font-light leading-relaxed text-alert">{t.quoteExpired}</p>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  if (hasBackend) {
+                    api.patchOrder(order.ref, { accept: true }).then(onRefresh).catch(() => notify("saveFailed"));
+                  } else {
+                    acceptQuote(order.ref);
+                    onRefresh();
+                  }
+                }}
+                className="self-start bg-ink px-4 py-2.5 text-[11px] font-medium uppercase tracking-[0.14em] text-paper transition-colors hover:bg-graphite"
+              >
+                {t.acceptQuote}
+              </button>
+              <p className="text-[11px] font-light leading-relaxed text-stone">{t.acceptNote}</p>
+            </>
+          )}
           <button
             type="button"
-            onClick={() => {
-              if (hasBackend) {
-                api.patchOrder(order.ref, { accept: true }).then(onRefresh).catch(() => notify("saveFailed"));
-              } else {
-                acceptQuote(order.ref);
-                onRefresh();
-              }
-            }}
-            className="self-start bg-ink px-4 py-2.5 text-[11px] font-medium uppercase tracking-[0.14em] text-paper transition-colors hover:bg-graphite"
+            onClick={() =>
+              downloadQuotePdf(order, t.quote, order.system === "glass" ? cfgDict.systemGlass : cfgDict.systemBars)
+            }
+            className="self-start text-xs uppercase tracking-[0.12em] text-graphite underline-offset-4 hover:text-ink hover:underline"
           >
-            {t.acceptQuote}
+            ↓ {t.quotePdf}
           </button>
-          <p className="text-[11px] font-light leading-relaxed text-stone">{t.acceptNote}</p>
         </div>
       )}
       {/* Order confirmation: visible as soon as the order leaves internal review. */}
@@ -113,9 +136,13 @@ function OrderCard({
           )}
           <button
             type="button"
-            onClick={() =>
-              downloadConfirmationPdf(order, t.confirmation, cfgDict.payTerms, order.system === "glass" ? cfgDict.systemGlass : cfgDict.systemBars)
-            }
+            onClick={() => {
+              const systemName = order.system === "glass" ? cfgDict.systemGlass : cfgDict.systemBars;
+              void downloadConfirmationPdf(order, t.confirmation, cfgDict.payTerms, systemName, {
+                svg: svgRef.current,
+                summary: confirmationSummary(order, cfgDict, tp?.name?.de ?? systemName),
+              });
+            }}
             className="self-start bg-ink px-4 py-2.5 text-[11px] font-medium uppercase tracking-[0.14em] text-paper transition-colors hover:bg-graphite"
           >
             ↓ {t.confirmationPdf}
@@ -169,6 +196,25 @@ function OrderCard({
             ↓ {t.drawingPdf}
           </button>
         </div>
+      )}
+      {/* Withdraw: an order still in review, or an open quote. */}
+      {(order.kind === "order" ? order.status === "new" : order.status === "quote_requested" || order.status === "quoted") && (
+        <button
+          type="button"
+          onClick={() => {
+            const isOrder = order.kind === "order";
+            if (!window.confirm(isOrder ? t.cancelOrderConfirm : t.declineQuoteConfirm)) return;
+            if (hasBackend) {
+              api.patchOrder(order.ref, { cancel: true }).then(onRefresh).catch(() => notify("saveFailed"));
+            } else {
+              cancelOrder(order.ref);
+              onRefresh();
+            }
+          }}
+          className="self-start text-xs uppercase tracking-[0.12em] text-stone underline-offset-4 hover:text-alert hover:underline"
+        >
+          {order.kind === "order" ? t.cancelOrder : t.declineQuote}
+        </button>
       )}
       {order.config && derived && (
         <div className="hidden">

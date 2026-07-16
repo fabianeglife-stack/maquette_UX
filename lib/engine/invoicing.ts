@@ -26,7 +26,14 @@ export interface Instalment {
   dueDate?: string;
   /** yyyy-mm-dd when marked paid, else undefined. */
   paidAt?: string;
+  /** Dunning trail: dates of the reminders sent for this instalment. */
+  reminders: string[];
   state: InstalmentState;
+}
+
+/** Dunning escalation from the reminder count: 0 none, 1 R1, 2 R2, 3+ formal notice. */
+export function reminderLevel(reminders: string[]): 0 | 1 | 2 | 3 {
+  return Math.min(reminders.length, 3) as 0 | 1 | 2 | 3;
 }
 
 const DATE = /^\d{4}-\d{2}-\d{2}/;
@@ -63,7 +70,8 @@ export function invoicesFor(
   pb?: PriceBook,
   now: Date = new Date(),
 ): Instalment[] {
-  if (order.kind !== "order") return [];
+  // Quotes carry no invoices; a cancelled order never bills.
+  if (order.kind !== "order" || order.status === "cancelled") return [];
   const plan = paymentPlan(order.quotedGross ?? order.gross, pb);
   const base = invoiceNoFor(order.ref);
   const today = now.toISOString().slice(0, 10);
@@ -76,10 +84,10 @@ export function invoicesFor(
   };
 
   // First invoice — full amount (small order) or the deposit (split order).
-  // Issued at confirmation; falls back to the order date for seeded fixtures
-  // that carry no event trail.
-  const firstIssued = orderRank >= rank("confirmed");
-  const firstAt = firstIssued ? (eventDay(events, "confirmed") ?? dayOf(order.createdAt)) : undefined;
+  // It is due with the order itself (paid online at checkout in the current
+  // flow), so it is issued at creation; legacy/seeded orders without a paid
+  // marker simply show as outstanding from that date.
+  const firstAt = eventDay(events, "created") ?? dayOf(order.createdAt);
   const first: Instalment = {
     kind: plan.split ? "deposit" : "full",
     no: plan.split ? `${base}-A` : base,
@@ -87,9 +95,10 @@ export function invoicesFor(
     issuedAt: firstAt,
     dueDate: firstAt ? addDays(firstAt, plan.netDays) : undefined,
     paidAt: dayOf(order.depositPaidAt),
+    reminders: order.reminders?.deposit ?? [],
     state: "pending",
   };
-  first.state = state(firstIssued, first.paidAt, first.dueDate);
+  first.state = state(Boolean(firstAt), first.paidAt, first.dueDate);
   if (!plan.split) return [first];
 
   // Balance — issued at delivery ("shipped"); due at the delivery date + net.
@@ -103,6 +112,7 @@ export function invoicesFor(
     issuedAt: balAt,
     dueDate: dueBasis ? addDays(dueBasis, plan.netDays) : undefined,
     paidAt: dayOf(order.balancePaidAt),
+    reminders: order.reminders?.balance ?? [],
     state: "pending",
   };
   balance.state = state(balIssued, balance.paidAt, balance.dueDate);

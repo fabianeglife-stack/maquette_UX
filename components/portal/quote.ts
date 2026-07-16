@@ -1,32 +1,23 @@
 /*
- * Client-side invoice PDF (A4) for portal orders. Works from the order
- * snapshot alone (gross incl. VAT), so seeded fixtures get invoices too.
+ * Client-side quote/offer PDF (A4). Renders the binding price set by the
+ * sales team, with its validity date — the document a customer can file or
+ * forward before deciding. Mirrors the invoice layout.
  */
 
 import { jsPDF } from "jspdf";
 import { chf, defaultPriceBook } from "@/lib/engine/pricing";
-import { invoiceNoFor, type Order } from "@/lib/store";
-import type { Instalment } from "@/lib/engine/invoicing";
+import { quoteNoFor, type Order } from "@/lib/store";
 import { fmt, type Dict } from "@/lib/i18n";
 
-// Single source of truth for the VAT rate (see the price book).
-const VAT_RATE = defaultPriceBook.vatRate;
-
-/**
- * Invoice PDF (A4). Without an `instalment` it bills the full order; with one
- * it bills that part (deposit / balance / full) — its own number, amount, due
- * date and a note pointing back at the order total.
- */
-export function downloadInvoicePdf(order: Order, t: Dict["portal"]["invoice"], systemName: string, instalment?: Instalment): void {
+export function downloadQuotePdf(order: Order, t: Dict["portal"]["quote"], systemName: string): void {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const right = 190;
   const left = 20;
 
-  const amount = instalment ? instalment.amount : order.gross;
-  const net = amount / (1 + VAT_RATE);
+  const amount = order.quotedGross ?? order.gross;
+  const net = amount / (1 + defaultPriceBook.vatRate);
   const vat = amount - net;
-  const no = instalment ? instalment.no : invoiceNoFor(order.ref);
-  const title = instalment?.kind === "deposit" ? t.deposit : instalment?.kind === "balance" ? t.balance : t.title;
+  const no = quoteNoFor(order.ref);
 
   // header
   doc.setFont("helvetica", "bold");
@@ -40,7 +31,7 @@ export function downloadInvoicePdf(order: Order, t: Dict["portal"]["invoice"], s
   doc.text("AxioForm AG · Werkstrasse 12 · 6300 Zug · hello@axioform.ch", left, 30);
   doc.setTextColor(0);
   doc.setFontSize(13);
-  doc.text(title, right, 24, { align: "right" });
+  doc.text(t.title, right, 24, { align: "right" });
 
   // customer address
   doc.setFontSize(10);
@@ -53,10 +44,9 @@ export function downloadInvoicePdf(order: Order, t: Dict["portal"]["invoice"], s
   const meta: [string, string][] = [
     [t.no, no],
     [t.ref, order.ref],
-    [t.date, instalment?.issuedAt ?? order.createdAt],
+    [t.date, order.createdAt],
   ];
-  if (instalment?.dueDate) meta.push([t.due, instalment.dueDate]);
-  if (order.payment) meta.push([t.payment, order.payment.toUpperCase()]);
+  if (order.validUntil) meta.push([t.validUntil, order.validUntil]);
   meta.forEach(([k, v], i) => {
     doc.setTextColor(130);
     doc.text(k, right - 45, y + i * 5);
@@ -71,8 +61,7 @@ export function downloadInvoicePdf(order: Order, t: Dict["portal"]["invoice"], s
   doc.line(left, y, right, y);
   y += 7;
   doc.setFontSize(10);
-  const itemLabel = instalment && instalment.kind !== "full" ? `${title} — ${systemName}, ${order.lengthM.toLocaleString("de-CH")} m` : `${t.item} — ${systemName}, ${order.lengthM.toLocaleString("de-CH")} m`;
-  doc.text(itemLabel, left, y);
+  doc.text(`${t.item} — ${systemName}, ${order.lengthM.toLocaleString("de-CH")} m`, left, y);
   doc.text(chf(net), right, y, { align: "right" });
   y += 6;
   doc.setDrawColor(200);
@@ -97,16 +86,10 @@ export function downloadInvoicePdf(order: Order, t: Dict["portal"]["invoice"], s
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
   doc.setTextColor(90);
-  // For a split instalment, point back at the full order total.
-  if (instalment && instalment.kind !== "full") {
-    doc.text(fmt(t.partOf, { total: chf(order.gross) }), left, y + 9);
-    doc.text(t.payable, left, y + 16);
-  } else {
-    doc.text(t.payable, left, y + 16);
-  }
+  if (order.validUntil) doc.text(fmt(t.validNote, { date: order.validUntil }), left, y + 16);
   doc.setTextColor(160);
   doc.setFontSize(8);
   doc.text(t.demo, left, 280);
 
-  doc.save(`axioform-invoice-${no}.pdf`);
+  doc.save(`axioform-quote-${no}.pdf`);
 }

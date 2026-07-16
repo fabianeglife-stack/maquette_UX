@@ -11,9 +11,11 @@ import { api, hasBackend } from "@/lib/api";
 import { notify } from "@/lib/toast";
 import {
   acceptQuote,
+  cancelOrder,
   loadOrders,
   logEvent,
   ORDER_FLOW,
+  QUOTE_VALID_DAYS,
   updateOrder,
   updateOrderStatus,
   type Order,
@@ -40,6 +42,7 @@ export const STATUS_HUES: Record<OrderStatus, string> = {
   shipped: "#0d9488",
   invoiced: "#4f46e5",
   paid: "#16a34a",
+  cancelled: "#6b7280",
 };
 
 export function StatusChip({ status, label }: { status: OrderStatus; label: string }) {
@@ -161,8 +164,20 @@ export function useOrders() {
       api.patchOrder(o.ref, { quotedGross: value }).then(refresh).catch(() => notify("saveFailed"));
       return;
     }
-    updateOrder(o.ref, { status: "quoted", quotedGross: value });
+    // The binding quote carries a validity window from the day it is sent.
+    const validUntil = new Date(Date.now() + QUOTE_VALID_DAYS * 86400000).toISOString().slice(0, 10);
+    updateOrder(o.ref, { status: "quoted", quotedGross: value, validUntil });
     logEvent(o.ref, "quoted", o.customer.email);
+    refresh();
+  };
+
+  // Withdraw an order in review / decline a quote (terminal "cancelled").
+  const cancel = (o: Order) => {
+    if (hasBackend) {
+      api.patchOrder(o.ref, { cancel: true }).then(refresh).catch(() => notify("saveFailed"));
+      return;
+    }
+    cancelOrder(o.ref);
     refresh();
   };
 
@@ -176,14 +191,28 @@ export function useOrders() {
     refresh();
   };
 
-  // Estimated delivery date, required before an order can be confirmed.
-  const setDeliveryDate = (ref: string, deliveryDate: string) => {
+  // Estimated delivery date. Entering it on an order in review IS the
+  // confirmation: the order moves to "confirmed" and the confirmation goes
+  // out to the customer. Resolves true when that dispatch happened.
+  const setDeliveryDate = (ref: string, deliveryDate: string): Promise<boolean> => {
+    const o = orders.find((x) => x.ref === ref);
+    const confirmNow = o?.kind === "order" && o.status === "new";
     if (hasBackend) {
-      api.patchOrder(ref, { deliveryDate }).then(refresh).catch(() => notify("saveFailed"));
-      return;
+      return api
+        .patchOrder(ref, { deliveryDate })
+        .then(() => {
+          refresh();
+          return confirmNow ?? false;
+        })
+        .catch(() => {
+          notify("saveFailed");
+          return false;
+        });
     }
-    updateOrder(ref, { deliveryDate });
+    updateOrder(ref, { deliveryDate, ...(confirmNow ? { status: "confirmed" as OrderStatus } : {}) });
+    if (confirmNow && o) logEvent(ref, "confirmed", o.customer.email);
     refresh();
+    return Promise.resolve(confirmNow ?? false);
   };
 
   // Record a payment on the deposit/full or balance invoice; once fully
@@ -206,5 +235,18 @@ export function useOrders() {
     refresh();
   };
 
-  return { orders, ready, refresh, advance, sendQuote, markAccepted, setDeliveryDate, markPaid };
+  // Dunning: record a payment reminder for an issued, unpaid instalment.
+  const remind = (o: Order, which: "deposit" | "balance") => {
+    if (hasBackend) {
+      api.patchOrder(o.ref, { remind: which }).then(refresh).catch(() => notify("saveFailed"));
+      return;
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    const reminders = { ...o.reminders, [which]: [...(o.reminders?.[which] ?? []), today] };
+    updateOrder(o.ref, { reminders });
+    logEvent(o.ref, "reminder_sent", o.customer.email);
+    refresh();
+  };
+
+  return { orders, ready, refresh, advance, sendQuote, markAccepted, setDeliveryDate, markPaid, cancel, remind };
 }

@@ -137,8 +137,9 @@ function segmentsSummary(cfg: RailingConfig): string {
     .join("  ·  ");
 }
 
-/** Rasterise the principle drawing SVG onto a landscape page. */
-async function addPlanPage(doc: jsPDF, svg: SVGSVGElement, title: string) {
+/** Rasterise the principle drawing SVG onto a landscape page. Shared with the
+ *  customer-facing order confirmation. */
+export async function addPlanPage(doc: jsPDF, svg: SVGSVGElement, title: string) {
   const xml = new XMLSerializer().serializeToString(svg);
   const url = URL.createObjectURL(new Blob([xml], { type: "image/svg+xml;charset=utf-8" }));
   try {

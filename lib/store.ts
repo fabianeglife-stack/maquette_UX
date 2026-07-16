@@ -16,7 +16,11 @@ export type OrderStatus =
   | "invoiced"
   | "paid"
   | "quote_requested"
-  | "quoted";
+  | "quoted"
+  // Terminal state outside the linear flows: a withdrawn order or declined
+  // quote. Orders can be cancelled while new (customer) or new/confirmed
+  // (staff); later stages are committed to production.
+  | "cancelled";
 
 export const ORDER_FLOW: OrderStatus[] = ["new", "confirmed", "production", "shipped", "invoiced", "paid"];
 
@@ -32,6 +36,16 @@ export function deliveryNoFor(ref: string): string {
 export function confirmationNoFor(ref: string): string {
   return "AB-" + ref.replace(/^AX-/, "");
 }
+/** Deterministic quote/offer number for a request. */
+export function quoteNoFor(ref: string): string {
+  return "OF-" + ref.replace(/^AX-/, "");
+}
+/** Days a binding quote stays valid after it is sent. */
+export const QUOTE_VALID_DAYS = 30;
+/** Whether a binding quote has passed its validity date. */
+export function isQuoteExpired(o: Pick<Order, "validUntil">, today: string = new Date().toISOString().slice(0, 10)): boolean {
+  return Boolean(o.validUntil && today > o.validUntil);
+}
 export const QUOTE_FLOW: OrderStatus[] = ["quote_requested", "quoted"];
 
 export interface Order {
@@ -39,18 +53,32 @@ export interface Order {
   kind: OrderKind;
   createdAt: string; // ISO date
   status: OrderStatus;
-  customer: { name: string; email: string; street: string; city: string };
+  customer: {
+    name: string;
+    email: string;
+    street: string;
+    city: string;
+    /** Contact number for delivery/installation coordination. */
+    phone?: string;
+    /** Delivery/site address when it differs from the billing address. */
+    deliveryStreet?: string;
+    deliveryCity?: string;
+  };
   payment?: "card" | "twint" | "invoice";
   system: "bars" | "glass";
   lengthM: number;
   gross: number;
   /** Binding price set by the admin when quoting; becomes `gross` on acceptance. */
   quotedGross?: number;
+  /** Last day (ISO yyyy-mm-dd) a binding quote can be accepted. */
+  validUntil?: string;
   /** Estimated delivery date (ISO yyyy-mm-dd), entered by staff before confirmation. */
   deliveryDate?: string;
   /** Payment markers (ISO yyyy-mm-dd) for the deposit/full and balance invoices. */
   depositPaidAt?: string;
   balancePaidAt?: string;
+  /** Dunning trail: reminder dates (ISO) per instalment. */
+  reminders?: { deposit?: string[]; balance?: string[] };
   config?: RailingConfig;
   seeded?: boolean;
 }
@@ -132,9 +160,17 @@ export function updateOrderStatus(ref: string, status: OrderStatus): void {
 /** Customer accepts a binding quote: it converts into a confirmed order. */
 export function acceptQuote(ref: string): void {
   const q = loadOrders().find((o) => o.ref === ref);
-  if (!q || q.kind !== "quote") return;
+  if (!q || q.kind !== "quote" || isQuoteExpired(q)) return;
   updateOrder(ref, { kind: "order", status: "confirmed", gross: q.quotedGross ?? q.gross, payment: "invoice" });
   logEvent(ref, "quote_accepted", q.customer.email);
+}
+
+/** Withdraw an order (while still in review) or decline a quote. */
+export function cancelOrder(ref: string): void {
+  const o = loadOrders().find((x) => x.ref === ref);
+  if (!o || o.status === "cancelled") return;
+  updateOrder(ref, { status: "cancelled" });
+  logEvent(ref, "cancelled", o.customer.email);
 }
 
 export function dedupeOrders(orders: Order[]): Order[] {
@@ -212,7 +248,11 @@ export type OrderEventType =
   // the balance invoice at delivery (shipping).
   | "deposit_sent"
   | "balance_sent"
-  | "invoice_sent";
+  | "invoice_sent"
+  // Online payment received with the order (deposit or full amount).
+  | "deposit_paid"
+  // Dunning: a payment reminder went out for an unpaid instalment.
+  | "reminder_sent";
 
 export interface OrderEvent {
   ref: string;
@@ -289,20 +329,30 @@ export interface HomeContent {
 }
 
 /**
- * Admin-uploaded principle drawings per guardrail type and fixing situation
- * (bottom = mounted on the slab, side = lateral). Values are PDF data-URLs
- * (prototype) or hosted URLs; the type's built-in planUrl is the fallback.
+ * Admin-uploaded principle drawings per guardrail type, wall situation
+ * (substrate) and fixing (top = on the slab, side = lateral). The canonical
+ * key is the combination "substrate|mounting"; bare-substrate and bare-mounting
+ * keys are legacy uploads kept as fallbacks. Values are PDF data-URLs
+ * (prototype) or hosted URLs; the type's built-in planUrl is the last resort.
  */
-export type TypePlans = Record<string, Partial<Record<Substrate | "top" | "side", string>>>;
+export type Mounting = "top" | "side";
+export type PlanKey = `${Substrate}|${Mounting}` | Substrate | Mounting;
+export type TypePlans = Record<string, Partial<Record<PlanKey, string>>>;
 
 /**
- * Plan resolution: exact substrate → legacy mounting-level upload
- * ("top"/"side", kept for plans stored before the per-substrate matrix) →
- * the type's built-in planUrl.
+ * Plan resolution: exact substrate|mounting combination → bare substrate
+ * (legacy) → bare mounting (legacy) → the type's built-in planUrl.
  */
-export function planFor(plans: TypePlans, typeId: string, substrate: Substrate, fallback?: string): string | undefined {
+export function planFor(
+  plans: TypePlans,
+  typeId: string,
+  substrate: Substrate,
+  mounting?: Mounting,
+  fallback?: string,
+): string | undefined {
   const entry = plans[typeId];
-  return entry?.[substrate] ?? entry?.[SUBSTRATE_MOUNTING[substrate]] ?? fallback;
+  const m = mounting ?? SUBSTRATE_MOUNTING[substrate];
+  return entry?.[`${substrate}|${m}`] ?? entry?.[substrate] ?? entry?.[m] ?? fallback;
 }
 
 export function loadPageContent<T>(id: string, empty: T): T {

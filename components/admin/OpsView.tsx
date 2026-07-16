@@ -19,6 +19,7 @@ export default function OpsView({
   cfgDict,
   invoiceDict,
   confirmationDict,
+  quoteDict,
   locale,
   statuses,
   accent,
@@ -29,12 +30,13 @@ export default function OpsView({
   cfgDict: Dict["cfg"];
   invoiceDict: Dict["portal"]["invoice"];
   confirmationDict: Dict["portal"]["confirmation"];
+  quoteDict: Dict["portal"]["quote"];
   locale?: string;
   statuses: OrderStatus[];
   accent: string;
   hint: string;
 }) {
-  const { orders, ready, advance, sendQuote, markAccepted, setDeliveryDate } = useOrders();
+  const { orders, ready, advance, sendQuote, markAccepted, setDeliveryDate, cancel } = useOrders();
   const [openRef, setOpenRef] = useState<string | null>(null);
 
   if (!ready) return <TabSkeleton />;
@@ -109,12 +111,14 @@ export default function OpsView({
           cfgDict={cfgDict}
           invoiceDict={invoiceDict}
           confirmationDict={confirmationDict}
+          quoteDict={quoteDict}
           locale={locale}
           onClose={() => setOpenRef(null)}
           advance={advance}
           sendQuote={sendQuote}
           markAccepted={markAccepted}
           setDeliveryDate={setDeliveryDate}
+          cancel={cancel}
         />
       )}
     </div>

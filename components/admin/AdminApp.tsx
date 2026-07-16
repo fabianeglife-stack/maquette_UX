@@ -50,6 +50,7 @@ export default function AdminApp({
   aboutDict,
   invoiceDict,
   confirmationDict,
+  quoteDict,
   locale,
 }: {
   variant: Console;
@@ -60,6 +61,7 @@ export default function AdminApp({
   aboutDict: Dict["about"];
   invoiceDict: Dict["portal"]["invoice"];
   confirmationDict: Dict["portal"]["confirmation"];
+  quoteDict: Dict["portal"]["quote"];
   locale: string;
 }) {
   const consoleTabs = variant === "erp" ? ERP_TABS : STUDIO_TABS;
@@ -228,7 +230,7 @@ export default function AdminApp({
       {/* workspace — the only scrolling region in the full-screen console */}
       <main className="min-w-0 flex-1 overflow-auto p-4 md:p-6">
         {tab === "dashboard" && <DashboardTab t={t} statusLabels={statusLabels} cfgDict={cfgDict} />}
-        {tab === "orders" && <OrdersTab t={t} statusLabels={statusLabels} cfgDict={cfgDict} invoiceDict={invoiceDict} confirmationDict={confirmationDict} locale={locale} />}
+        {tab === "orders" && <OrdersTab t={t} statusLabels={statusLabels} cfgDict={cfgDict} invoiceDict={invoiceDict} confirmationDict={confirmationDict} quoteDict={quoteDict} locale={locale} />}
         {tab === "production" && (
           <OpsView
             t={t}
@@ -236,6 +238,7 @@ export default function AdminApp({
             cfgDict={cfgDict}
             invoiceDict={invoiceDict}
             confirmationDict={confirmationDict}
+            quoteDict={quoteDict}
             locale={locale}
             statuses={["new", "confirmed", "production"]}
             accent="#ea580c"
@@ -249,6 +252,7 @@ export default function AdminApp({
             cfgDict={cfgDict}
             invoiceDict={invoiceDict}
             confirmationDict={confirmationDict}
+            quoteDict={quoteDict}
             locale={locale}
             statuses={["confirmed", "production", "shipped"]}
             accent="#0d9488"
@@ -262,10 +266,11 @@ export default function AdminApp({
             cfgDict={cfgDict}
             invoiceDict={invoiceDict}
             confirmationDict={confirmationDict}
+            quoteDict={quoteDict}
             locale={locale}
           />
         )}
-        {tab === "customers" && <CustomersTab t={t} />}
+        {tab === "customers" && <CustomersTab t={t} statusLabels={statusLabels} cfgDict={cfgDict} />}
         {tab === "pricing" && <PricingTab t={t} />}
         {tab === "products" && <ProductsTab t={t} cfgDict={cfgDict} />}
         {tab === "content" && <ContentTab t={t} refsDict={refsDict} aboutDict={aboutDict} locale={locale} />}

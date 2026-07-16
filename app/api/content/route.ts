@@ -46,6 +46,11 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: "invalid_input" }, { status: 400 });
   }
   const json = JSON.stringify(content);
+  // Images/plan PDFs travel as data URLs inside the blob — cap the row size
+  // so a runaway upload can't bloat the database.
+  if (json.length > 8_000_000) {
+    return NextResponse.json({ error: "payload_too_large" }, { status: 413 });
+  }
   await db.siteContent.upsert({ where: { id }, create: { id, json }, update: { json } });
   return NextResponse.json({ ok: true });
 }

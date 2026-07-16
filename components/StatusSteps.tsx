@@ -14,6 +14,15 @@ export default function StatusSteps({
   showLabel?: boolean;
 }) {
   const idx = flow.indexOf(status);
+  // Cancelled sits outside the linear flow: a plain terminal chip, no pipeline.
+  if (status === "cancelled") {
+    return (
+      <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-stone/40 bg-mist/60 px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.1em] text-stone">
+        <span className="h-1.5 w-1.5 rounded-full bg-stone" />
+        {labels.cancelled}
+      </span>
+    );
+  }
   return (
     <div
       className="flex items-center gap-1.5"
