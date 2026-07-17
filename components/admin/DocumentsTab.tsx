@@ -3,14 +3,18 @@
 /*
  * Documents station: the per-order document binder. Pick an order on the left
  * and every document that belongs to it appears on the right, structured by
- * department (sales, finance, production, logistics, technical). Everything is
- * generated on the fly by the existing PDF generators — the binder is a lens
- * over the order, not a second storage.
+ * department (sales, finance, production, logistics, technical).
+ *
+ * In the backend build the documents are *persisted*: the first "Open" builds
+ * the PDF, stores it against the order and opens it inline in a new tab; later
+ * opens serve the stored bytes without regenerating. A "Regenerate" action
+ * rebuilds documents that track order state (e.g. an invoice after payment).
+ * The static prototype (no backend) falls back to the classic download.
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { chf } from "@/lib/engine/pricing";
-import { invoicesFor, reminderLevel } from "@/lib/engine/invoicing";
+import { invoicesFor } from "@/lib/engine/invoicing";
 import { deriveRailing } from "@/lib/engine/geometry";
 import { buildBom } from "@/lib/engine/bom";
 import type { TypeProfile } from "@/lib/engine/types";
@@ -18,7 +22,6 @@ import { fmt, type Dict } from "@/lib/i18n";
 import {
   confirmationNoFor,
   deliveryNoFor,
-  invoiceNoFor,
   loadEvents,
   planFor,
   quoteNoFor,
@@ -27,15 +30,20 @@ import {
   type TypePlans,
 } from "@/lib/store";
 import { fetchAllTypes, fetchPageContent, resolveType } from "@/lib/data";
-import { hasBackend, type ApiOrder } from "@/lib/api";
-import { downloadQuotePdf } from "@/components/portal/quote";
-import { confirmationSummary, downloadConfirmationPdf } from "@/components/portal/confirmation";
-import { downloadInvoicePdf } from "@/components/portal/invoice";
-import { downloadReminderPdf } from "@/components/portal/reminder";
-import { downloadDeliveryPdf, downloadFabricationPdf, downloadPickingPdf } from "./docs";
-import { downloadDrawingPdf } from "@/components/configurator/pdf";
+import { hasBackend, api, type ApiOrder, type DocumentMeta } from "@/lib/api";
+import { docToDataUri, type BuiltDoc } from "@/lib/pdf";
+import { notify } from "@/lib/toast";
+import { buildQuoteDoc } from "@/components/portal/quote";
+import { confirmationSummary, buildConfirmationDoc } from "@/components/portal/confirmation";
+import { buildInvoiceDoc } from "@/components/portal/invoice";
+import { buildReminderDoc } from "@/components/portal/reminder";
+import { buildDeliveryDoc, buildFabricationDoc, buildPickingDoc } from "./docs";
+import { buildDrawingDoc } from "@/components/configurator/pdf";
 import DrawingSVG from "@/components/configurator/DrawingSVG";
 import { StatusChip, TabSkeleton, inputCls, useOrders, type AdminDict } from "./shared";
+
+/** A generator producing the document bytes on demand (built, not yet saved). */
+type Build = () => BuiltDoc | Promise<BuiltDoc>;
 
 /** One binder line: a document that exists or a slot with the reason it doesn't yet. */
 function DocRow({
@@ -43,28 +51,53 @@ function DocRow({
   no,
   note,
   reason,
-  onDownload,
+  savedNote,
+  busy,
+  openLabel,
+  generatingLabel,
+  regenLabel,
+  onOpen,
+  onRegen,
 }: {
   label: string;
   no?: string;
   note?: string;
   reason?: string;
-  onDownload?: () => void;
+  savedNote?: string;
+  busy?: boolean;
+  openLabel: string;
+  generatingLabel: string;
+  regenLabel: string;
+  onOpen?: () => void;
+  onRegen?: () => void;
 }) {
-  const available = Boolean(onDownload);
+  const available = Boolean(onOpen);
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-hairline/70 py-2 first:border-t-0">
       <button
         type="button"
-        disabled={!available}
-        onClick={onDownload}
+        disabled={!available || busy}
+        onClick={onOpen}
         className="border border-hairline px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] text-graphite transition-colors hover:border-graphite hover:text-ink disabled:cursor-not-allowed disabled:opacity-35"
       >
-        ↓ PDF
+        {busy ? generatingLabel : openLabel}
       </button>
       <span className={`text-[13px] ${available ? "text-ink" : "text-stone"}`}>{label}</span>
       {no && <span className="text-xs font-light text-stone">{no}</span>}
       {note && <span className="text-xs font-light text-steel">{note}</span>}
+      {savedNote && <span className="text-[11px] font-light text-steel">· {savedNote}</span>}
+      {onRegen && (
+        <button
+          type="button"
+          onClick={onRegen}
+          disabled={busy}
+          title={regenLabel}
+          aria-label={regenLabel}
+          className="text-[13px] text-stone transition-colors hover:text-ink disabled:opacity-35"
+        >
+          ↻
+        </button>
+      )}
       {!available && reason && <span className="ml-auto text-[11px] font-light italic text-stone">{reason}</span>}
     </div>
   );
@@ -103,6 +136,9 @@ export default function DocumentsTab({
   const [selRef, setSelRef] = useState<string | null>(null);
   const [types, setTypes] = useState<TypeProfile[]>([]);
   const [typePlans, setTypePlans] = useState<TypePlans>({});
+  // Persisted documents for the selected order, keyed by their stable slug.
+  const [savedMap, setSavedMap] = useState<Record<string, DocumentMeta>>({});
+  const [busySlug, setBusySlug] = useState<string | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
 
   useEffect(() => {
@@ -120,6 +156,26 @@ export default function DocumentsTab({
   );
   const order = orders.find((o) => o.ref === selRef) ?? null;
 
+  // Pull the list of already-stored documents whenever the selection changes.
+  useEffect(() => {
+    if (!selRef || !hasBackend) {
+      setSavedMap({});
+      return;
+    }
+    let alive = true;
+    api
+      .listDocuments(selRef)
+      .then((docs) => {
+        if (alive) setSavedMap(Object.fromEntries(docs.map((d) => [d.slug, d])));
+      })
+      .catch(() => {
+        if (alive) setSavedMap({});
+      });
+    return () => {
+      alive = false;
+    };
+  }, [selRef]);
+
   // Engine output for the selected order's technical documents.
   const tp = useMemo(
     () => (order?.config && types.length > 0 ? resolveType(types, order.config.typeId, order.config.system) : null),
@@ -130,6 +186,54 @@ export default function DocumentsTab({
   const systemName = order ? (order.system === "glass" ? cfgDict.systemGlass : cfgDict.systemBars) : "";
   const typeName =
     tp?.name?.[locale as "de" | "fr" | "en"] ?? tp?.name?.de ?? systemName;
+
+  // Open a document: serve the stored copy when present, otherwise build it,
+  // persist it and open the stored bytes. In the static build (no backend) the
+  // document is simply downloaded, as before.
+  async function runOpen(slug: string, area: string, kind: string, no: string | undefined, build: Build, force: boolean) {
+    if (!order) return;
+    if (!hasBackend) {
+      const { doc, filename } = await build();
+      doc.save(filename);
+      return;
+    }
+    const existing = savedMap[slug];
+    if (existing && !force) {
+      window.open(api.documentUrl(existing.id), "_blank", "noopener");
+      return;
+    }
+    // Reserve the tab during the click gesture so the async build doesn't trip
+    // the pop-up blocker; point it at the stored bytes once saved.
+    const win = window.open("", "_blank");
+    setBusySlug(slug);
+    try {
+      const { doc, filename } = await build();
+      const meta = await api.saveDocument(order.ref, { slug, area, kind, no, filename, dataUri: docToDataUri(doc) });
+      const url = api.documentUrl(meta.id);
+      if (win) win.location.href = url;
+      else window.open(url, "_blank", "noopener");
+      setSavedMap((m) => ({ ...m, [slug]: meta }));
+    } catch {
+      if (win) win.close();
+      notify("loadFailed", t.docsHub.openError);
+    } finally {
+      setBusySlug(null);
+    }
+  }
+
+  // Common props for a binder line: wires open + regenerate and the stored note.
+  const rowProps = (slug: string, area: string, kind: string, no: string | undefined, build: Build | undefined) => {
+    const meta = savedMap[slug];
+    return {
+      openLabel: t.docsHub.open,
+      generatingLabel: t.docsHub.generating,
+      regenLabel: t.docsHub.regenerate,
+      busy: busySlug === slug,
+      savedNote: meta ? fmt(t.docsHub.savedOn, { date: meta.createdAt.slice(0, 10) }) : undefined,
+      onOpen: build ? () => runOpen(slug, area, kind, no, build, false) : undefined,
+      onRegen: hasBackend && build && meta ? () => runOpen(slug, area, kind, no, build, true) : undefined,
+    };
+  };
 
   if (!ready) return <TabSkeleton />;
 
@@ -188,21 +292,25 @@ export default function DocumentsTab({
                 label={quoteDict.title}
                 no={quoteNoFor(order.ref)}
                 note={order.validUntil ? `${quoteDict.validUntil} ${order.validUntil}` : undefined}
-                onDownload={() => downloadQuotePdf(order, quoteDict, systemName)}
+                {...rowProps("quote", "sale", quoteDict.title, quoteNoFor(order.ref), () => buildQuoteDoc(order, quoteDict, systemName))}
               />
               <DocRow
                 label={t.docs.confirmation}
                 no={confirmationNoFor(order.ref)}
                 reason={t.docsHub.needConfirm}
-                onDownload={
+                {...rowProps(
+                  "confirmation",
+                  "sale",
+                  t.docs.confirmation,
+                  confirmationNoFor(order.ref),
                   order.kind === "order" && order.deliveryDate
                     ? () =>
-                        void downloadConfirmationPdf(order, confirmationDict, cfgDict.payTerms, systemName, {
+                        buildConfirmationDoc(order, confirmationDict, cfgDict.payTerms, systemName, {
                           svg: svgRef.current,
                           summary: confirmationSummary(order, cfgDict, typeName),
                         })
-                    : undefined
-                }
+                    : undefined,
+                )}
               />
             </Category>
 
@@ -217,19 +325,30 @@ export default function DocumentsTab({
                     no={inv.no}
                     note={inv.paidAt ? fmt(t.docsHub.paidOn, { date: inv.paidAt }) : inv.dueDate ? `${t.finance.colDue} ${inv.dueDate}` : undefined}
                     reason={t.docsHub.needShipped}
-                    onDownload={inv.state !== "pending" ? () => downloadInvoicePdf(order, invoiceDict, systemName, inv) : undefined}
+                    {...rowProps(
+                      `invoice-${inv.kind}`,
+                      "finance",
+                      t.finance.types[inv.kind],
+                      inv.no,
+                      inv.state !== "pending" ? () => buildInvoiceDoc(order, invoiceDict, systemName, inv) : undefined,
+                    )}
                   />
                 ))}
                 {instalments.flatMap((inv) =>
-                  inv.reminders.map((date, i) => (
-                    <DocRow
-                      key={`${inv.kind}-r${i}`}
-                      label={t.finance.reminderLevels[Math.min(i + 1, 3) as 1 | 2 | 3]}
-                      no={inv.no}
-                      note={date}
-                      onDownload={() => downloadReminderPdf(order, inv, Math.min(i + 1, 3) as 1 | 2 | 3, date, reminderDict)}
-                    />
-                  )),
+                  inv.reminders.map((date, i) => {
+                    const level = Math.min(i + 1, 3) as 1 | 2 | 3;
+                    return (
+                      <DocRow
+                        key={`${inv.kind}-r${i}`}
+                        label={t.finance.reminderLevels[level]}
+                        no={inv.no}
+                        note={date}
+                        {...rowProps(`reminder-${inv.kind}-${i + 1}`, "finance", t.finance.reminderLevels[level], inv.no, () =>
+                          buildReminderDoc(order, inv, level, date, reminderDict),
+                        )}
+                      />
+                    );
+                  }),
                 )}
               </Category>
             )}
@@ -240,16 +359,20 @@ export default function DocumentsTab({
                 <DocRow
                   label={t.docs.fabrication}
                   reason={t.docs.needConfig}
-                  onDownload={
+                  {...rowProps(
+                    "fabrication",
+                    "production",
+                    t.docs.fabrication,
+                    undefined,
                     order.config && tp && derived && bom
-                      ? () => downloadFabricationPdf(order, order.config!, tp, derived, bom, typeName, t.docs, t.bom, cfgDict, svgRef.current)
-                      : undefined
-                  }
+                      ? () => buildFabricationDoc(order, order.config!, tp, derived, bom, typeName, t.docs, t.bom, cfgDict, svgRef.current)
+                      : undefined,
+                  )}
                 />
                 <DocRow
                   label={t.docs.picking}
                   reason={t.docs.needConfig}
-                  onDownload={derived && bom ? () => downloadPickingPdf(order, derived, bom, t.docs, t.bom) : undefined}
+                  {...rowProps("picking", "production", t.docs.picking, undefined, derived && bom ? () => buildPickingDoc(order, derived, bom, t.docs, t.bom) : undefined)}
                 />
               </Category>
             )}
@@ -257,7 +380,11 @@ export default function DocumentsTab({
             {/* logistics */}
             {order.kind === "order" && (
               <Category title={t.docsHub.logistics}>
-                <DocRow label={t.docs.delivery} no={deliveryNoFor(order.ref)} onDownload={() => downloadDeliveryPdf(order, typeName, t.docs, derived)} />
+                <DocRow
+                  label={t.docs.delivery}
+                  no={deliveryNoFor(order.ref)}
+                  {...rowProps("delivery", "logistics", t.docs.delivery, deliveryNoFor(order.ref), () => buildDeliveryDoc(order, typeName, t.docs, derived))}
+                />
               </Category>
             )}
 
@@ -266,9 +393,12 @@ export default function DocumentsTab({
               <DocRow
                 label={cfgDict.downloadPdf}
                 reason={t.docs.needConfig}
-                onDownload={
-                  order.config && derived ? () => svgRef.current && downloadDrawingPdf(svgRef.current, `axioform-${order.ref}.pdf`) : undefined
-                }
+                {...rowProps("drawing", "technical", cfgDict.downloadPdf, undefined, order.config && derived
+                  ? async () => {
+                      const doc = await buildDrawingDoc(svgRef.current!);
+                      return { doc, filename: `axioform-${order.ref}.pdf` };
+                    }
+                  : undefined)}
               />
               {plan ? (
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-hairline/70 py-2">
@@ -277,12 +407,18 @@ export default function DocumentsTab({
                     {...(plan.startsWith("data:") ? { download: `axioform-plan-${order.ref}.pdf` } : { target: "_blank", rel: "noopener" })}
                     className="border border-hairline px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] text-graphite transition-colors hover:border-graphite hover:text-ink"
                   >
-                    ↓ PDF
+                    {t.docsHub.open}
                   </a>
                   <span className="text-[13px] text-ink">{cfgDict.planPdf}</span>
                 </div>
               ) : (
-                <DocRow label={cfgDict.planPdf} reason={t.docsHub.noPlan} />
+                <DocRow
+                  label={cfgDict.planPdf}
+                  reason={t.docsHub.noPlan}
+                  openLabel={t.docsHub.open}
+                  generatingLabel={t.docsHub.generating}
+                  regenLabel={t.docsHub.regenerate}
+                />
               )}
             </Category>
 

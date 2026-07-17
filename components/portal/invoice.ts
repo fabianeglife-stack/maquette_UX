@@ -8,6 +8,7 @@ import { chf, defaultPriceBook } from "@/lib/engine/pricing";
 import { invoiceNoFor, type Order } from "@/lib/store";
 import type { Instalment } from "@/lib/engine/invoicing";
 import { fmt, type Dict } from "@/lib/i18n";
+import type { BuiltDoc } from "@/lib/pdf";
 
 // Single source of truth for the VAT rate (see the price book).
 const VAT_RATE = defaultPriceBook.vatRate;
@@ -17,7 +18,7 @@ const VAT_RATE = defaultPriceBook.vatRate;
  * it bills that part (deposit / balance / full) — its own number, amount, due
  * date and a note pointing back at the order total.
  */
-export function downloadInvoicePdf(order: Order, t: Dict["portal"]["invoice"], systemName: string, instalment?: Instalment): void {
+export function buildInvoiceDoc(order: Order, t: Dict["portal"]["invoice"], systemName: string, instalment?: Instalment): BuiltDoc {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const right = 190;
   const left = 20;
@@ -108,5 +109,10 @@ export function downloadInvoicePdf(order: Order, t: Dict["portal"]["invoice"], s
   doc.setFontSize(8);
   doc.text(t.demo, left, 280);
 
-  doc.save(`axioform-invoice-${no}.pdf`);
+  return { doc, filename: `axioform-invoice-${no}.pdf` };
+}
+
+export function downloadInvoicePdf(order: Order, t: Dict["portal"]["invoice"], systemName: string, instalment?: Instalment): void {
+  const { doc, filename } = buildInvoiceDoc(order, t, systemName, instalment);
+  doc.save(filename);
 }

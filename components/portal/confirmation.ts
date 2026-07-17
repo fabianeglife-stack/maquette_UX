@@ -11,6 +11,7 @@ import { chf, defaultPriceBook, paymentPlan } from "@/lib/engine/pricing";
 import { confirmationNoFor, type Order } from "@/lib/store";
 import { addPlanPage } from "@/components/admin/docs";
 import { fmt, type Dict } from "@/lib/i18n";
+import type { BuiltDoc } from "@/lib/pdf";
 
 // Single source of truth for the VAT rate (see the price book).
 const VAT_RATE = defaultPriceBook.vatRate;
@@ -41,13 +42,13 @@ export function confirmationSummary(order: Order, cfg: Dict["cfg"], typeName: st
   return rows;
 }
 
-export async function downloadConfirmationPdf(
+export async function buildConfirmationDoc(
   order: Order,
   t: Dict["portal"]["confirmation"],
   payTerms: Dict["cfg"]["payTerms"],
   systemName: string,
   extras?: ConfirmationExtras,
-): Promise<void> {
+): Promise<BuiltDoc> {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const right = 190;
   const left = 20;
@@ -190,5 +191,16 @@ export async function downloadConfirmationPdf(
     }
   }
 
-  doc.save(`axioform-confirmation-${order.ref}.pdf`);
+  return { doc, filename: `axioform-confirmation-${order.ref}.pdf` };
+}
+
+export async function downloadConfirmationPdf(
+  order: Order,
+  t: Dict["portal"]["confirmation"],
+  payTerms: Dict["cfg"]["payTerms"],
+  systemName: string,
+  extras?: ConfirmationExtras,
+): Promise<void> {
+  const { doc, filename } = await buildConfirmationDoc(order, t, payTerms, systemName, extras);
+  doc.save(filename);
 }

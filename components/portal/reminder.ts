@@ -9,14 +9,15 @@ import { chf } from "@/lib/engine/pricing";
 import type { Instalment } from "@/lib/engine/invoicing";
 import type { Order } from "@/lib/store";
 import { fmt, type Dict } from "@/lib/i18n";
+import type { BuiltDoc } from "@/lib/pdf";
 
-export function downloadReminderPdf(
+export function buildReminderDoc(
   order: Order,
   inv: Instalment,
   level: 1 | 2 | 3,
   sentAt: string,
   t: Dict["portal"]["reminder"],
-): void {
+): BuiltDoc {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const right = 190;
   const left = 20;
@@ -80,5 +81,16 @@ export function downloadReminderPdf(
   doc.setFontSize(8);
   doc.text(t.demo, left, 280);
 
-  doc.save(`axioform-reminder-${inv.no}-R${level}.pdf`);
+  return { doc, filename: `axioform-reminder-${inv.no}-R${level}.pdf` };
+}
+
+export function downloadReminderPdf(
+  order: Order,
+  inv: Instalment,
+  level: 1 | 2 | 3,
+  sentAt: string,
+  t: Dict["portal"]["reminder"],
+): void {
+  const { doc, filename } = buildReminderDoc(order, inv, level, sentAt, t);
+  doc.save(filename);
 }
