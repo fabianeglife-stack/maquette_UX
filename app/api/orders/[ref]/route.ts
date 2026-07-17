@@ -94,14 +94,24 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ ref: s
   const canHandle = (["orders", "production", "logistics", "invoices"] as const).some((a) => hasArea(user, a));
 
   // Finance action: record a payment on the deposit/full or balance invoice.
+  // An optional paidAt (yyyy-mm-dd, not in the future) backdates the receipt
+  // to the actual bank value date.
   if (body.markPaid === "deposit" || body.markPaid === "balance") {
     if (!hasArea(user, "invoices")) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    let paidAt = todayISO();
+    if (body.paidAt !== undefined) {
+      const d = String(body.paidAt);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || Number.isNaN(Date.parse(d)) || d > todayISO()) {
+        return NextResponse.json({ error: "invalid_input" }, { status: 400 });
+      }
+      paidAt = d;
+    }
     const field = body.markPaid === "balance" ? "balancePaidAt" : "depositPaidAt";
     const plan = paymentPlan(order.quotedGross ?? order.gross);
     const paid = {
       depositPaidAt: order.depositPaidAt,
       balancePaidAt: order.balancePaidAt,
-      [field]: todayISO(),
+      [field]: paidAt,
     };
     // Fully collected once the deposit (small order) or both parts (split) are
     // paid; only then, and once delivered, does the order reach "paid".
@@ -110,7 +120,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ ref: s
     const updated = await db.order.update({
       where: { ref },
       data: {
-        [field]: todayISO(),
+        [field]: paidAt,
         ...(allPaid && delivered ? { status: "paid", events: { create: { type: "paid", emailTo: order.email } } } : {}),
       },
       include: { events: { orderBy: { at: "asc" } } },

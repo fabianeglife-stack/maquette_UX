@@ -8,6 +8,7 @@ export const AREAS = [
   "dashboard",
   "orders",
   "invoices",
+  "documents",
   "production",
   "logistics",
   "customers",
