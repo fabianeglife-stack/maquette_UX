@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { addDays, invoicesFor, reminderLevel } from "../lib/engine/invoicing";
+import { addDays, agingBuckets, invoicesFor, reminderLevel, type Instalment } from "../lib/engine/invoicing";
 import type { Order, OrderEvent, OrderStatus } from "../lib/store";
 
 const NOW = new Date("2026-07-13T12:00:00Z");
@@ -140,5 +140,49 @@ describe("invoicesFor", () => {
     const inv = invoicesFor(order({ status: "confirmed", gross: 1493.6, createdAt: "2026-06-01" }), [], undefined, NOW);
     expect(inv[0].issuedAt).toBe("2026-06-01");
     expect(inv[0].dueDate).toBe("2026-07-01");
+  });
+});
+
+describe("agingBuckets (AR aging report)", () => {
+  const inst = (over: Partial<Instalment>): Instalment => ({
+    kind: "balance",
+    no: "RE-X",
+    amount: 100,
+    reminders: [],
+    state: "sent",
+    ...over,
+  });
+  const TODAY = "2026-07-17";
+
+  it("groups issued unpaid instalments by days overdue", () => {
+    const buckets = agingBuckets(
+      [
+        inst({ issuedAt: "2026-07-01", dueDate: "2026-07-31" }), // not due yet → current
+        inst({ issuedAt: "2026-06-01", dueDate: "2026-07-01", amount: 200 }), // 16 d → 1–30
+        inst({ issuedAt: "2026-05-01", dueDate: "2026-05-31", amount: 300 }), // 47 d → 31–60
+        inst({ issuedAt: "2026-04-01", dueDate: "2026-04-20", amount: 400 }), // 88 d → 61–90
+        inst({ issuedAt: "2026-01-01", dueDate: "2026-01-31", amount: 500 }), // 167 d → 90+
+      ],
+      TODAY,
+    );
+    expect(buckets.map((b) => b.amount)).toEqual([100, 200, 300, 400, 500]);
+    expect(buckets.map((b) => b.count)).toEqual([1, 1, 1, 1, 1]);
+  });
+
+  it("ignores paid and not-yet-issued instalments", () => {
+    const buckets = agingBuckets(
+      [
+        inst({ issuedAt: "2026-06-01", dueDate: "2026-07-01", paidAt: "2026-06-20" }),
+        inst({ issuedAt: undefined, dueDate: undefined, state: "pending" }),
+      ],
+      TODAY,
+    );
+    expect(buckets.every((b) => b.amount === 0 && b.count === 0)).toBe(true);
+  });
+
+  it("counts the due date itself as current", () => {
+    const buckets = agingBuckets([inst({ issuedAt: "2026-06-17", dueDate: "2026-07-17" })], TODAY);
+    expect(buckets[0].count).toBe(1);
+    expect(buckets[1].count).toBe(0);
   });
 });

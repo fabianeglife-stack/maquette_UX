@@ -81,6 +81,7 @@ export const api = {
       cancel?: boolean;
       deliveryDate?: string;
       markPaid?: "deposit" | "balance";
+      paidAt?: string;
       remind?: "deposit" | "balance";
     },
   ) => call<{ order: ApiOrder }>("PATCH", `/api/orders/${ref}/`, patch).then((r) => r.order),

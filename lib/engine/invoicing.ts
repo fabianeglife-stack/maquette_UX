@@ -36,6 +36,40 @@ export function reminderLevel(reminders: string[]): 0 | 1 | 2 | 3 {
   return Math.min(reminders.length, 3) as 0 | 1 | 2 | 3;
 }
 
+/** One receivables-aging bucket: outstanding amount + invoice count. */
+export interface AgingBucket {
+  /** Stable id: current | d30 | d60 | d90 | d90plus. */
+  id: "current" | "d30" | "d60" | "d90" | "d90plus";
+  amount: number;
+  count: number;
+}
+
+/**
+ * Receivables aging: issued, unpaid instalments grouped by how many days they
+ * are past due (the classic AR aging report). "current" = issued but not due
+ * yet; then 1–30, 31–60, 61–90 and 90+ days overdue.
+ */
+export function agingBuckets(instalments: Instalment[], today: string = new Date().toISOString().slice(0, 10)): AgingBucket[] {
+  const buckets: AgingBucket[] = [
+    { id: "current", amount: 0, count: 0 },
+    { id: "d30", amount: 0, count: 0 },
+    { id: "d60", amount: 0, count: 0 },
+    { id: "d90", amount: 0, count: 0 },
+    { id: "d90plus", amount: 0, count: 0 },
+  ];
+  const dayMs = 86400000;
+  for (const inv of instalments) {
+    if (!inv.issuedAt || inv.paidAt) continue;
+    const due = inv.dueDate ?? inv.issuedAt;
+    const overdueDays = Math.floor((Date.parse(today) - Date.parse(due)) / dayMs);
+    const b =
+      overdueDays <= 0 ? buckets[0] : overdueDays <= 30 ? buckets[1] : overdueDays <= 60 ? buckets[2] : overdueDays <= 90 ? buckets[3] : buckets[4];
+    b.amount += inv.amount;
+    b.count += 1;
+  }
+  return buckets;
+}
+
 const DATE = /^\d{4}-\d{2}-\d{2}/;
 
 /** yyyy-mm-dd of an ISO date/datetime string, or undefined if unparseable. */
