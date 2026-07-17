@@ -190,29 +190,31 @@ export default function AdminApp({
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden bg-[#f3f4f6] md:flex-row">
-      {/* sidebar */}
-      <aside className="flex w-full shrink-0 flex-col gap-5 overflow-y-auto bg-[#151a23] px-3 py-5 md:w-56">
-        <div className="flex flex-col gap-2 px-3">
-          <Link href={`/${locale}/`} className="text-[13px] font-semibold tracking-[0.18em] text-white transition-opacity hover:opacity-80">
+      {/* sidebar — a compact top bar with a horizontally scrolling tab row on
+          mobile, the full vertical rail from md: up. The workspace below is
+          the only scrolling region, so the console stays usable on phones. */}
+      <aside className="flex w-full shrink-0 flex-col gap-3 bg-[#151a23] px-3 py-3 md:h-full md:w-56 md:gap-5 md:overflow-y-auto md:py-5">
+        <div className="flex flex-row items-center justify-between gap-2 px-1 md:flex-col md:items-stretch md:gap-2 md:px-3">
+          <Link href={`/${locale}/`} className="whitespace-nowrap text-[13px] font-semibold tracking-[0.18em] text-white transition-opacity hover:opacity-80">
             AXIOFORM <span className="rounded px-1.5 py-0.5 text-[9px] font-bold tracking-[0.1em] text-white" style={{ background: brandHue }}>{brand}</span>
           </Link>
           {showSwitch && (
-            <div className="flex gap-0.5 rounded-md bg-[#0f131b] p-0.5">
+            <div className="flex shrink-0 gap-0.5 rounded-md bg-[#0f131b] p-0.5">
               {switchLink("erp")}
               {switchLink("studio")}
             </div>
           )}
         </div>
-        <nav className="flex flex-col gap-4">
+        <nav className="flex flex-row gap-1 overflow-x-auto pb-1 md:flex-col md:gap-4 md:overflow-visible md:pb-0">
           {groups.map((g) => (
-            <div key={g.label} className="flex flex-col gap-0.5">
-              <span className="px-3 pb-1 text-[9.5px] font-semibold uppercase tracking-[0.16em] text-[#5c6472]">{g.label}</span>
+            <div key={g.label} className="flex flex-row gap-1 md:flex-col md:gap-0.5">
+              <span className="hidden px-3 pb-1 text-[9.5px] font-semibold uppercase tracking-[0.16em] text-[#5c6472] md:block">{g.label}</span>
               {g.items.map(({ v, icon }) => (
                 <button
                   key={v}
                   type="button"
                   onClick={() => setTab(v)}
-                  className={`flex items-center gap-2.5 rounded-md px-3 py-2 text-left text-[12.5px] transition-colors ${
+                  className={`flex shrink-0 items-center gap-2.5 whitespace-nowrap rounded-md px-3 py-2 text-left text-[12.5px] transition-colors ${
                     tab === v ? "bg-[#242b38] font-medium text-white" : "text-[#9aa1ac] hover:bg-[#1c2230] hover:text-white"
                   }`}
                 >
