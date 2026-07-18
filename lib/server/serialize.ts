@@ -24,6 +24,8 @@ export function toClientOrder(o: DbOrder & { events?: DbEvent[] }) {
     quotedGross: o.quotedGross ?? undefined,
     validUntil: o.validUntil ?? undefined,
     deliveryDate: o.deliveryDate ?? undefined,
+    plansSentAt: o.plansSentAt ?? undefined,
+    plansApprovedAt: o.plansApprovedAt ?? undefined,
     depositPaidAt: o.depositPaidAt ?? undefined,
     balancePaidAt: o.balancePaidAt ?? undefined,
     reminders: safeParse(o.remindersJson) ?? undefined,

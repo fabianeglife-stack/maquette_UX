@@ -51,6 +51,11 @@ model Order {
   // Estimated delivery date (ISO yyyy-mm-dd), entered by staff before the
   // order confirmation goes out.
   deliveryDate     String?
+  // Plan-approval stage (ISO yyyy-mm-dd): staff sends the detail plans for
+  // sign-off, the customer approves them in the portal; only then can the
+  // order be confirmed. A change request clears plansSentAt for a re-send.
+  plansSentAt      String?
+  plansApprovedAt  String?
   // Payment markers (ISO yyyy-mm-dd) for the deposit/full and balance invoices.
   depositPaidAt    String?
   balancePaidAt    String?

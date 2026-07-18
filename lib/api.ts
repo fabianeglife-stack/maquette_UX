@@ -102,6 +102,9 @@ export const api = {
       accept?: boolean;
       cancel?: boolean;
       deliveryDate?: string;
+      sendPlans?: boolean;
+      approvePlans?: boolean;
+      requestPlanChanges?: boolean;
       markPaid?: "deposit" | "balance";
       paidAt?: string;
       remind?: "deposit" | "balance";

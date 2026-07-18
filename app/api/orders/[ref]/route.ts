@@ -47,6 +47,51 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ ref: s
     return NextResponse.json({ order: toClientOrder(updated) });
   }
 
+  // Plan approval — the sign-off stage between checkout and confirmation.
+  // Staff sends the detail plans; the customer approves them (or requests a
+  // change) in the portal; only an approved order can be confirmed.
+
+  // Staff action: send the detail plans to the customer for sign-off. A
+  // re-send after a change request refreshes the date and clears the state.
+  if (body.sendPlans === true) {
+    if (!hasArea(user, "orders")) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    if (order.kind !== "order" || order.status !== "new") {
+      return NextResponse.json({ error: "not_plannable" }, { status: 409 });
+    }
+    // The plan package is generated from the configuration snapshot.
+    if (!order.configJson) return NextResponse.json({ error: "no_config" }, { status: 409 });
+    const updated = await db.order.update({
+      where: { ref },
+      data: {
+        plansSentAt: todayISO(),
+        plansApprovedAt: null,
+        events: { create: { type: "plans_sent", emailTo: order.email } },
+      },
+      include: { events: { orderBy: { at: "asc" } } },
+    });
+    return NextResponse.json({ order: toClientOrder(updated) });
+  }
+
+  // Customer action: approve the plans (or request a change, which sends the
+  // order back to plan revision). Staff may record either on their behalf.
+  if (body.approvePlans === true || body.requestPlanChanges === true) {
+    if (!hasArea(user, "orders") && order.userId !== user.id) {
+      return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
+    if (order.kind !== "order" || order.status !== "new" || !order.plansSentAt || order.plansApprovedAt) {
+      return NextResponse.json({ error: "not_approvable" }, { status: 409 });
+    }
+    const approve = body.approvePlans === true;
+    const updated = await db.order.update({
+      where: { ref },
+      data: approve
+        ? { plansApprovedAt: todayISO(), events: { create: { type: "plans_approved", emailTo: order.email } } }
+        : { plansSentAt: null, events: { create: { type: "plans_change_requested", emailTo: order.email } } },
+      include: { events: { orderBy: { at: "asc" } } },
+    });
+    return NextResponse.json({ order: toClientOrder(updated) });
+  }
+
   // Dunning: send a payment reminder for an issued, unpaid instalment
   // (finance area). Reminder dates accumulate in the order's JSON trail.
   if (body.remind === "deposit" || body.remind === "balance") {
@@ -164,6 +209,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ ref: s
     if (body.status === "confirmed" && !deliveryDate && !order.deliveryDate) {
       return NextResponse.json({ error: "delivery_date_required" }, { status: 409 });
     }
+    // An order fresh from checkout can only be confirmed once the customer
+    // has signed off the detail plans in the portal.
+    if (body.status === "confirmed" && order.status === "new" && !order.plansApprovedAt) {
+      return NextResponse.json({ error: "plans_approval_required" }, { status: 409 });
+    }
     // Invoice dispatch hooks: the deposit/full amount is paid online with the
     // order itself; only the balance invoice goes out at delivery (shipping).
     const plan = paymentPlan(order.quotedGross ?? order.gross);
@@ -182,10 +232,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ ref: s
   }
 
   if (deliveryDate) {
-    // Entering the estimated delivery date on an order in review IS the
-    // confirmation: the order moves to "confirmed" and the confirmation
+    // Entering the estimated delivery date on a plan-approved order in review
+    // IS the confirmation: the order moves to "confirmed" and the confirmation
     // (summary + principle drawing) goes out to the customer immediately.
-    const confirmNow = order.kind === "order" && order.status === "new";
+    // Before the customer has signed off the plans, the date is only stored.
+    const confirmNow = order.kind === "order" && order.status === "new" && Boolean(order.plansApprovedAt);
     const updated = await db.order.update({
       where: { ref },
       data: {
