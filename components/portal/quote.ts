@@ -8,8 +8,9 @@ import { jsPDF } from "jspdf";
 import { chf, defaultPriceBook } from "@/lib/engine/pricing";
 import { quoteNoFor, type Order } from "@/lib/store";
 import { fmt, type Dict } from "@/lib/i18n";
+import type { BuiltDoc } from "@/lib/pdf";
 
-export function downloadQuotePdf(order: Order, t: Dict["portal"]["quote"], systemName: string): void {
+export function buildQuoteDoc(order: Order, t: Dict["portal"]["quote"], systemName: string): BuiltDoc {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const right = 190;
   const left = 20;
@@ -91,5 +92,10 @@ export function downloadQuotePdf(order: Order, t: Dict["portal"]["quote"], syste
   doc.setFontSize(8);
   doc.text(t.demo, left, 280);
 
-  doc.save(`axioform-quote-${no}.pdf`);
+  return { doc, filename: `axioform-quote-${no}.pdf` };
+}
+
+export function downloadQuotePdf(order: Order, t: Dict["portal"]["quote"], systemName: string): void {
+  const { doc, filename } = buildQuoteDoc(order, t, systemName);
+  doc.save(filename);
 }

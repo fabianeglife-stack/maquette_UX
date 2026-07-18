@@ -3,7 +3,10 @@
  * resolution and places it on an A4 landscape sheet.
  */
 
-export async function downloadDrawingPdf(svg: SVGSVGElement, filename: string): Promise<void> {
+import type { jsPDF as JsPdf } from "jspdf";
+
+/** Rasterise the shop-drawing SVG onto an A4 landscape sheet (built, unsaved). */
+export async function buildDrawingDoc(svg: SVGSVGElement): Promise<JsPdf> {
   const { jsPDF } = await import("jspdf");
 
   const xml = new XMLSerializer().serializeToString(svg);
@@ -30,8 +33,13 @@ export async function downloadDrawingPdf(svg: SVGSVGElement, filename: string): 
     const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
     // A4 landscape: 297 × 210 mm; drawing aspect 10:7 → 280 × 196 mm centred.
     pdf.addImage(canvas.toDataURL("image/png"), "PNG", 8.5, 7, 280, 196);
-    pdf.save(filename);
+    return pdf;
   } finally {
     URL.revokeObjectURL(url);
   }
+}
+
+export async function downloadDrawingPdf(svg: SVGSVGElement, filename: string): Promise<void> {
+  const pdf = await buildDrawingDoc(svg);
+  pdf.save(filename);
 }

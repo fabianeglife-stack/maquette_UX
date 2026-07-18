@@ -14,6 +14,7 @@ import type { BomLine } from "@/lib/engine/bom";
 import type { DerivedRailing } from "@/lib/engine/geometry";
 import type { RailingConfig, TypeProfile } from "@/lib/engine/types";
 import type { Dict } from "@/lib/i18n";
+import type { BuiltDoc } from "@/lib/pdf";
 
 type DocsDict = Dict["admin"]["docs"];
 type BomDict = Dict["admin"]["bom"];
@@ -169,7 +170,7 @@ export async function addPlanPage(doc: jsPDF, svg: SVGSVGElement, title: string)
 }
 
 /** Werkstattauftrag: title sheet + parts list + assembly drawing. */
-export async function downloadFabricationPdf(
+export async function buildFabricationDoc(
   order: Order,
   cfg: RailingConfig,
   tp: TypeProfile,
@@ -180,7 +181,7 @@ export async function downloadFabricationPdf(
   bomDict: BomDict,
   cfgDict: Dict["cfg"],
   svg: SVGSVGElement | null,
-): Promise<void> {
+): Promise<BuiltDoc> {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   header(doc, d.fab.title, order.ref);
 
@@ -226,17 +227,33 @@ export async function downloadFabricationPdf(
   // ---- Montageplan ----
   if (svg) await addPlanPage(doc, svg, `${d.fab.planTitle} · ${order.ref}`);
 
-  doc.save(`axioform-werkstattauftrag-${order.ref}.pdf`);
+  return { doc, filename: `axioform-werkstattauftrag-${order.ref}.pdf` };
+}
+
+export async function downloadFabricationPdf(
+  order: Order,
+  cfg: RailingConfig,
+  tp: TypeProfile,
+  derived: DerivedRailing,
+  bom: BomLine[],
+  typeName: string,
+  d: DocsDict,
+  bomDict: BomDict,
+  cfgDict: Dict["cfg"],
+  svg: SVGSVGElement | null,
+): Promise<void> {
+  const { doc, filename } = await buildFabricationDoc(order, cfg, tp, derived, bom, typeName, d, bomDict, cfgDict, svg);
+  doc.save(filename);
 }
 
 /** Kommissionierliste for the warehouse: checkboxes + remark column. */
-export function downloadPickingPdf(
+export function buildPickingDoc(
   order: Order,
   derived: DerivedRailing,
   bom: BomLine[],
   d: DocsDict,
   bomDict: BomDict,
-): void {
+): BuiltDoc {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   header(doc, d.pick.title, order.ref);
 
@@ -250,16 +267,21 @@ export function downloadPickingPdf(
 
   y += 16;
   signatureRow(doc, y, [d.pick.prepared, d.fab.sigDate]);
-  doc.save(`axioform-kommissionierung-${order.ref}.pdf`);
+  return { doc, filename: `axioform-kommissionierung-${order.ref}.pdf` };
+}
+
+export function downloadPickingPdf(order: Order, derived: DerivedRailing, bom: BomLine[], d: DocsDict, bomDict: BomDict): void {
+  const { doc, filename } = buildPickingDoc(order, derived, bom, d, bomDict);
+  doc.save(filename);
 }
 
 /** Lieferschein / bulletin de livraison — works from the order snapshot alone. */
-export function downloadDeliveryPdf(
+export function buildDeliveryDoc(
   order: Order,
   typeName: string,
   d: DocsDict,
   derived: DerivedRailing | null,
-): void {
+): BuiltDoc {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   header(doc, d.del.title, deliveryNoFor(order.ref));
 
@@ -343,5 +365,10 @@ export function downloadDeliveryPdf(
   doc.setTextColor(0);
   signatureRow(doc, y + 26, [d.del.senderSig, d.del.receiverSig]);
 
-  doc.save(`axioform-lieferschein-${order.ref}.pdf`);
+  return { doc, filename: `axioform-lieferschein-${order.ref}.pdf` };
+}
+
+export function downloadDeliveryPdf(order: Order, typeName: string, d: DocsDict, derived: DerivedRailing | null): void {
+  const { doc, filename } = buildDeliveryDoc(order, typeName, d, derived);
+  doc.save(filename);
 }

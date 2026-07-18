@@ -45,6 +45,28 @@ export interface CustomerRow {
   tier: Tier;
 }
 
+/** A persisted document (metadata only — the bytes are served separately). */
+export interface DocumentMeta {
+  id: string;
+  slug: string;
+  area: string;
+  kind: string;
+  no?: string | null;
+  filename: string;
+  createdAt: string;
+}
+
+/** Payload to persist a freshly generated document against an order. */
+export interface DocumentInput {
+  slug: string;
+  area: string;
+  kind: string;
+  no?: string;
+  filename: string;
+  /** Full data URI from jsPDF (`data:application/pdf;…;base64,…`). */
+  dataUri: string;
+}
+
 async function call<T>(method: string, url: string, body?: unknown): Promise<T> {
   const res = await fetch(url, {
     method,
@@ -85,6 +107,15 @@ export const api = {
       remind?: "deposit" | "balance";
     },
   ) => call<{ order: ApiOrder }>("PATCH", `/api/orders/${ref}/`, patch).then((r) => r.order),
+
+  // Documents: the per-order binder persists generated PDFs so they can be
+  // re-opened (served inline) instead of regenerated and downloaded each time.
+  listDocuments: (ref: string) =>
+    call<{ documents: DocumentMeta[] }>("GET", `/api/orders/${ref}/documents/`).then((r) => r.documents),
+  saveDocument: (ref: string, payload: DocumentInput) =>
+    call<{ document: DocumentMeta }>("POST", `/api/orders/${ref}/documents/`, payload).then((r) => r.document),
+  /** URL of the stored bytes; opening it renders the PDF inline in a new tab. */
+  documentUrl: (id: string) => `/api/documents/${id}/`,
 
   listCustomers: () => call<{ customers: CustomerRow[] }>("GET", "/api/customers/").then((r) => r.customers),
   setTier: (email: string, tier: Tier) => call<{ ok: true }>("PATCH", "/api/customers/", { email, tier }),
