@@ -68,6 +68,7 @@ export function NavIcon({ name }: { name: string }) {
     orders: <path d="M3 2h8l2 2v10H3zM6 7h6M6 10h6M6 4h3" />,
     invoices: <path d="M4 1h8v14l-2-1.4L8 15l-2-1.4L4 15zM6 5h4M6 8h4" />,
     docs: <path d="M1.5 3h5l1.5 2h6.5v8.5h-13zM1.5 5h13M5 9.5h6M5 11.5h4" />,
+    purchasing: <path d="M1.5 2.5h2l1.8 8h7.2l1.5-5.5H4M6 13.5a.8.8 0 1 0 0 .01M11.5 13.5a.8.8 0 1 0 0 .01" />,
     customers: <path d="M5.5 6.5a2.3 2.3 0 1 0 0-4.6 2.3 2.3 0 0 0 0 4.6zM1.5 14c0-2.7 1.8-4.4 4-4.4s4 1.7 4 4.4M11 6.2a2 2 0 1 0-.6-3.9M10.7 9.8c1.9.2 3.4 1.7 3.4 4.2" />,
     production: <path d="M2 14V8l4 2.5V8l4 2.5V4l4-1.5V14zM2 14h12" />,
     logistics: <path d="M1.5 3.5H9v7H1.5zM9 6h3l2.5 2.5V10.5H9zM4 13.2a1.4 1.4 0 1 0 0-2.8 1.4 1.4 0 0 0 0 2.8zM11.5 13.2a1.4 1.4 0 1 0 0-2.8 1.4 1.4 0 0 0 0 2.8z" />,

@@ -20,11 +20,11 @@ import type { Dict } from "@/lib/i18n";
 import { api, hasBackend, type SessionInfo } from "@/lib/api";
 import { NavIcon, TabSkeleton, type AdminDict } from "./shared";
 
-type Tab = "dashboard" | "orders" | "invoices" | "documents" | "production" | "logistics" | "customers" | "pricing" | "products" | "content" | "staff";
+type Tab = "dashboard" | "orders" | "invoices" | "purchasing" | "documents" | "production" | "logistics" | "customers" | "pricing" | "products" | "content" | "staff";
 export type Console = "erp" | "studio";
 
 /** Stations owned by each console (settings/staff is shared, admin-only). */
-const ERP_TABS: Tab[] = ["dashboard", "orders", "customers", "invoices", "documents", "production", "logistics"];
+const ERP_TABS: Tab[] = ["dashboard", "orders", "customers", "invoices", "purchasing", "documents", "production", "logistics"];
 const STUDIO_TABS: Tab[] = ["products", "pricing", "content"];
 
 /** Reserved to admins regardless of area grants (the shared settings group). */
@@ -35,6 +35,7 @@ const DashboardTab = dynamic(() => import("./DashboardTab"), { loading: () => <T
 const OrdersTab = dynamic(() => import("./OrdersTab"), { loading: () => <TabSkeleton /> });
 const OpsView = dynamic(() => import("./OpsView"), { loading: () => <TabSkeleton /> });
 const FinanceTab = dynamic(() => import("./FinanceTab"), { loading: () => <TabSkeleton /> });
+const PurchasingTab = dynamic(() => import("./PurchasingTab"), { loading: () => <TabSkeleton /> });
 const DocumentsTab = dynamic(() => import("./DocumentsTab"), { loading: () => <TabSkeleton /> });
 const CustomersTab = dynamic(() => import("./CustomersTab"), { loading: () => <TabSkeleton /> });
 const PricingTab = dynamic(() => import("./PricingTab"), { loading: () => <TabSkeleton /> });
@@ -159,6 +160,7 @@ export default function AdminApp({
     { label: t.erp.control, items: [{ v: "dashboard", icon: "dashboard" }] },
     { label: t.erp.sales, items: [{ v: "orders", icon: "orders" }, { v: "customers", icon: "customers" }] },
     { label: t.erp.finance, items: [{ v: "invoices", icon: "invoices" }] },
+    { label: t.erp.purchasing, items: [{ v: "purchasing", icon: "purchasing" }] },
     { label: t.erp.docs, items: [{ v: "documents", icon: "docs" }] },
     { label: t.erp.operations, items: [{ v: "production", icon: "production" }, { v: "logistics", icon: "logistics" }] },
   ];
@@ -263,8 +265,10 @@ export default function AdminApp({
             statuses={["confirmed", "production", "shipped"]}
             accent="#0d9488"
             hint={t.ops.logisticsHint}
+            logistics
           />
         )}
+        {tab === "purchasing" && <PurchasingTab t={t} statusLabels={statusLabels} cfgDict={cfgDict} />}
         {tab === "invoices" && (
           <FinanceTab
             t={t}
