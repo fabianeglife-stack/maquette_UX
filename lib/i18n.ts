@@ -527,6 +527,7 @@ const de = {
       orders: "Bestellungen",
       invoices: "Finanzen",
       documents: "Dokumente",
+      purchasing: "Beschaffung",
       production: "Produktion",
       logistics: "Logistik",
       customers: "Kunden",
@@ -535,7 +536,7 @@ const de = {
       content: "Inhalte",
       staff: "Mitarbeitende",
     },
-    erp: { control: "Steuerung", sales: "Verkauf", finance: "Finanzen", docs: "Dokumente", operations: "Betrieb", catalog: "Administration", studio: "Website & Konfigurator", settings: "Einstellungen", consoleErp: "ERP", consoleStudio: "Studio" },
+    erp: { control: "Steuerung", sales: "Verkauf", finance: "Finanzen", purchasing: "Beschaffung", docs: "Dokumente", operations: "Betrieb", catalog: "Administration", studio: "Website & Konfigurator", settings: "Einstellungen", consoleErp: "ERP", consoleStudio: "Studio" },
     docsHub: {
       hint: "Auftrag wählen — alle zugehörigen Dokumente erscheinen strukturiert und klassiert.",
       search: "Referenz oder Kunde suchen …",
@@ -706,6 +707,13 @@ const de = {
       },
       procurementRequired: "Die Produktion startet erst, wenn beide Bestellungen versendet sind und die Logistik das Material angenommen hat.",
       logisticsRequired: "Der Versand ist erst nach Rückkehr von der Behandlung und Palettierung möglich.",
+    },
+    purchasing: {
+      hint: "Beschaffungsstation: Bestellungen an die Lieferanten (Material + Behandlung). Warenannahme, Behandlungs-Hin- und Rückversand sowie Palettierung erfasst die Logistik.",
+      kpiToOrder: "Offene Bestellungen",
+      kpiAwaitingReceipt: "Warten auf Materialannahme",
+      awaitingReceipt: "Warten auf Materialannahme (Logistik)",
+      empty: "Keine Aufträge in der Beschaffung — Bestellungen erscheinen nach der Planfreigabe.",
     },
     customers: {
       hint: "B2B-Konditionen: Die Rabattstufe wirkt sofort im Konfigurator, sobald sich die Kundin mit dieser E-Mail anmeldet.",
@@ -1499,6 +1507,7 @@ const fr: Dict = {
       orders: "Commandes",
       invoices: "Finance",
       documents: "Documents",
+      purchasing: "Achats",
       production: "Production",
       logistics: "Logistique",
       customers: "Clients",
@@ -1507,7 +1516,7 @@ const fr: Dict = {
       content: "Contenus",
       staff: "Collaborateurs",
     },
-    erp: { control: "Pilotage", sales: "Ventes", finance: "Finance", docs: "Documents", operations: "Exploitation", catalog: "Administration", studio: "Site & configurateur", settings: "Réglages", consoleErp: "ERP", consoleStudio: "Studio" },
+    erp: { control: "Pilotage", sales: "Ventes", finance: "Finance", purchasing: "Achats", docs: "Documents", operations: "Exploitation", catalog: "Administration", studio: "Site & configurateur", settings: "Réglages", consoleErp: "ERP", consoleStudio: "Studio" },
     docsHub: {
       hint: "Choisissez une commande — tous ses documents apparaissent, structurés et classés.",
       search: "Rechercher référence ou client …",
@@ -1678,6 +1687,13 @@ const fr: Dict = {
       },
       procurementRequired: "La production ne démarre qu'après l'envoi des deux commandes et la réception de la matière par la logistique.",
       logisticsRequired: "L'expédition n'est possible qu'après le retour du traitement et la palettisation.",
+    },
+    purchasing: {
+      hint: "Station Achats : commandes aux fournisseurs (matière + traitement). La réception, l'envoi/retour au traitement et la palettisation se gèrent dans la station Logistique.",
+      kpiToOrder: "Commandes à envoyer",
+      kpiAwaitingReceipt: "En attente de réception",
+      awaitingReceipt: "En attente de réception matière (logistique)",
+      empty: "Aucune commande en phase achats — elles apparaissent après la validation des plans.",
     },
     customers: {
       hint: "Conditions B2B : le niveau de remise s'applique immédiatement au configurateur dès que le client se connecte avec cet e-mail.",
@@ -2469,6 +2485,7 @@ const en: Dict = {
       orders: "Orders",
       invoices: "Finance",
       documents: "Documents",
+      purchasing: "Purchasing",
       production: "Production",
       logistics: "Logistics",
       customers: "Customers",
@@ -2477,7 +2494,7 @@ const en: Dict = {
       content: "Content",
       staff: "Staff",
     },
-    erp: { control: "Control", sales: "Sales", finance: "Finance", docs: "Documents", operations: "Operations", catalog: "Administration", studio: "Site & configurator", settings: "Settings", consoleErp: "ERP", consoleStudio: "Studio" },
+    erp: { control: "Control", sales: "Sales", finance: "Finance", purchasing: "Purchasing", docs: "Documents", operations: "Operations", catalog: "Administration", studio: "Site & configurator", settings: "Settings", consoleErp: "ERP", consoleStudio: "Studio" },
     docsHub: {
       hint: "Pick an order — every related document appears, structured and classified.",
       search: "Search reference or customer …",
@@ -2648,6 +2665,13 @@ const en: Dict = {
       },
       procurementRequired: "Production only starts once both purchase orders are out and logistics has received the material.",
       logisticsRequired: "Shipping is only possible after the return from treatment and palletizing.",
+    },
+    purchasing: {
+      hint: "Purchasing station: supplier orders (material + treatment). Goods receipt, the treatment round-trip and palletizing are handled in the Logistics station.",
+      kpiToOrder: "POs to send",
+      kpiAwaitingReceipt: "Awaiting goods receipt",
+      awaitingReceipt: "Awaiting material receipt (logistics)",
+      empty: "No orders in the purchasing stage — they appear once the plans are approved.",
     },
     customers: {
       hint: "B2B terms: the discount tier applies to the configurator immediately once the customer signs in with this email.",

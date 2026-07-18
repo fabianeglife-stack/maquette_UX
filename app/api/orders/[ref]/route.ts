@@ -99,8 +99,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ ref: s
   if (typeof body.milestone === "string" && (MILESTONES as string[]).includes(body.milestone)) {
     const m = body.milestone as Milestone;
     const isPo = m === "material_ordered" || m === "treatment_ordered";
+    // POs belong to the purchasing station (sales as fallback); the physical
+    // movements — goods receipt, treatment round-trip, palletizing — to logistics.
     const allowed = isPo
-      ? hasArea(user, "orders") || hasArea(user, "production")
+      ? hasArea(user, "purchasing") || hasArea(user, "orders")
       : hasArea(user, "logistics");
     if (!allowed) return NextResponse.json({ error: "forbidden" }, { status: 403 });
     if (!milestoneReady(order, m)) return NextResponse.json({ error: "milestone_order" }, { status: 409 });

@@ -14,7 +14,7 @@ import { inputCls, TabSkeleton, type AdminDict } from "./shared";
 
 /** Grantable stations, labelled via the existing tab names. ERP stations plus
  *  the Studio stations (site & configurator management). */
-const AREAS = ["dashboard", "orders", "invoices", "documents", "production", "logistics", "customers", "products", "pricing", "content"] as const;
+const AREAS = ["dashboard", "orders", "invoices", "purchasing", "documents", "production", "logistics", "customers", "products", "pricing", "content"] as const;
 
 const emptyDraft = { name: "", email: "", password: "", role: "staff" as "staff" | "admin", access: [] as string[] };
 
