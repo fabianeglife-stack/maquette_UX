@@ -12,6 +12,7 @@ import { chf } from "@/lib/engine/pricing";
 import { invoicesFor } from "@/lib/engine/invoicing";
 import {
   acceptQuote,
+  approvePlans,
   cancelOrder,
   clearSession,
   confirmationNoFor,
@@ -21,13 +22,16 @@ import {
   loadEvents,
   loadOrders,
   ORDER_FLOW,
+  planFor,
   QUOTE_FLOW,
+  requestPlanChanges,
   type Order,
   type SavedConfig,
+  type TypePlans,
 } from "@/lib/store";
-import { fetchAllTypes, fetchSavedConfigs, removeSavedConfig, resolveType } from "@/lib/data";
+import { fetchAllTypes, fetchPageContent, fetchSavedConfigs, removeSavedConfig, resolveType } from "@/lib/data";
 import type { TypeProfile } from "@/lib/engine/types";
-import type { Dict } from "@/lib/i18n";
+import { fmt, type Dict } from "@/lib/i18n";
 import { api, hasBackend, type ApiOrder } from "@/lib/api";
 import { notify } from "@/lib/toast";
 import StatusSteps from "@/components/StatusSteps";
@@ -49,8 +53,10 @@ function OrderCard({
   const flow = order.kind === "order" ? ORDER_FLOW : QUOTE_FLOW;
   const svgRef = useRef<SVGSVGElement>(null);
   const [types, setTypes] = useState<TypeProfile[]>([]);
+  const [typePlans, setTypePlans] = useState<TypePlans>({});
   useEffect(() => {
     fetchAllTypes().then(setTypes);
+    fetchPageContent<TypePlans>("typeplans", {}).then(setTypePlans);
   }, []);
   const tp = useMemo(
     () => (order.config && types.length > 0 ? resolveType(types, order.config.typeId, order.config.system) : undefined),
@@ -120,6 +126,89 @@ function OrderCard({
           </button>
         </div>
       )}
+      {/* Plan approval — while the order is in review the customer signs off
+          the detail plans here; the confirmation follows once staff enter the
+          delivery date. */}
+      {order.kind === "order" &&
+        order.status === "new" &&
+        (() => {
+          const plan = order.config
+            ? planFor(typePlans, tp?.id ?? order.config.typeId ?? "", order.config.substrate ?? "concrete_top", order.config.mounting, tp?.planUrl)
+            : undefined;
+          if (order.plansApprovedAt) {
+            return (
+              <div className="flex flex-col gap-1 border-l-2 border-steel bg-mist/70 p-3">
+                <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-steel">{t.plans.title}</span>
+                <p className="text-sm font-light text-graphite">✓ {fmt(t.plans.approvedOn, { date: order.plansApprovedAt })}</p>
+                <p className="text-[11px] font-light leading-relaxed text-stone">{t.plans.afterApproval}</p>
+              </div>
+            );
+          }
+          if (!order.plansSentAt) {
+            return <p className="border-l-2 border-hairline bg-mist/50 p-3 text-[13px] font-light leading-relaxed text-graphite">{t.plans.waiting}</p>;
+          }
+          return (
+            <div className="flex flex-col gap-2 border-l-2 border-ink bg-mist/70 p-3">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-ink">{t.plans.title}</span>
+                <span className="text-xs font-light text-stone">{fmt(t.plans.sentOn, { date: order.plansSentAt })}</span>
+              </div>
+              <p className="text-[13px] font-light leading-relaxed text-graphite">{t.plans.toApprove}</p>
+              <div className="flex flex-wrap gap-x-5 gap-y-1">
+                {order.config && derived && (
+                  <button
+                    type="button"
+                    onClick={() => svgRef.current && downloadDrawingPdf(svgRef.current, `axioform-${order.ref}.pdf`)}
+                    className="text-xs uppercase tracking-[0.12em] text-graphite underline-offset-4 hover:text-ink hover:underline"
+                  >
+                    ↓ {t.drawingPdf}
+                  </button>
+                )}
+                {plan && (
+                  <a
+                    href={plan.startsWith("data:") ? plan : `${process.env.NEXT_PUBLIC_BASE_PATH || ""}${plan}`}
+                    {...(plan.startsWith("data:") ? { download: `axioform-plan-${order.ref}.pdf` } : { target: "_blank", rel: "noopener" })}
+                    className="text-xs uppercase tracking-[0.12em] text-graphite underline-offset-4 hover:text-ink hover:underline"
+                  >
+                    ↓ {cfgDict.planPdf}
+                  </a>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (hasBackend) {
+                      api.patchOrder(order.ref, { approvePlans: true }).then(onRefresh).catch(() => notify("saveFailed"));
+                    } else {
+                      approvePlans(order.ref);
+                      onRefresh();
+                    }
+                  }}
+                  className="bg-ink px-4 py-2.5 text-[11px] font-medium uppercase tracking-[0.14em] text-paper transition-colors hover:bg-graphite"
+                >
+                  {t.plans.approve}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!window.confirm(t.plans.requestChangeConfirm)) return;
+                    if (hasBackend) {
+                      api.patchOrder(order.ref, { requestPlanChanges: true }).then(onRefresh).catch(() => notify("saveFailed"));
+                    } else {
+                      requestPlanChanges(order.ref);
+                      onRefresh();
+                    }
+                  }}
+                  className="text-xs uppercase tracking-[0.12em] text-stone underline-offset-4 hover:text-ink hover:underline"
+                >
+                  {t.plans.requestChange}
+                </button>
+              </div>
+              <p className="text-[11px] font-light leading-relaxed text-stone">{t.plans.approveNote}</p>
+            </div>
+          );
+        })()}
       {/* Order confirmation: visible as soon as the order leaves internal review. */}
       {order.kind === "order" && order.status !== "new" && (
         <div className="flex flex-col gap-2 border-l-2 border-steel bg-mist/70 p-3">

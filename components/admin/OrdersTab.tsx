@@ -101,7 +101,7 @@ function KanbanBoard({
 }
 
 export default function OrdersTab({ t, statusLabels, cfgDict, invoiceDict, confirmationDict, quoteDict, locale }: { t: AdminDict; statusLabels: Dict["portal"]["status"]; cfgDict: Dict["cfg"]; invoiceDict: Dict["portal"]["invoice"]; confirmationDict: Dict["portal"]["confirmation"]; quoteDict: Dict["portal"]["quote"]; locale?: string }) {
-  const { orders, ready, advance, sendQuote, markAccepted, setDeliveryDate, cancel } = useOrders();
+  const { orders, ready, advance, sendQuote, markAccepted, sendPlans, setDeliveryDate, cancel } = useOrders();
   const [openRef, setOpenRef] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [view, setView] = useState<OrdersViewMode>("kanban");
@@ -288,6 +288,7 @@ export default function OrdersTab({ t, statusLabels, cfgDict, invoiceDict, confi
           advance={advance}
           sendQuote={sendQuote}
           markAccepted={markAccepted}
+          sendPlans={sendPlans}
           setDeliveryDate={setDeliveryDate}
           cancel={cancel}
         />

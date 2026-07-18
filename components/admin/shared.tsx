@@ -16,6 +16,7 @@ import {
   logEvent,
   ORDER_FLOW,
   QUOTE_VALID_DAYS,
+  sendPlans as sendPlansLocal,
   updateOrder,
   updateOrderStatus,
   type Order,
@@ -192,12 +193,22 @@ export function useOrders() {
     refresh();
   };
 
-  // Estimated delivery date. Entering it on an order in review IS the
-  // confirmation: the order moves to "confirmed" and the confirmation goes
-  // out to the customer. Resolves true when that dispatch happened.
+  // Send the detail plans to the customer for sign-off (plan-approval stage).
+  const sendPlans = (o: Order) => {
+    if (hasBackend) {
+      api.patchOrder(o.ref, { sendPlans: true }).then(refresh).catch(() => notify("saveFailed"));
+      return;
+    }
+    sendPlansLocal(o.ref);
+    refresh();
+  };
+
+  // Estimated delivery date. Entering it on a plan-approved order in review
+  // IS the confirmation: the order moves to "confirmed" and the confirmation
+  // goes out to the customer. Resolves true when that dispatch happened.
   const setDeliveryDate = (ref: string, deliveryDate: string): Promise<boolean> => {
     const o = orders.find((x) => x.ref === ref);
-    const confirmNow = o?.kind === "order" && o.status === "new";
+    const confirmNow = o?.kind === "order" && o.status === "new" && Boolean(o.plansApprovedAt);
     if (hasBackend) {
       return api
         .patchOrder(ref, { deliveryDate })
@@ -250,5 +261,5 @@ export function useOrders() {
     refresh();
   };
 
-  return { orders, ready, refresh, advance, sendQuote, markAccepted, setDeliveryDate, markPaid, cancel, remind };
+  return { orders, ready, refresh, advance, sendQuote, markAccepted, sendPlans, setDeliveryDate, markPaid, cancel, remind };
 }

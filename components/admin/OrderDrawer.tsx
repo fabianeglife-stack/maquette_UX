@@ -51,6 +51,12 @@ function EventTimeline({ order, t, statusLabels }: { order: Order; t: AdminDict;
         return t.events.deposit_paid;
       case "reminder_sent":
         return t.events.reminder_sent;
+      case "plans_sent":
+        return t.events.plans_sent;
+      case "plans_approved":
+        return t.events.plans_approved;
+      case "plans_change_requested":
+        return t.events.plans_change_requested;
       default:
         return statusLabels[e.type];
     }
@@ -132,6 +138,7 @@ export default function OrderDrawer({
   advance,
   sendQuote,
   markAccepted,
+  sendPlans,
   setDeliveryDate,
   cancel,
 }: {
@@ -147,6 +154,7 @@ export default function OrderDrawer({
   advance: (ref: string, status: OrderStatus) => Promise<boolean>;
   sendQuote: (o: Order, value: number) => void;
   markAccepted: (o: Order) => void;
+  sendPlans: (o: Order) => void;
   setDeliveryDate: (ref: string, date: string) => Promise<boolean>;
   cancel: (o: Order) => void;
 }) {
@@ -219,8 +227,33 @@ export default function OrderDrawer({
           <StatusSteps status={order.status} flow={flow} labels={statusLabels} />
           {order.status === "cancelled" ? null : order.kind === "order" ? (
             <>
-              {/* Estimated delivery date — entering it on an order in review
-                  confirms the order and sends the confirmation right away. */}
+              {/* Plan approval — first stop after checkout: the detail plans go
+                  out for the customer's sign-off before anything is confirmed. */}
+              {order.status === "new" && (
+                <div className="flex flex-col gap-2 border-l-2 border-steel bg-mist/70 p-3">
+                  <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-steel">{t.orders.plansTitle}</span>
+                  {order.plansApprovedAt ? (
+                    <p className="text-[13px] font-light text-graphite">✓ {fmt(t.orders.plansApprovedOn, { date: order.plansApprovedAt })}</p>
+                  ) : order.plansSentAt ? (
+                    <p className="text-[13px] font-light text-graphite">{fmt(t.orders.plansAwaiting, { date: order.plansSentAt })}</p>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        disabled={!order.config}
+                        title={!order.config ? t.docs.needConfig : undefined}
+                        onClick={() => sendPlans(order)}
+                        className="self-start bg-ink px-3 py-2 text-[11px] uppercase tracking-[0.12em] text-paper transition-colors hover:bg-graphite disabled:opacity-35"
+                      >
+                        {t.orders.sendPlans}
+                      </button>
+                      <p className="text-xs font-light text-stone">{t.orders.sendPlansHint}</p>
+                    </>
+                  )}
+                </div>
+              )}
+              {/* Estimated delivery date — entering it on a plan-approved order
+                  in review confirms the order and sends the confirmation. */}
               <label className="flex items-center gap-3">
                 <span className="text-[10px] uppercase tracking-[0.12em] text-stone">{t.orders.deliveryDate}</span>
                 <input
@@ -246,7 +279,10 @@ export default function OrderDrawer({
                 </button>
                 <button
                   type="button"
-                  disabled={idx >= flow.length - 1 || (flow[idx + 1] === "confirmed" && !order.deliveryDate)}
+                  disabled={
+                    idx >= flow.length - 1 ||
+                    (flow[idx + 1] === "confirmed" && (!order.deliveryDate || !order.plansApprovedAt))
+                  }
                   onClick={() => {
                     const next = flow[idx + 1];
                     void advance(order.ref, next).then((ok) => {
@@ -258,7 +294,10 @@ export default function OrderDrawer({
                   {t.orders.advance} ›
                 </button>
               </div>
-              {flow[idx + 1] === "confirmed" && !order.deliveryDate && (
+              {flow[idx + 1] === "confirmed" && !order.plansApprovedAt && (
+                <p className="text-xs font-light text-alert">{t.orders.plansRequired}</p>
+              )}
+              {flow[idx + 1] === "confirmed" && order.plansApprovedAt && !order.deliveryDate && (
                 <p className="text-xs font-light text-alert">{t.orders.deliveryRequired}</p>
               )}
               {sentTo && (

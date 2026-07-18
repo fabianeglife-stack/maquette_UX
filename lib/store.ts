@@ -74,6 +74,10 @@ export interface Order {
   validUntil?: string;
   /** Estimated delivery date (ISO yyyy-mm-dd), entered by staff before confirmation. */
   deliveryDate?: string;
+  /** Plan-approval stage: date the detail plans went out for sign-off … */
+  plansSentAt?: string;
+  /** … and the date the customer approved them (gates the confirmation). */
+  plansApprovedAt?: string;
   /** Payment markers (ISO yyyy-mm-dd) for the deposit/full and balance invoices. */
   depositPaidAt?: string;
   balancePaidAt?: string;
@@ -165,6 +169,30 @@ export function acceptQuote(ref: string): void {
   logEvent(ref, "quote_accepted", q.customer.email);
 }
 
+/** Staff sends the detail plans to the customer for sign-off. */
+export function sendPlans(ref: string): void {
+  const o = loadOrders().find((x) => x.ref === ref);
+  if (!o || o.kind !== "order" || o.status !== "new" || !o.config) return;
+  updateOrder(ref, { plansSentAt: new Date().toISOString().slice(0, 10), plansApprovedAt: undefined });
+  logEvent(ref, "plans_sent", o.customer.email);
+}
+
+/** Customer approves the detail plans — unlocks the order confirmation. */
+export function approvePlans(ref: string): void {
+  const o = loadOrders().find((x) => x.ref === ref);
+  if (!o || o.kind !== "order" || o.status !== "new" || !o.plansSentAt || o.plansApprovedAt) return;
+  updateOrder(ref, { plansApprovedAt: new Date().toISOString().slice(0, 10) });
+  logEvent(ref, "plans_approved", o.customer.email);
+}
+
+/** Customer sends the plans back for revision — staff will re-send them. */
+export function requestPlanChanges(ref: string): void {
+  const o = loadOrders().find((x) => x.ref === ref);
+  if (!o || o.kind !== "order" || o.status !== "new" || !o.plansSentAt || o.plansApprovedAt) return;
+  updateOrder(ref, { plansSentAt: undefined });
+  logEvent(ref, "plans_change_requested", o.customer.email);
+}
+
 /** Withdraw an order (while still in review) or decline a quote. */
 export function cancelOrder(ref: string): void {
   const o = loadOrders().find((x) => x.ref === ref);
@@ -252,7 +280,12 @@ export type OrderEventType =
   // Online payment received with the order (deposit or full amount).
   | "deposit_paid"
   // Dunning: a payment reminder went out for an unpaid instalment.
-  | "reminder_sent";
+  | "reminder_sent"
+  // Plan approval: detail plans sent for sign-off, approved by the customer,
+  // or sent back with a change request.
+  | "plans_sent"
+  | "plans_approved"
+  | "plans_change_requested";
 
 export interface OrderEvent {
   ref: string;

@@ -36,7 +36,7 @@ export default function OpsView({
   accent: string;
   hint: string;
 }) {
-  const { orders, ready, advance, sendQuote, markAccepted, setDeliveryDate, cancel } = useOrders();
+  const { orders, ready, advance, sendQuote, markAccepted, sendPlans, setDeliveryDate, cancel } = useOrders();
   const [openRef, setOpenRef] = useState<string | null>(null);
 
   if (!ready) return <TabSkeleton />;
@@ -117,6 +117,7 @@ export default function OpsView({
           advance={advance}
           sendQuote={sendQuote}
           markAccepted={markAccepted}
+          sendPlans={sendPlans}
           setDeliveryDate={setDeliveryDate}
           cancel={cancel}
         />
