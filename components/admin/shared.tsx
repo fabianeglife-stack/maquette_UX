@@ -14,11 +14,13 @@ import {
   cancelOrder,
   loadOrders,
   logEvent,
+  markMilestone as markMilestoneLocal,
   ORDER_FLOW,
   QUOTE_VALID_DAYS,
   sendPlans as sendPlansLocal,
   updateOrder,
   updateOrderStatus,
+  type Milestone,
   type Order,
   type OrderStatus,
 } from "@/lib/store";
@@ -193,6 +195,16 @@ export function useOrders() {
     refresh();
   };
 
+  // Record a procurement/logistics milestone (chain rules live in the store/API).
+  const markMilestone = (o: Order, m: Milestone) => {
+    if (hasBackend) {
+      api.patchOrder(o.ref, { milestone: m }).then(refresh).catch(() => notify("saveFailed"));
+      return;
+    }
+    markMilestoneLocal(o.ref, m);
+    refresh();
+  };
+
   // Send the detail plans to the customer for sign-off (plan-approval stage).
   const sendPlans = (o: Order) => {
     if (hasBackend) {
@@ -261,5 +273,5 @@ export function useOrders() {
     refresh();
   };
 
-  return { orders, ready, refresh, advance, sendQuote, markAccepted, sendPlans, setDeliveryDate, markPaid, cancel, remind };
+  return { orders, ready, refresh, advance, sendQuote, markAccepted, sendPlans, markMilestone, setDeliveryDate, markPaid, cancel, remind };
 }

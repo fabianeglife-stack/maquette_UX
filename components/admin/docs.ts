@@ -19,10 +19,10 @@ import type { BuiltDoc } from "@/lib/pdf";
 type DocsDict = Dict["admin"]["docs"];
 type BomDict = Dict["admin"]["bom"];
 
-const LEFT = 20;
-const RIGHT = 190;
+export const LEFT = 20;
+export const RIGHT = 190;
 
-function header(doc: jsPDF, title: string, docNo: string) {
+export function header(doc: jsPDF, title: string, docNo: string) {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(15);
   doc.setCharSpace(1.2);
@@ -46,7 +46,7 @@ function header(doc: jsPDF, title: string, docNo: string) {
   doc.line(LEFT, 36, RIGHT, 36);
 }
 
-function metaRow(doc: jsPDF, y: number, k: string, v: string): number {
+export function metaRow(doc: jsPDF, y: number, k: string, v: string): number {
   doc.setFontSize(9);
   doc.setTextColor(130);
   doc.text(k, LEFT, y);
@@ -56,7 +56,7 @@ function metaRow(doc: jsPDF, y: number, k: string, v: string): number {
   return y + 6.4;
 }
 
-function signatureRow(doc: jsPDF, y: number, labels: string[]) {
+export function signatureRow(doc: jsPDF, y: number, labels: string[]) {
   const w = (RIGHT - LEFT - (labels.length - 1) * 8) / labels.length;
   labels.forEach((l, i) => {
     const x = LEFT + i * (w + 8);

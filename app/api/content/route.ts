@@ -3,8 +3,10 @@ import { db } from "@/lib/server/db";
 import { sessionUser } from "@/lib/server/auth";
 import { hasArea } from "@/lib/server/authz";
 
-/** CMS content rows, one JSON blob per page (typeplans: principle PDFs per type × fixing). */
-const CONTENT_IDS = ["references", "about", "home", "typeplans"] as const;
+/** CMS content rows, one JSON blob per page (typeplans: principle PDFs per
+ *  type × fixing; suppliers: the material/treatment supplier records the
+ *  purchase orders are addressed to). */
+const CONTENT_IDS = ["references", "about", "home", "typeplans", "suppliers"] as const;
 type ContentId = (typeof CONTENT_IDS)[number];
 
 const EMPTY: Record<ContentId, unknown> = {
@@ -12,6 +14,7 @@ const EMPTY: Record<ContentId, unknown> = {
   about: {},
   home: {},
   typeplans: {},
+  suppliers: {},
 };
 
 function contentId(raw: string | null): ContentId | null {

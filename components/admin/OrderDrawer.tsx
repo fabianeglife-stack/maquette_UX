@@ -13,15 +13,23 @@ import { deriveRailing } from "@/lib/engine/geometry";
 import { buildBom } from "@/lib/engine/bom";
 import type { TypeProfile } from "@/lib/engine/types";
 import {
+  DEFAULT_SUPPLIERS,
   isQuoteExpired,
   loadEvents,
+  MILESTONE_FIELD,
+  MILESTONES,
+  milestoneReady,
   ORDER_FLOW,
   QUOTE_FLOW,
+  type Milestone,
   type Order,
   type OrderEvent,
   type OrderStatus,
+  type Suppliers,
 } from "@/lib/store";
-import { fetchAllTypes, resolveType } from "@/lib/data";
+import { materialOrderFor, treatmentOrderFor } from "@/lib/engine/procurement";
+import { buildMaterialOrderDoc, buildTreatmentOrderDoc } from "./purchase";
+import { fetchAllTypes, fetchPageContent, resolveType } from "@/lib/data";
 import { fmt, type Dict } from "@/lib/i18n";
 import { api, hasBackend, type ApiOrder } from "@/lib/api";
 import StatusSteps from "@/components/StatusSteps";
@@ -57,6 +65,18 @@ function EventTimeline({ order, t, statusLabels }: { order: Order; t: AdminDict;
         return t.events.plans_approved;
       case "plans_change_requested":
         return t.events.plans_change_requested;
+      case "material_ordered":
+        return t.events.material_ordered;
+      case "treatment_ordered":
+        return t.events.treatment_ordered;
+      case "material_received":
+        return t.events.material_received;
+      case "treatment_sent":
+        return t.events.treatment_sent;
+      case "treatment_received":
+        return t.events.treatment_received;
+      case "palletized":
+        return t.events.palletized;
       default:
         return statusLabels[e.type];
     }
@@ -139,6 +159,7 @@ export default function OrderDrawer({
   sendQuote,
   markAccepted,
   sendPlans,
+  markMilestone,
   setDeliveryDate,
   cancel,
 }: {
@@ -155,6 +176,7 @@ export default function OrderDrawer({
   sendQuote: (o: Order, value: number) => void;
   markAccepted: (o: Order) => void;
   sendPlans: (o: Order) => void;
+  markMilestone: (o: Order, m: Milestone) => void;
   setDeliveryDate: (ref: string, date: string) => Promise<boolean>;
   cancel: (o: Order) => void;
 }) {
@@ -171,8 +193,10 @@ export default function OrderDrawer({
   // Engine output for the production/logistics documents.
   const svgRef = useRef<SVGSVGElement>(null);
   const [types, setTypes] = useState<TypeProfile[]>([]);
+  const [suppliers, setSuppliers] = useState<Suppliers>(DEFAULT_SUPPLIERS);
   useEffect(() => {
     fetchAllTypes().then(setTypes);
+    fetchPageContent<Suppliers>("suppliers", DEFAULT_SUPPLIERS).then(setSuppliers);
   }, []);
   const tp = useMemo(
     () => (order.config && types.length > 0 ? resolveType(types, order.config.typeId, order.config.system) : null),
@@ -193,6 +217,23 @@ export default function OrderDrawer({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  // Supplier purchase orders, generated from the configuration on demand.
+  const downloadPo = (m: Milestone) => {
+    if (!order.config || !tp || !derived) return;
+    if (m === "material_ordered") {
+      const mat = materialOrderFor(order.config, derived, tp);
+      const { doc, filename } = buildMaterialOrderDoc(order, mat, suppliers, t.purchase, t.bom.parts);
+      doc.save(filename);
+    } else {
+      const treat = treatmentOrderFor(order.config, derived);
+      const { doc, filename } = buildTreatmentOrderDoc(order, treat, suppliers, t.purchase, treat.ral ? cfgDict.colors[treat.ral] : undefined);
+      doc.save(filename);
+    }
+  };
+  // The procurement/logistics chain is live from plan approval to production.
+  const showChecklist =
+    order.kind === "order" && Boolean(order.plansApprovedAt) && ["new", "confirmed", "production"].includes(order.status);
 
   return (
     <div className="fixed inset-0 z-[90] flex justify-end" role="dialog" aria-modal="true">
@@ -281,7 +322,11 @@ export default function OrderDrawer({
                   type="button"
                   disabled={
                     idx >= flow.length - 1 ||
-                    (flow[idx + 1] === "confirmed" && (!order.deliveryDate || !order.plansApprovedAt))
+                    (flow[idx + 1] === "confirmed" && (!order.deliveryDate || !order.plansApprovedAt)) ||
+                    (flow[idx + 1] === "production" &&
+                      Boolean(order.config) &&
+                      !(order.materialOrderedAt && order.treatmentOrderedAt && order.materialReceivedAt)) ||
+                    (flow[idx + 1] === "shipped" && Boolean(order.config) && !(order.treatmentReceivedAt && order.palletizedAt))
                   }
                   onClick={() => {
                     const next = flow[idx + 1];
@@ -299,6 +344,14 @@ export default function OrderDrawer({
               )}
               {flow[idx + 1] === "confirmed" && order.plansApprovedAt && !order.deliveryDate && (
                 <p className="text-xs font-light text-alert">{t.orders.deliveryRequired}</p>
+              )}
+              {flow[idx + 1] === "production" &&
+                Boolean(order.config) &&
+                !(order.materialOrderedAt && order.treatmentOrderedAt && order.materialReceivedAt) && (
+                  <p className="text-xs font-light text-alert">{t.purchase.procurementRequired}</p>
+                )}
+              {flow[idx + 1] === "shipped" && Boolean(order.config) && !(order.treatmentReceivedAt && order.palletizedAt) && (
+                <p className="text-xs font-light text-alert">{t.purchase.logisticsRequired}</p>
               )}
               {sentTo && (
                 <p role="status" className="border-l-2 border-steel bg-mist/70 p-3 text-sm font-light text-graphite">
@@ -371,6 +424,50 @@ export default function OrderDrawer({
             </button>
           )}
         </div>
+
+        {/* procurement & logistics checklist: the physical chain between plan
+            approval and shipment — POs out, goods receipt (gates fabrication),
+            treatment round-trip, palletizing (gates the customer shipment). */}
+        {showChecklist && (
+          <div className="flex flex-col gap-1 border border-hairline p-4">
+            <span className="pb-1 text-[11px] font-medium uppercase tracking-[0.14em] text-stone">{t.purchase.checklist}</span>
+            {MILESTONES.map((m) => {
+              const done = order[MILESTONE_FIELD[m]];
+              const ready = milestoneReady(order, m);
+              const isPo = m === "material_ordered" || m === "treatment_ordered";
+              return (
+                <div key={m} className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-hairline/70 py-1.5 first:border-t-0">
+                  <span className={`text-[13px] font-light ${done ? "text-ink" : "text-graphite"}`}>
+                    {done ? "✓ " : ""}
+                    {t.purchase.steps[m]}
+                  </span>
+                  {done && <span className="text-xs font-light text-stone">{done}</span>}
+                  <span className="ml-auto flex items-center gap-2">
+                    {isPo && order.config && tp && derived && (
+                      <button
+                        type="button"
+                        onClick={() => downloadPo(m)}
+                        className="border border-hairline px-2 py-1 text-[10px] uppercase tracking-[0.1em] text-graphite transition-colors hover:border-graphite hover:text-ink"
+                      >
+                        ↓ PDF
+                      </button>
+                    )}
+                    {!done && (
+                      <button
+                        type="button"
+                        disabled={!ready}
+                        onClick={() => markMilestone(order, m)}
+                        className="bg-ink px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] text-paper transition-colors hover:bg-graphite disabled:opacity-30"
+                      >
+                        {t.purchase.mark}
+                      </button>
+                    )}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {/* summary line */}
         <div className="grid grid-cols-2 gap-3 text-sm">

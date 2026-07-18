@@ -5,7 +5,7 @@ import { hasArea } from "@/lib/server/authz";
 import { toClientOrder } from "@/lib/server/serialize";
 import { safeParse } from "@/lib/server/json";
 import { paymentPlan } from "@/lib/engine/pricing";
-import { QUOTE_VALID_DAYS } from "@/lib/store";
+import { MILESTONE_FIELD, MILESTONES, milestoneReady, QUOTE_VALID_DAYS, type Milestone } from "@/lib/store";
 
 const ORDER_STATUSES = ["new", "confirmed", "production", "shipped", "invoiced", "paid"];
 const ORDER_RANK = ["new", "confirmed", "production", "shipped", "invoiced", "paid"];
@@ -87,6 +87,37 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ ref: s
       data: approve
         ? { plansApprovedAt: todayISO(), events: { create: { type: "plans_approved", emailTo: order.email } } }
         : { plansSentAt: null, events: { create: { type: "plans_change_requested", emailTo: order.email } } },
+      include: { events: { orderBy: { at: "asc" } } },
+    });
+    return NextResponse.json({ order: toClientOrder(updated) });
+  }
+
+  // Procurement & logistics milestones — the physical chain between plan
+  // approval and shipment: supplier POs (material BM-, treatment BT-), goods
+  // receipt of the material, shipment to / return from the treatment plant,
+  // and palletizing. Chain rules live in milestoneReady (lib/store.ts).
+  if (typeof body.milestone === "string" && (MILESTONES as string[]).includes(body.milestone)) {
+    const m = body.milestone as Milestone;
+    const isPo = m === "material_ordered" || m === "treatment_ordered";
+    const allowed = isPo
+      ? hasArea(user, "orders") || hasArea(user, "production")
+      : hasArea(user, "logistics");
+    if (!allowed) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    if (!milestoneReady(order, m)) return NextResponse.json({ error: "milestone_order" }, { status: 409 });
+    // A PO event carries the supplier's email (the transactional-email hook);
+    // the logistics milestones are internal and email nobody.
+    let emailTo: string | undefined;
+    if (isPo) {
+      const row = await db.siteContent.findUnique({ where: { id: "suppliers" } });
+      const sup = (row ? safeParse(row.json) : null) as { material?: { email?: string }; treatment?: { email?: string } } | null;
+      emailTo = (m === "material_ordered" ? sup?.material?.email : sup?.treatment?.email) || undefined;
+    }
+    const updated = await db.order.update({
+      where: { ref },
+      data: {
+        [MILESTONE_FIELD[m]]: todayISO(),
+        events: { create: { type: m, emailTo } },
+      },
       include: { events: { orderBy: { at: "asc" } } },
     });
     return NextResponse.json({ order: toClientOrder(updated) });
@@ -213,6 +244,21 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ ref: s
     // has signed off the detail plans in the portal.
     if (body.status === "confirmed" && order.status === "new" && !order.plansApprovedAt) {
       return NextResponse.json({ error: "plans_approval_required" }, { status: 409 });
+    }
+    // Fabrication only starts once both supplier POs are out and the material
+    // has been received by logistics; shipment to the customer only after the
+    // parts are back from treatment and palletized. (Configured orders only —
+    // seeded fixtures without a configuration keep the simple flow.)
+    if (order.configJson) {
+      if (
+        body.status === "production" &&
+        !(order.materialOrderedAt && order.treatmentOrderedAt && order.materialReceivedAt)
+      ) {
+        return NextResponse.json({ error: "procurement_required" }, { status: 409 });
+      }
+      if (body.status === "shipped" && !(order.treatmentReceivedAt && order.palletizedAt)) {
+        return NextResponse.json({ error: "logistics_required" }, { status: 409 });
+      }
     }
     // Invoice dispatch hooks: the deposit/full amount is paid online with the
     // order itself; only the balance invoice goes out at delivery (shipping).
