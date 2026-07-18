@@ -4,7 +4,7 @@
  * store in lib/store.ts (static prototype on GitHub Pages).
  */
 
-import type { ContentState, Order, OrderEvent, SavedConfig, Tier } from "./store";
+import type { ContentState, Milestone, Order, OrderEvent, SavedConfig, Tier } from "./store";
 import type { RailingConfig, TypeProfile } from "./engine/types";
 import type { PriceBook } from "./engine/pricing";
 
@@ -105,6 +105,7 @@ export const api = {
       sendPlans?: boolean;
       approvePlans?: boolean;
       requestPlanChanges?: boolean;
+      milestone?: Milestone;
       markPaid?: "deposit" | "balance";
       paidAt?: string;
       remind?: "deposit" | "balance";

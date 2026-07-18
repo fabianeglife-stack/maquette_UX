@@ -21,12 +21,16 @@ import type { TypeProfile } from "@/lib/engine/types";
 import { fmt, type Dict } from "@/lib/i18n";
 import {
   confirmationNoFor,
+  DEFAULT_SUPPLIERS,
   deliveryNoFor,
   loadEvents,
+  materialNoFor,
   planFor,
   quoteNoFor,
+  treatmentNoFor,
   type Order,
   type OrderEvent,
+  type Suppliers,
   type TypePlans,
 } from "@/lib/store";
 import { fetchAllTypes, fetchPageContent, resolveType } from "@/lib/data";
@@ -38,6 +42,8 @@ import { confirmationSummary, buildConfirmationDoc } from "@/components/portal/c
 import { buildInvoiceDoc } from "@/components/portal/invoice";
 import { buildReminderDoc } from "@/components/portal/reminder";
 import { buildDeliveryDoc, buildFabricationDoc, buildPickingDoc } from "./docs";
+import { buildMaterialOrderDoc, buildTreatmentOrderDoc } from "./purchase";
+import { materialOrderFor, treatmentOrderFor } from "@/lib/engine/procurement";
 import { buildDrawingDoc } from "@/components/configurator/pdf";
 import DrawingSVG from "@/components/configurator/DrawingSVG";
 import { StatusChip, TabSkeleton, inputCls, useOrders, type AdminDict } from "./shared";
@@ -136,6 +142,7 @@ export default function DocumentsTab({
   const [selRef, setSelRef] = useState<string | null>(null);
   const [types, setTypes] = useState<TypeProfile[]>([]);
   const [typePlans, setTypePlans] = useState<TypePlans>({});
+  const [suppliers, setSuppliers] = useState<Suppliers>(DEFAULT_SUPPLIERS);
   // Persisted documents for the selected order, keyed by their stable slug.
   const [savedMap, setSavedMap] = useState<Record<string, DocumentMeta>>({});
   const [busySlug, setBusySlug] = useState<string | null>(null);
@@ -144,6 +151,7 @@ export default function DocumentsTab({
   useEffect(() => {
     fetchAllTypes().then(setTypes);
     fetchPageContent<TypePlans>("typeplans", {}).then(setTypePlans);
+    fetchPageContent<Suppliers>("suppliers", DEFAULT_SUPPLIERS).then(setSuppliers);
   }, []);
 
   const needle = q.trim().toLowerCase();
@@ -350,6 +358,45 @@ export default function DocumentsTab({
                     );
                   }),
                 )}
+              </Category>
+            )}
+
+            {/* procurement: the supplier POs preceding fabrication */}
+            {order.kind === "order" && (
+              <Category title={t.docsHub.procurement}>
+                <DocRow
+                  label={t.purchase.materialTitle}
+                  no={materialNoFor(order.ref)}
+                  note={order.materialOrderedAt ? fmt(t.purchase.steps.material_ordered + " · {date}", { date: order.materialOrderedAt }) : undefined}
+                  reason={order.config ? t.docsHub.needPlansApproved : t.docs.needConfig}
+                  {...rowProps(
+                    "material-order",
+                    "procurement",
+                    t.purchase.materialTitle,
+                    materialNoFor(order.ref),
+                    order.plansApprovedAt && order.config && tp && derived
+                      ? () => buildMaterialOrderDoc(order, materialOrderFor(order.config!, derived, tp), suppliers, t.purchase, t.bom.parts)
+                      : undefined,
+                  )}
+                />
+                <DocRow
+                  label={t.purchase.treatmentTitle}
+                  no={treatmentNoFor(order.ref)}
+                  note={order.treatmentOrderedAt ? fmt(t.purchase.steps.treatment_ordered + " · {date}", { date: order.treatmentOrderedAt }) : undefined}
+                  reason={order.config ? t.docsHub.needPlansApproved : t.docs.needConfig}
+                  {...rowProps(
+                    "treatment-order",
+                    "procurement",
+                    t.purchase.treatmentTitle,
+                    treatmentNoFor(order.ref),
+                    order.plansApprovedAt && order.config && derived
+                      ? () => {
+                          const tr = treatmentOrderFor(order.config!, derived);
+                          return buildTreatmentOrderDoc(order, tr, suppliers, t.purchase, tr.ral ? cfgDict.colors[tr.ral] : undefined);
+                        }
+                      : undefined,
+                  )}
+                />
               </Category>
             )}
 

@@ -36,7 +36,7 @@ export default function OpsView({
   accent: string;
   hint: string;
 }) {
-  const { orders, ready, advance, sendQuote, markAccepted, sendPlans, setDeliveryDate, cancel } = useOrders();
+  const { orders, ready, advance, sendQuote, markAccepted, sendPlans, markMilestone, setDeliveryDate, cancel } = useOrders();
   const [openRef, setOpenRef] = useState<string | null>(null);
 
   if (!ready) return <TabSkeleton />;
@@ -67,6 +67,16 @@ export default function OpsView({
           {list.map((o) => {
             const idx = ORDER_FLOW.indexOf(o.status);
             const next = idx >= 0 && idx < ORDER_FLOW.length - 1 ? ORDER_FLOW[idx + 1] : null;
+            // Mirror the API gates: fabrication needs both POs + goods receipt,
+            // shipping needs the treatment return + palletizing (configured orders).
+            const blockedNote =
+              next === "confirmed" && !o.deliveryDate
+                ? t.orders.deliveryRequired
+                : next === "production" && Boolean(o.config) && !(o.materialOrderedAt && o.treatmentOrderedAt && o.materialReceivedAt)
+                  ? t.purchase.procurementRequired
+                  : next === "shipped" && Boolean(o.config) && !(o.treatmentReceivedAt && o.palletizedAt)
+                    ? t.purchase.logisticsRequired
+                    : undefined;
             return (
               <div key={o.ref} className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-lg border border-[#e4e6ea] bg-white px-4 py-3 shadow-sm transition-shadow hover:shadow-md">
                 <StatusChip status={o.status} label={statusLabels[o.status]} />
@@ -80,9 +90,8 @@ export default function OpsView({
                 {next && (
                   <button
                     type="button"
-                    // Confirming requires the estimated delivery date (set in the drawer).
-                    disabled={next === "confirmed" && !o.deliveryDate}
-                    title={next === "confirmed" && !o.deliveryDate ? t.orders.deliveryRequired : undefined}
+                    disabled={Boolean(blockedNote)}
+                    title={blockedNote}
                     onClick={() => advance(o.ref, next)}
                     className="rounded-md px-3 py-1.5 text-[11px] font-semibold text-white transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-40"
                     style={{ background: accent }}
@@ -118,6 +127,7 @@ export default function OpsView({
           sendQuote={sendQuote}
           markAccepted={markAccepted}
           sendPlans={sendPlans}
+          markMilestone={markMilestone}
           setDeliveryDate={setDeliveryDate}
           cancel={cancel}
         />

@@ -4,7 +4,7 @@ import { sessionUser } from "@/lib/server/auth";
 import { hasArea } from "@/lib/server/authz";
 
 /** Departments a stored document can belong to (mirrors the binder columns). */
-const AREAS = ["sale", "finance", "production", "logistics", "technical"];
+const AREAS = ["sale", "finance", "procurement", "production", "logistics", "technical"];
 /** Cap the stored base64 payload so a runaway generation can't bloat the DB. */
 const MAX_BASE64 = 15_000_000;
 

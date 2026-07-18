@@ -40,6 +40,14 @@ export function confirmationNoFor(ref: string): string {
 export function quoteNoFor(ref: string): string {
   return "OF-" + ref.replace(/^AX-/, "");
 }
+/** Deterministic material purchase-order number for an order. */
+export function materialNoFor(ref: string): string {
+  return "BM-" + ref.replace(/^AX-/, "");
+}
+/** Deterministic treatment purchase-order number for an order. */
+export function treatmentNoFor(ref: string): string {
+  return "BT-" + ref.replace(/^AX-/, "");
+}
 /** Days a binding quote stays valid after it is sent. */
 export const QUOTE_VALID_DAYS = 30;
 /** Whether a binding quote has passed its validity date. */
@@ -78,6 +86,13 @@ export interface Order {
   plansSentAt?: string;
   /** … and the date the customer approved them (gates the confirmation). */
   plansApprovedAt?: string;
+  /** Procurement & logistics milestones — see MILESTONES for the chain. */
+  materialOrderedAt?: string;
+  treatmentOrderedAt?: string;
+  materialReceivedAt?: string;
+  treatmentSentAt?: string;
+  treatmentReceivedAt?: string;
+  palletizedAt?: string;
   /** Payment markers (ISO yyyy-mm-dd) for the deposit/full and balance invoices. */
   depositPaidAt?: string;
   balancePaidAt?: string;
@@ -185,6 +200,79 @@ export function approvePlans(ref: string): void {
   logEvent(ref, "plans_approved", o.customer.email);
 }
 
+/* ---------- procurement & logistics milestones ---------- */
+
+export type Milestone =
+  | "material_ordered"
+  | "treatment_ordered"
+  | "material_received"
+  | "treatment_sent"
+  | "treatment_received"
+  | "palletized";
+
+export const MILESTONES: Milestone[] = [
+  "material_ordered",
+  "treatment_ordered",
+  "material_received",
+  "treatment_sent",
+  "treatment_received",
+  "palletized",
+];
+
+export const MILESTONE_FIELD = {
+  material_ordered: "materialOrderedAt",
+  treatment_ordered: "treatmentOrderedAt",
+  material_received: "materialReceivedAt",
+  treatment_sent: "treatmentSentAt",
+  treatment_received: "treatmentReceivedAt",
+  palletized: "palletizedAt",
+} as const satisfies Record<Milestone, keyof Order>;
+
+/** Order-like shape shared by the client store and the DB row (server reuse). */
+type MilestoneState = {
+  kind: string;
+  status: string;
+  plansApprovedAt?: string | null;
+  materialOrderedAt?: string | null;
+  treatmentOrderedAt?: string | null;
+  materialReceivedAt?: string | null;
+  treatmentSentAt?: string | null;
+  treatmentReceivedAt?: string | null;
+  palletizedAt?: string | null;
+};
+
+/**
+ * Whether a milestone may be recorded now. Encodes the physical chain: both
+ * POs after plan approval; goods receipt after the material PO; shipment to
+ * the treatment plant only once fabricated (status ≥ production) and ordered;
+ * return after shipment; palletizing after the return.
+ */
+export function milestoneReady(o: MilestoneState, m: Milestone): boolean {
+  if (o.kind !== "order" || o.status === "cancelled" || !o.plansApprovedAt) return false;
+  if (o[MILESTONE_FIELD[m]]) return false;
+  switch (m) {
+    case "material_ordered":
+    case "treatment_ordered":
+      return true;
+    case "material_received":
+      return Boolean(o.materialOrderedAt);
+    case "treatment_sent":
+      return Boolean(o.treatmentOrderedAt) && ORDER_FLOW.indexOf(o.status as OrderStatus) >= ORDER_FLOW.indexOf("production");
+    case "treatment_received":
+      return Boolean(o.treatmentSentAt);
+    case "palletized":
+      return Boolean(o.treatmentReceivedAt);
+  }
+}
+
+/** Static-mode fallback: record a milestone (same chain rules as the API). */
+export function markMilestone(ref: string, m: Milestone): void {
+  const o = loadOrders().find((x) => x.ref === ref);
+  if (!o || !milestoneReady(o, m)) return;
+  updateOrder(ref, { [MILESTONE_FIELD[m]]: new Date().toISOString().slice(0, 10) });
+  logEvent(ref, m, o.customer.email);
+}
+
 /** Customer sends the plans back for revision — staff will re-send them. */
 export function requestPlanChanges(ref: string): void {
   const o = loadOrders().find((x) => x.ref === ref);
@@ -285,7 +373,9 @@ export type OrderEventType =
   // or sent back with a change request.
   | "plans_sent"
   | "plans_approved"
-  | "plans_change_requested";
+  | "plans_change_requested"
+  // Procurement & logistics chain (see Milestone in this module).
+  | Milestone;
 
 export interface OrderEvent {
   ref: string;
@@ -387,6 +477,27 @@ export function planFor(
   const m = mounting ?? SUBSTRATE_MOUNTING[substrate];
   return entry?.[`${substrate}|${m}`] ?? entry?.[substrate] ?? entry?.[m] ?? fallback;
 }
+
+/* ---------- supplier records for the purchase orders ---------- */
+
+export interface SupplierInfo {
+  name: string;
+  street: string;
+  city: string;
+  email: string;
+}
+
+/** The two supplier slots the purchase orders are addressed to. */
+export interface Suppliers {
+  material: SupplierInfo;
+  treatment: SupplierInfo;
+}
+
+/** Demo defaults; editable later via the CMS blob `suppliers`. */
+export const DEFAULT_SUPPLIERS: Suppliers = {
+  material: { name: "Stahlhandel Zug AG", street: "Industriestrasse 24", city: "6300 Zug", email: "verkauf@stahlzug.example.ch" },
+  treatment: { name: "Verzinkerei & Pulverwerk Seetal AG", street: "Werkstrasse 8", city: "5703 Seon", email: "auftrag@seetal-zink.example.ch" },
+};
 
 export function loadPageContent<T>(id: string, empty: T): T {
   try {

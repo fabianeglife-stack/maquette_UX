@@ -56,6 +56,16 @@ model Order {
   // order be confirmed. A change request clears plansSentAt for a re-send.
   plansSentAt      String?
   plansApprovedAt  String?
+  // Procurement & logistics milestones (ISO yyyy-mm-dd): supplier POs sent
+  // (material BM-, treatment BT-), goods receipt of the material (gates
+  // fabrication), shipment to / return from the treatment plant, and
+  // palletizing (gates the customer shipment).
+  materialOrderedAt   String?
+  treatmentOrderedAt  String?
+  materialReceivedAt  String?
+  treatmentSentAt     String?
+  treatmentReceivedAt String?
+  palletizedAt        String?
   // Payment markers (ISO yyyy-mm-dd) for the deposit/full and balance invoices.
   depositPaidAt    String?
   balancePaidAt    String?
