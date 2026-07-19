@@ -5,6 +5,9 @@
 import { useEffect, useState } from "react";
 import { type Substrate, type TypeProfile } from "@/lib/engine/types";
 import type { Mounting, PlanKey, TypePlans } from "@/lib/store";
+// Type-only import — erased at compile time, so the server-only OCCT module is
+// never pulled into the client bundle.
+import type { StepTemplate, StepTemplates, TubeRole } from "@/lib/cad/step";
 import { fetchAllTypes, fetchPageContent, putPageContent, removeType, saveType } from "@/lib/data";
 import type { Dict } from "@/lib/i18n";
 import { notify } from "@/lib/toast";
@@ -181,6 +184,171 @@ function PlansSection({ t, cfgDict, types }: { t: AdminDict; cfgDict: Dict["cfg"
   );
 }
 
+/** Read an uploaded STEP template as a data URL (≤ 4 MB, .step/.stp only). */
+function readStepFile(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const name = file.name.toLowerCase();
+    if (!name.endsWith(".step") && !name.endsWith(".stp")) return reject(new Error("not_step"));
+    if (file.size > 4 * 1024 * 1024) return reject(new Error("too_big"));
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result));
+    r.onerror = () => reject(new Error("read_failed"));
+    r.readAsDataURL(file);
+  });
+}
+
+const STEP_ROLE_ORDER: TubeRole[] = ["posts", "bars", "railsPart", "handrailPart", "bottomRail"];
+
+/** Tube roles that carry a laser-cut template for a given recipe type. */
+function stepRolesFor(tp: TypeProfile): TubeRole[] {
+  if (!tp.recipe) return [];
+  const roles: TubeRole[] = ["posts"];
+  const kind = tp.recipe.infill.kind;
+  if (kind === "vertical_bars" || kind === "vertical_flats") roles.push("bars");
+  else if (kind === "horizontal_rails") roles.push("railsPart");
+  roles.push("handrailPart", "bottomRail");
+  return roles.filter((r) => STEP_ROLE_ORDER.includes(r));
+}
+
+/** One tube role's STEP template: upload/replace, remove, and the straight-end margin. */
+function StepCell({
+  t,
+  label,
+  tpl,
+  onFile,
+  onMargin,
+  onRemove,
+}: {
+  t: AdminDict;
+  label: string;
+  tpl?: StepTemplate;
+  onFile: (step: string) => void;
+  onMargin: (m?: number) => void;
+  onRemove: () => void;
+}) {
+  const [err, setErr] = useState<"too_big" | "not_step" | null>(null);
+  const has = Boolean(tpl?.step);
+  return (
+    <div className="flex flex-col gap-1.5 rounded-md border border-hairline/70 p-3">
+      <span className="text-[10px] font-medium uppercase tracking-[0.1em] text-graphite">{label}</span>
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="cursor-pointer border border-hairline px-3 py-1.5 text-[10px] uppercase tracking-[0.12em] text-graphite transition-colors hover:border-graphite hover:text-ink">
+          {has ? t.stepTpl.replace : t.stepTpl.upload}
+          <input
+            type="file"
+            accept=".step,.stp,application/step,model/step,application/octet-stream"
+            className="hidden"
+            onChange={async (e) => {
+              const f = e.target.files?.[0];
+              e.target.value = "";
+              if (!f) return;
+              try {
+                setErr(null);
+                onFile(await readStepFile(f));
+              } catch (ex) {
+                setErr((ex as Error).message === "not_step" ? "not_step" : "too_big");
+              }
+            }}
+          />
+        </label>
+        {has && (
+          <button
+            type="button"
+            onClick={onRemove}
+            className="px-1 text-[10px] uppercase tracking-[0.12em] text-alert underline-offset-2 hover:underline"
+          >
+            {t.stepTpl.remove}
+          </button>
+        )}
+        <span className={`text-[10px] ${has ? "text-steel" : "text-stone"}`}>{has ? t.stepTpl.loaded : t.stepTpl.none}</span>
+      </div>
+      <label className="flex items-center gap-2 text-[10px] text-graphite">
+        <span className="whitespace-nowrap">{t.stepTpl.margin}</span>
+        <input
+          type="number"
+          min={0}
+          step={5}
+          defaultValue={tpl?.marginMm ?? ""}
+          onBlur={(e) => {
+            const v = e.target.value.trim();
+            onMargin(v === "" ? undefined : Math.max(0, Number(v) || 0));
+          }}
+          className="w-20 border border-hairline px-2 py-1 text-[11px]"
+        />
+      </label>
+      <span className="text-[10px] font-light text-stone">{t.stepTpl.marginHint}</span>
+      {err && (
+        <span role="alert" className="text-[10px] text-alert">
+          {err === "not_step" ? t.stepTpl.notStep : t.stepTpl.tooBig}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** Upload one Inventor STEP template (with notches) per type × tube role. */
+function StepTemplatesSection({ t, types }: { t: AdminDict; types: TypeProfile[] }) {
+  const [tpls, setTpls] = useState<StepTemplates>({});
+  const [saved, setSaved] = useState(false);
+  useEffect(() => {
+    fetchPageContent<StepTemplates>("steptemplates", {}).then(setTpls);
+  }, []);
+
+  const persist = (next: StepTemplates) => {
+    setTpls(next);
+    putPageContent("steptemplates", next)
+      .then(() => {
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2500);
+      })
+      .catch(() => notify("saveFailed"));
+  };
+
+  const setTpl = (typeId: string, role: TubeRole, patch: Partial<StepTemplate> | null) => {
+    const entry = { ...(tpls[typeId] ?? {}) };
+    if (patch === null) {
+      delete entry[role];
+    } else {
+      entry[role] = { ...(entry[role] ?? { step: "" }), ...patch };
+    }
+    persist({ ...tpls, [typeId]: entry });
+  };
+
+  const recipeTypes = types.filter((x) => x.active && x.recipe);
+  if (recipeTypes.length === 0) return null;
+  return (
+    <div className="flex max-w-4xl flex-col gap-4 border border-hairline p-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <span className="text-xs font-medium uppercase tracking-[0.16em] text-ink">{t.stepTpl.title}</span>
+        {saved && (
+          <span role="status" className="text-[11px] font-light text-steel">
+            {t.stepTpl.saved}
+          </span>
+        )}
+      </div>
+      <p className="text-xs font-light leading-relaxed text-stone">{t.stepTpl.hint}</p>
+      {recipeTypes.map((x) => (
+        <div key={x.id} className="flex flex-col gap-2.5 border-t border-hairline/70 pt-3">
+          <span className="text-sm text-ink">{x.name?.de ?? x.id}</span>
+          <div className="grid gap-2.5 sm:grid-cols-2">
+            {stepRolesFor(x).map((role) => (
+              <StepCell
+                key={role}
+                t={t}
+                label={t.stepTpl.roles[role]}
+                tpl={tpls[x.id]?.[role]}
+                onFile={(step) => setTpl(x.id, role, { step })}
+                onMargin={(marginMm) => setTpl(x.id, role, { marginMm })}
+                onRemove={() => setTpl(x.id, role, null)}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function ProductsTab({ t, cfgDict }: { t: AdminDict; cfgDict: Dict["cfg"] }) {
   const [types, setTypes] = useState<TypeProfile[]>([]);
   const [designer, setDesigner] = useState<"new" | TypeProfile | null>(null);
@@ -297,6 +465,8 @@ export default function ProductsTab({ t, cfgDict }: { t: AdminDict; cfgDict: Dic
       )}
 
       <PlansSection t={t} cfgDict={cfgDict} types={types} />
+
+      <StepTemplatesSection t={t} types={types} />
     </div>
   );
 }
