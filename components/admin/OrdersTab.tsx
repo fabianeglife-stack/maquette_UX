@@ -4,7 +4,7 @@
 
 import { useState } from "react";
 import { chf } from "@/lib/engine/pricing";
-import { isLate, ORDER_FLOW, QUOTE_FLOW, type Order, type OrderStatus } from "@/lib/store";
+import { isLate, MILESTONE_FIELD, ORDER_FLOW, QUOTE_FLOW, type Order, type OrderStatus } from "@/lib/store";
 import { fmt, type Dict } from "@/lib/i18n";
 import StatusSteps from "@/components/StatusSteps";
 import OrderDrawer from "./OrderDrawer";
@@ -14,9 +14,33 @@ type KindFilter = "all" | "order" | "quote";
 type SortKey = "newest" | "value";
 type OrdersViewMode = "kanban" | "list";
 
-/** Drag-and-drop order board: one column per lifecycle status. */
+/** Hue of the derived procurement (Achats) column — distinct from the statuses. */
+const PROCUREMENT_HUE = "#0e7490";
+
+/** Small ✓/⌛ progress pill for a procurement milestone on a board card. */
+function ProgressPill({ label, done }: { label: string; done: boolean }) {
+  return (
+    <span
+      className={`inline-flex items-center gap-0.5 rounded-sm px-1 py-px text-[9px] font-medium ${
+        done ? "bg-[#0e7490]/12 text-[#0e7490]" : "bg-[#eceef1] text-[#9aa1ac]"
+      }`}
+    >
+      {done ? "✓" : "⌛"} {label}
+    </span>
+  );
+}
+
+/**
+ * Drag-and-drop order board. Columns follow the process phases: the linear
+ * statuses plus a derived "procurement" (Achats) column between Confirmée and
+ * En production, so the material/treatment purchasing phase is visible. The
+ * procurement column is driven by milestones (not a status), so it is a
+ * display column — not a drop target; its cards still drag on to production
+ * (the server gate enforces the prerequisites).
+ */
 function KanbanBoard({
   orders,
+  t,
   statusLabels,
   cfgDict,
   lateLabel,
@@ -24,6 +48,7 @@ function KanbanBoard({
   onOpen,
 }: {
   orders: Order[];
+  t: AdminDict;
   statusLabels: Dict["portal"]["status"];
   cfgDict: Dict["cfg"];
   lateLabel: string;
@@ -31,68 +56,94 @@ function KanbanBoard({
   onOpen: (ref: string) => void;
 }) {
   const [dragRef, setDragRef] = useState<string | null>(null);
-  const [overCol, setOverCol] = useState<OrderStatus | null>(null);
+  const [overCol, setOverCol] = useState<string | null>(null);
+
+  // Procurement is under way once a supplier PO has gone out but the order has
+  // not yet advanced to production.
+  const inProcurement = (o: Order) => o.status === "confirmed" && Boolean(o.materialOrderedAt || o.treatmentOrderedAt);
+
+  type Column = { key: string; label: string; hue: string; match: (o: Order) => boolean; dropStatus?: OrderStatus };
+  const columns: Column[] = [
+    { key: "new", label: statusLabels.new, hue: STATUS_HUES.new, match: (o) => o.status === "new", dropStatus: "new" },
+    { key: "confirmed", label: statusLabels.confirmed, hue: STATUS_HUES.confirmed, match: (o) => o.status === "confirmed" && !inProcurement(o), dropStatus: "confirmed" },
+    { key: "procurement", label: t.tabs.purchasing, hue: PROCUREMENT_HUE, match: inProcurement },
+    { key: "production", label: statusLabels.production, hue: STATUS_HUES.production, match: (o) => o.status === "production", dropStatus: "production" },
+    { key: "shipped", label: statusLabels.shipped, hue: STATUS_HUES.shipped, match: (o) => o.status === "shipped", dropStatus: "shipped" },
+    { key: "invoiced", label: statusLabels.invoiced, hue: STATUS_HUES.invoiced, match: (o) => o.status === "invoiced", dropStatus: "invoiced" },
+    { key: "paid", label: statusLabels.paid, hue: STATUS_HUES.paid, match: (o) => o.status === "paid", dropStatus: "paid" },
+  ];
 
   return (
     <div className="flex items-start gap-3 overflow-x-auto pb-2">
-      {ORDER_FLOW.map((s) => {
-        const col = orders.filter((o) => o.status === s);
-        const hue = STATUS_HUES[s];
+      {columns.map((c) => {
+        const col = orders.filter(c.match);
         const sum = col.reduce((a, o) => a + o.gross, 0);
+        const isTarget = Boolean(c.dropStatus);
         return (
           <div
-            key={s}
-            onDragOver={(e) => {
-              e.preventDefault();
-              setOverCol(s);
-            }}
-            onDragLeave={() => setOverCol((c) => (c === s ? null : c))}
-            onDrop={(e) => {
-              e.preventDefault();
-              if (dragRef) onDrop(dragRef, s);
-              setDragRef(null);
-              setOverCol(null);
-            }}
+            key={c.key}
+            onDragOver={isTarget ? (e) => { e.preventDefault(); setOverCol(c.key); } : undefined}
+            onDragLeave={isTarget ? () => setOverCol((x) => (x === c.key ? null : x)) : undefined}
+            onDrop={
+              isTarget
+                ? (e) => {
+                    e.preventDefault();
+                    if (dragRef && c.dropStatus) onDrop(dragRef, c.dropStatus);
+                    setDragRef(null);
+                    setOverCol(null);
+                  }
+                : undefined
+            }
             className={`flex w-56 shrink-0 flex-col gap-2 rounded-lg p-2.5 pt-2 transition-colors ${
-              overCol === s && dragRef ? "bg-[#dbe3ec] ring-2 ring-inset" : "bg-[#eceef1]"
+              overCol === c.key && dragRef ? "bg-[#dbe3ec] ring-2 ring-inset" : "bg-[#eceef1]"
             }`}
-            style={{ borderTop: `3px solid ${hue}`, ...(overCol === s && dragRef ? ({ ["--tw-ring-color" as string]: `${hue}66` } as React.CSSProperties) : {}) }}
+            style={{ borderTop: `3px solid ${c.hue}`, ...(overCol === c.key && dragRef ? ({ ["--tw-ring-color" as string]: `${c.hue}66` } as React.CSSProperties) : {}) }}
           >
             <div className="flex items-baseline justify-between gap-2 px-1 pb-1">
-              <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em]" style={{ color: hue }}>
-                {statusLabels[s]}
+              <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em]" style={{ color: c.hue }}>
+                {c.label}
                 <span className="rounded-full bg-white px-1.5 text-[10px] font-bold text-[#5b6069]">{col.length}</span>
               </span>
               {sum > 0 && <span className="whitespace-nowrap text-[10px] text-[#8a8f98]">{Math.round(sum / 1000)}k</span>}
             </div>
-            {col.map((o) => (
-              <div
-                key={o.ref}
-                draggable
-                onDragStart={(e) => {
-                  e.dataTransfer.effectAllowed = "move";
-                  setDragRef(o.ref);
-                }}
-                onDragEnd={() => {
-                  setDragRef(null);
-                  setOverCol(null);
-                }}
-                onClick={() => onOpen(o.ref)}
-                className={`cursor-grab rounded-md border border-[#e4e6ea] bg-white p-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing ${
-                  dragRef === o.ref ? "opacity-50" : ""
-                }`}
-              >
-                <div className="flex items-baseline justify-between gap-2">
-                  <span className="text-[12px] font-semibold text-[#1b1e24]">{o.ref}</span>
-                  <span className="whitespace-nowrap text-[11px] font-medium text-[#1b1e24]">{chf(o.gross)}</span>
+            {col.map((o) => {
+              const showProgress = c.key === "confirmed" || c.key === "procurement";
+              return (
+                <div
+                  key={o.ref}
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.effectAllowed = "move";
+                    setDragRef(o.ref);
+                  }}
+                  onDragEnd={() => {
+                    setDragRef(null);
+                    setOverCol(null);
+                  }}
+                  onClick={() => onOpen(o.ref)}
+                  className={`cursor-grab rounded-md border border-[#e4e6ea] bg-white p-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing ${
+                    dragRef === o.ref ? "opacity-50" : ""
+                  }`}
+                >
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-[12px] font-semibold text-[#1b1e24]">{o.ref}</span>
+                    <span className="whitespace-nowrap text-[11px] font-medium text-[#1b1e24]">{chf(o.gross)}</span>
+                  </div>
+                  {isLate(o) && <span className="mt-1 inline-block text-[10px] font-semibold uppercase tracking-[0.06em] text-[#dc2626]">⚠ {lateLabel}</span>}
+                  <span className="mt-0.5 block truncate text-[11.5px] text-[#5b6069]">{o.customer.name}</span>
+                  <span className="block truncate text-[10.5px] text-[#9aa1ac]">
+                    {o.system === "glass" ? cfgDict.systemGlass : cfgDict.systemBars} · {o.lengthM.toLocaleString("de-CH")} m
+                  </span>
+                  {showProgress && (
+                    <div className="mt-1.5 flex flex-wrap gap-1">
+                      <ProgressPill label={t.orders.boardMaterial} done={Boolean(o[MILESTONE_FIELD.material_ordered])} />
+                      <ProgressPill label={t.orders.boardTreatment} done={Boolean(o[MILESTONE_FIELD.treatment_ordered])} />
+                      <ProgressPill label={t.orders.boardReceipt} done={Boolean(o[MILESTONE_FIELD.material_received])} />
+                    </div>
+                  )}
                 </div>
-                {isLate(o) && <span className="mt-1 inline-block text-[10px] font-semibold uppercase tracking-[0.06em] text-[#dc2626]">⚠ {lateLabel}</span>}
-                <span className="mt-0.5 block truncate text-[11.5px] text-[#5b6069]">{o.customer.name}</span>
-                <span className="block truncate text-[10.5px] text-[#9aa1ac]">
-                  {o.system === "glass" ? cfgDict.systemGlass : cfgDict.systemBars} · {o.lengthM.toLocaleString("de-CH")} m
-                </span>
-              </div>
-            ))}
+              );
+            })}
             {col.length === 0 && (
               <div className="rounded-md border border-dashed border-[#c9cdd4] py-4 text-center text-[11px] text-[#a8adb6]">—</div>
             )}
@@ -219,6 +270,7 @@ export default function OrdersTab({ t, statusLabels, cfgDict, invoiceDict, confi
         <>
           <KanbanBoard
             orders={filtered.filter((o) => o.kind === "order")}
+            t={t}
             statusLabels={statusLabels}
             cfgDict={cfgDict}
             lateLabel={t.orders.late}
