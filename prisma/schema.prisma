@@ -65,7 +65,14 @@ model Order {
   materialReceivedAt  String?
   treatmentSentAt     String?
   treatmentReceivedAt String?
+  // Final-inspection sign-off (dimensions, welds, finish) — gates palletizing.
+  qcPassedAt          String?
   palletizedAt        String?
+  // Shipment details + proof of delivery (recipient name at handover).
+  carrier             String?
+  trackingNo          String?
+  deliveredAt         String?
+  deliveredTo         String?
   // Payment markers (ISO yyyy-mm-dd) for the deposit/full and balance invoices.
   depositPaidAt    String?
   balancePaidAt    String?

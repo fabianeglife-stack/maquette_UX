@@ -60,7 +60,7 @@ export default function FinanceTab({
   reminderDict: Dict["portal"]["reminder"];
   locale?: string;
 }) {
-  const { orders, ready, advance, sendQuote, markAccepted, sendPlans, markMilestone, setDeliveryDate, markPaid, cancel, remind } = useOrders();
+  const { orders, ready, advance, sendQuote, markAccepted, sendPlans, markMilestone, setShipping, setDeliveryDate, markPaid, cancel, remind } = useOrders();
   const [openRef, setOpenRef] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
   const [q, setQ] = useState("");
@@ -358,6 +358,7 @@ export default function FinanceTab({
           markAccepted={markAccepted}
           sendPlans={sendPlans}
           markMilestone={markMilestone}
+          setShipping={setShipping}
           setDeliveryDate={setDeliveryDate}
           cancel={cancel}
         />

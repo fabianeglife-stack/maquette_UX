@@ -17,7 +17,7 @@ const seedOrders = [
     ref: "AX-E3M9Q7", kind: "order", createdAt: new Date("2026-06-24"), status: "production",
     customerName: "Atelier Brunner AG", email: "bau@brunner.example.ch", street: "Werkhofweg 3", city: "3013 Bern",
     phone: "+41 31 555 02 02", payment: "invoice", system: "bars", lengthM: 26, gross: 7250.1,
-    depositPaidAt: "2026-06-24", deliveryDate: "2026-08-15",
+    depositPaidAt: "2026-06-24", deliveryDate: "2026-07-10",
     deliveryStreet: "Chantier Viktoriaplatz 2", deliveryCity: "3013 Bern",
   },
   {

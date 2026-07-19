@@ -14,6 +14,7 @@ import { buildBom } from "@/lib/engine/bom";
 import type { TypeProfile } from "@/lib/engine/types";
 import {
   DEFAULT_SUPPLIERS,
+  isLate,
   isQuoteExpired,
   loadEvents,
   MILESTONE_FIELD,
@@ -38,7 +39,7 @@ import { confirmationSummary, downloadConfirmationPdf } from "@/components/porta
 import { downloadQuotePdf } from "@/components/portal/quote";
 import { downloadDeliveryPdf, downloadFabricationPdf, downloadPickingPdf } from "./docs";
 import DrawingSVG from "@/components/configurator/DrawingSVG";
-import type { AdminDict } from "./shared";
+import { LateBadge, type AdminDict } from "./shared";
 
 /** Vertical event timeline (order lifecycle + transactional-email hooks). */
 function EventTimeline({ order, t, statusLabels }: { order: Order; t: AdminDict; statusLabels: Dict["portal"]["status"] }) {
@@ -75,8 +76,12 @@ function EventTimeline({ order, t, statusLabels }: { order: Order; t: AdminDict;
         return t.events.treatment_sent;
       case "treatment_received":
         return t.events.treatment_received;
+      case "qc_passed":
+        return t.events.qc_passed;
       case "palletized":
         return t.events.palletized;
+      case "delivered":
+        return t.events.delivered;
       default:
         return statusLabels[e.type];
     }
@@ -160,6 +165,7 @@ export default function OrderDrawer({
   markAccepted,
   sendPlans,
   markMilestone,
+  setShipping,
   setDeliveryDate,
   cancel,
 }: {
@@ -176,7 +182,8 @@ export default function OrderDrawer({
   sendQuote: (o: Order, value: number) => void;
   markAccepted: (o: Order) => void;
   sendPlans: (o: Order) => void;
-  markMilestone: (o: Order, m: Milestone) => void;
+  markMilestone: (o: Order, m: Milestone, deliveredTo?: string) => void;
+  setShipping: (o: Order, patch: { carrier?: string; trackingNo?: string }) => void;
   setDeliveryDate: (ref: string, date: string) => Promise<boolean>;
   cancel: (o: Order) => void;
 }) {
@@ -184,6 +191,14 @@ export default function OrderDrawer({
   // Set right after a successful confirm: the order confirmation went out to
   // this address (the transactional-email hook fired with the delivery date).
   const [sentTo, setSentTo] = useState<string | null>(null);
+  // Final-inspection checklist: all three checks must pass to sign QC off.
+  const [qc, setQc] = useState({ dims: false, welds: false, finish: false });
+  const qcAllChecked = qc.dims && qc.welds && qc.finish;
+  // Proof-of-delivery recipient captured when marking an order delivered.
+  const [deliveredTo, setDeliveredTo] = useState("");
+  // Carrier + tracking, seeded from the order and persisted on blur.
+  const [carrier, setCarrier] = useState(order.carrier ?? "");
+  const [trackingNo, setTrackingNo] = useState(order.trackingNo ?? "");
   const flow = order.kind === "order" ? ORDER_FLOW : QUOTE_FLOW;
   const idx = flow.indexOf(order.status);
   // Instalments for the internal review / order confirmation (≤ threshold:
@@ -234,6 +249,10 @@ export default function OrderDrawer({
   // The procurement/logistics chain is live from plan approval to production.
   const showChecklist =
     order.kind === "order" && Boolean(order.plansApprovedAt) && ["new", "confirmed", "production"].includes(order.status);
+  // Shipping details + proof of delivery: from the shop floor through delivery.
+  const rank = ORDER_FLOW.indexOf(order.status);
+  const showShipping = order.kind === "order" && rank >= ORDER_FLOW.indexOf("production");
+  const shipped = rank >= ORDER_FLOW.indexOf("shipped");
 
   return (
     <div className="fixed inset-0 z-[90] flex justify-end" role="dialog" aria-modal="true">
@@ -250,6 +269,7 @@ export default function OrderDrawer({
               >
                 {t.kind[order.kind]}
               </span>
+              {isLate(order) && <LateBadge label={t.orders.late} />}
             </div>
             <span className="text-xs font-light text-stone">{order.createdAt}</span>
           </div>
@@ -435,37 +455,116 @@ export default function OrderDrawer({
               const done = order[MILESTONE_FIELD[m]];
               const ready = milestoneReady(order, m);
               const isPo = m === "material_ordered" || m === "treatment_ordered";
+              const isQc = m === "qc_passed";
               return (
-                <div key={m} className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-hairline/70 py-1.5 first:border-t-0">
-                  <span className={`text-[13px] font-light ${done ? "text-ink" : "text-graphite"}`}>
-                    {done ? "✓ " : ""}
-                    {t.purchase.steps[m]}
-                  </span>
-                  {done && <span className="text-xs font-light text-stone">{done}</span>}
-                  <span className="ml-auto flex items-center gap-2">
-                    {isPo && order.config && tp && derived && (
+                <div key={m} className="flex flex-col gap-1.5 border-t border-hairline/70 py-1.5 first:border-t-0">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <span className={`text-[13px] font-light ${done ? "text-ink" : "text-graphite"}`}>
+                      {done ? "✓ " : ""}
+                      {t.purchase.steps[m]}
+                    </span>
+                    {done && <span className="text-xs font-light text-stone">{done}</span>}
+                    <span className="ml-auto flex items-center gap-2">
+                      {isPo && order.config && tp && derived && (
+                        <button
+                          type="button"
+                          onClick={() => downloadPo(m)}
+                          className="border border-hairline px-2 py-1 text-[10px] uppercase tracking-[0.1em] text-graphite transition-colors hover:border-graphite hover:text-ink"
+                        >
+                          ↓ PDF
+                        </button>
+                      )}
+                      {!done && !isQc && (
+                        <button
+                          type="button"
+                          disabled={!ready}
+                          onClick={() => markMilestone(order, m)}
+                          className="bg-ink px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] text-paper transition-colors hover:bg-graphite disabled:opacity-30"
+                        >
+                          {t.purchase.mark}
+                        </button>
+                      )}
+                    </span>
+                  </div>
+                  {/* Final inspection: three checks gate the sign-off. */}
+                  {isQc && !done && ready && (
+                    <div className="flex flex-col gap-1.5 rounded-sm bg-mist/60 p-2.5">
+                      {(["dims", "welds", "finish"] as const).map((k) => (
+                        <label key={k} className="flex items-center gap-2 text-[12px] font-light text-graphite">
+                          <input
+                            type="checkbox"
+                            checked={qc[k]}
+                            onChange={(e) => setQc((v) => ({ ...v, [k]: e.target.checked }))}
+                            className="h-3.5 w-3.5 accent-[#171716]"
+                          />
+                          {t.qc[k]}
+                        </label>
+                      ))}
                       <button
                         type="button"
-                        onClick={() => downloadPo(m)}
-                        className="border border-hairline px-2 py-1 text-[10px] uppercase tracking-[0.1em] text-graphite transition-colors hover:border-graphite hover:text-ink"
+                        disabled={!qcAllChecked}
+                        onClick={() => markMilestone(order, "qc_passed")}
+                        className="mt-0.5 self-start bg-ink px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] text-paper transition-colors hover:bg-graphite disabled:opacity-30"
                       >
-                        ↓ PDF
+                        {t.qc.sign}
                       </button>
-                    )}
-                    {!done && (
-                      <button
-                        type="button"
-                        disabled={!ready}
-                        onClick={() => markMilestone(order, m)}
-                        className="bg-ink px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] text-paper transition-colors hover:bg-graphite disabled:opacity-30"
-                      >
-                        {t.purchase.mark}
-                      </button>
-                    )}
-                  </span>
+                    </div>
+                  )}
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* shipping details + proof of delivery */}
+        {showShipping && (
+          <div className="flex flex-col gap-2 border border-hairline p-4">
+            <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone">{t.shipping.title}</span>
+            <label className="flex flex-col gap-1">
+              <span className="text-[10px] uppercase tracking-[0.12em] text-stone">{t.shipping.carrier}</span>
+              <input
+                value={carrier}
+                onChange={(e) => setCarrier(e.target.value)}
+                onBlur={() => carrier !== (order.carrier ?? "") && setShipping(order, { carrier })}
+                placeholder={t.shipping.carrierPlaceholder}
+                className="border border-hairline bg-paper px-2 py-1.5 text-sm font-light text-ink outline-none focus:border-graphite"
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-[10px] uppercase tracking-[0.12em] text-stone">{t.shipping.tracking}</span>
+              <input
+                value={trackingNo}
+                onChange={(e) => setTrackingNo(e.target.value)}
+                onBlur={() => trackingNo !== (order.trackingNo ?? "") && setShipping(order, { trackingNo })}
+                className="border border-hairline bg-paper px-2 py-1.5 text-sm font-light text-ink outline-none focus:border-graphite"
+              />
+            </label>
+            {order.deliveredAt ? (
+              <p className="border-l-2 border-[#16a34a] bg-[#16a34a]/8 p-2.5 text-[13px] font-light text-graphite">
+                ✓ {fmt(t.shipping.deliveredOn, { date: order.deliveredAt })}
+                {order.deliveredTo && <span className="block text-xs text-stone">{fmt(t.shipping.receivedBy, { name: order.deliveredTo })}</span>}
+              </p>
+            ) : shipped ? (
+              <div className="flex flex-wrap items-end gap-2">
+                <label className="flex flex-1 flex-col gap-1">
+                  <span className="text-[10px] uppercase tracking-[0.12em] text-stone">{t.shipping.recipient}</span>
+                  <input
+                    value={deliveredTo}
+                    onChange={(e) => setDeliveredTo(e.target.value)}
+                    className="w-full border border-hairline bg-paper px-2 py-1.5 text-sm font-light text-ink outline-none focus:border-graphite"
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={() => markMilestone(order, "delivered", deliveredTo.trim() || undefined)}
+                  className="bg-ink px-3 py-2 text-[11px] uppercase tracking-[0.12em] text-paper transition-colors hover:bg-graphite"
+                >
+                  {t.shipping.markDelivered}
+                </button>
+              </div>
+            ) : (
+              <p className="text-xs font-light text-stone">{t.shipping.deliverHint}</p>
+            )}
           </div>
         )}
 

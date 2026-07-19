@@ -3,7 +3,7 @@
 /* Overview tab: KPIs, revenue chart, status/system breakdowns, recent orders. */
 
 import { chf } from "@/lib/engine/pricing";
-import { ORDER_FLOW, type Order } from "@/lib/store";
+import { isLate, ORDER_FLOW, type Order } from "@/lib/store";
 import type { Dict } from "@/lib/i18n";
 import { Kpi, StatusChip, STATUS_HUES, TabSkeleton, useOrders, type AdminDict } from "./shared";
 
@@ -76,6 +76,7 @@ export default function DashboardTab({
   const quotes = orders.filter((o) => o.kind === "quote" && o.status !== "cancelled");
   const revenue = real.reduce((s, o) => s + o.gross, 0);
   const openOrders = real.filter((o) => !["shipped", "invoiced", "paid"].includes(o.status)).length;
+  const lateCount = real.filter((o) => isLate(o)).length;
 
   const byStatus = ORDER_FLOW.map((s) => ({ s, n: real.filter((o) => o.status === s).length }));
   const maxN = Math.max(1, ...byStatus.map((x) => x.n));
@@ -92,6 +93,7 @@ export default function DashboardTab({
         <Kpi label={t.dash.openOrders} value={String(openOrders)} hue="#ea580c" icon="production" />
         <Kpi label={t.dash.openQuotes} value={String(quotes.length)} hue="#2563eb" icon="orders" />
         <Kpi label={t.dash.avgOrder} value={real.length ? chf(revenue / real.length) : "—"} hue="#7c3aed" icon="pricing" />
+        <Kpi label={t.dash.late} value={String(lateCount)} hue={lateCount > 0 ? "#dc2626" : "#8a8f98"} icon="logistics" />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-3">

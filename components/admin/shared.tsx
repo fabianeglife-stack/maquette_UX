@@ -48,6 +48,15 @@ export const STATUS_HUES: Record<OrderStatus, string> = {
   cancelled: "#6b7280",
 };
 
+/** Red flag for orders past their promised delivery date (see isLate). */
+export function LateBadge({ label }: { label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-[#dc2626]/50 bg-[#dc2626]/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#dc2626]">
+      ⚠ {label}
+    </span>
+  );
+}
+
 export function StatusChip({ status, label }: { status: OrderStatus; label: string }) {
   const hue = STATUS_HUES[status] ?? "#6b7280";
   return (
@@ -197,12 +206,26 @@ export function useOrders() {
   };
 
   // Record a procurement/logistics milestone (chain rules live in the store/API).
-  const markMilestone = (o: Order, m: Milestone) => {
+  // `deliveredTo` carries the proof-of-delivery recipient on the final milestone.
+  const markMilestone = (o: Order, m: Milestone, deliveredTo?: string) => {
     if (hasBackend) {
-      api.patchOrder(o.ref, { milestone: m }).then(refresh).catch(() => notify("saveFailed"));
+      api
+        .patchOrder(o.ref, { milestone: m, ...(deliveredTo ? { deliveredTo } : {}) })
+        .then(refresh)
+        .catch(() => notify("saveFailed"));
       return;
     }
-    markMilestoneLocal(o.ref, m);
+    markMilestoneLocal(o.ref, m, deliveredTo);
+    refresh();
+  };
+
+  // Shipment details (carrier + tracking number) shown to the customer.
+  const setShipping = (o: Order, patch: { carrier?: string; trackingNo?: string }) => {
+    if (hasBackend) {
+      api.patchOrder(o.ref, patch).then(refresh).catch(() => notify("saveFailed"));
+      return;
+    }
+    updateOrder(o.ref, patch);
     refresh();
   };
 
@@ -274,5 +297,5 @@ export function useOrders() {
     refresh();
   };
 
-  return { orders, ready, refresh, advance, sendQuote, markAccepted, sendPlans, markMilestone, setDeliveryDate, markPaid, cancel, remind };
+  return { orders, ready, refresh, advance, sendQuote, markAccepted, sendPlans, markMilestone, setShipping, setDeliveryDate, markPaid, cancel, remind };
 }

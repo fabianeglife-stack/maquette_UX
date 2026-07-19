@@ -4,11 +4,11 @@
 
 import { useState } from "react";
 import { chf } from "@/lib/engine/pricing";
-import { ORDER_FLOW, QUOTE_FLOW, type Order, type OrderStatus } from "@/lib/store";
+import { isLate, ORDER_FLOW, QUOTE_FLOW, type Order, type OrderStatus } from "@/lib/store";
 import { fmt, type Dict } from "@/lib/i18n";
 import StatusSteps from "@/components/StatusSteps";
 import OrderDrawer from "./OrderDrawer";
-import { inputCls, Kpi, STATUS_HUES, TabSkeleton, useOrders, type AdminDict } from "./shared";
+import { inputCls, Kpi, LateBadge, STATUS_HUES, TabSkeleton, useOrders, type AdminDict } from "./shared";
 
 type KindFilter = "all" | "order" | "quote";
 type SortKey = "newest" | "value";
@@ -19,12 +19,14 @@ function KanbanBoard({
   orders,
   statusLabels,
   cfgDict,
+  lateLabel,
   onDrop,
   onOpen,
 }: {
   orders: Order[];
   statusLabels: Dict["portal"]["status"];
   cfgDict: Dict["cfg"];
+  lateLabel: string;
   onDrop: (ref: string, status: OrderStatus) => void;
   onOpen: (ref: string) => void;
 }) {
@@ -84,6 +86,7 @@ function KanbanBoard({
                   <span className="text-[12px] font-semibold text-[#1b1e24]">{o.ref}</span>
                   <span className="whitespace-nowrap text-[11px] font-medium text-[#1b1e24]">{chf(o.gross)}</span>
                 </div>
+                {isLate(o) && <span className="mt-1 inline-block text-[10px] font-semibold uppercase tracking-[0.06em] text-[#dc2626]">⚠ {lateLabel}</span>}
                 <span className="mt-0.5 block truncate text-[11.5px] text-[#5b6069]">{o.customer.name}</span>
                 <span className="block truncate text-[10.5px] text-[#9aa1ac]">
                   {o.system === "glass" ? cfgDict.systemGlass : cfgDict.systemBars} · {o.lengthM.toLocaleString("de-CH")} m
@@ -101,7 +104,7 @@ function KanbanBoard({
 }
 
 export default function OrdersTab({ t, statusLabels, cfgDict, invoiceDict, confirmationDict, quoteDict, locale }: { t: AdminDict; statusLabels: Dict["portal"]["status"]; cfgDict: Dict["cfg"]; invoiceDict: Dict["portal"]["invoice"]; confirmationDict: Dict["portal"]["confirmation"]; quoteDict: Dict["portal"]["quote"]; locale?: string }) {
-  const { orders, ready, advance, sendQuote, markAccepted, sendPlans, markMilestone, setDeliveryDate, cancel } = useOrders();
+  const { orders, ready, advance, sendQuote, markAccepted, sendPlans, markMilestone, setShipping, setDeliveryDate, cancel } = useOrders();
   const [openRef, setOpenRef] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [view, setView] = useState<OrdersViewMode>("kanban");
@@ -218,6 +221,7 @@ export default function OrdersTab({ t, statusLabels, cfgDict, invoiceDict, confi
             orders={filtered.filter((o) => o.kind === "order")}
             statusLabels={statusLabels}
             cfgDict={cfgDict}
+            lateLabel={t.orders.late}
             onDrop={advance}
             onOpen={setOpenRef}
           />
@@ -249,12 +253,15 @@ export default function OrdersTab({ t, statusLabels, cfgDict, invoiceDict, confi
               >
                 <span className="flex w-[112px] shrink-0 flex-col gap-1">
                   <span className="whitespace-nowrap text-sm text-ink">{o.ref}</span>
-                  <span
-                    className={`w-fit border px-1.5 py-0.5 text-[9px] uppercase tracking-[0.1em] ${
-                      o.kind === "order" ? "border-ink/40 text-ink" : "border-steel/50 text-steel"
-                    }`}
-                  >
-                    {t.kind[o.kind]}
+                  <span className="flex flex-wrap items-center gap-1">
+                    <span
+                      className={`w-fit border px-1.5 py-0.5 text-[9px] uppercase tracking-[0.1em] ${
+                        o.kind === "order" ? "border-ink/40 text-ink" : "border-steel/50 text-steel"
+                      }`}
+                    >
+                      {t.kind[o.kind]}
+                    </span>
+                    {isLate(o) && <LateBadge label={t.orders.late} />}
                   </span>
                 </span>
                 <span className="min-w-[130px] flex-1 text-sm font-light text-graphite">
@@ -290,6 +297,7 @@ export default function OrdersTab({ t, statusLabels, cfgDict, invoiceDict, confi
           markAccepted={markAccepted}
           sendPlans={sendPlans}
           markMilestone={markMilestone}
+          setShipping={setShipping}
           setDeliveryDate={setDeliveryDate}
           cancel={cancel}
         />

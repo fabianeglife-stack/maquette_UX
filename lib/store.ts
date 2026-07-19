@@ -92,7 +92,14 @@ export interface Order {
   materialReceivedAt?: string;
   treatmentSentAt?: string;
   treatmentReceivedAt?: string;
+  /** Final inspection (dimensions, welds, finish) — gates palletizing. */
+  qcPassedAt?: string;
   palletizedAt?: string;
+  /** Shipment details + proof of delivery (recipient at handover). */
+  carrier?: string;
+  trackingNo?: string;
+  deliveredAt?: string;
+  deliveredTo?: string;
   /** Payment markers (ISO yyyy-mm-dd) for the deposit/full and balance invoices. */
   depositPaidAt?: string;
   balancePaidAt?: string;
@@ -117,7 +124,7 @@ const seedOrders: Order[] = [
   {
     ref: "AX-E3M9Q7", kind: "order", createdAt: "2026-06-24", status: "production", seeded: true,
     customer: { name: "Atelier Brunner AG", email: "bau@brunner.example.ch", street: "Werkhofweg 3", city: "3013 Bern" },
-    payment: "invoice", system: "bars", lengthM: 26, gross: 7250.1,
+    payment: "invoice", system: "bars", lengthM: 26, gross: 7250.1, deliveryDate: "2026-07-10",
   },
   {
     ref: "AX-F7T2B4", kind: "order", createdAt: "2026-07-01", status: "confirmed", seeded: true,
@@ -208,14 +215,18 @@ export type Milestone =
   | "material_received"
   | "treatment_sent"
   | "treatment_received"
-  | "palletized";
+  | "qc_passed"
+  | "palletized"
+  | "delivered";
 
+/** The pre-shipment chain shown in the order-drawer checklist. */
 export const MILESTONES: Milestone[] = [
   "material_ordered",
   "treatment_ordered",
   "material_received",
   "treatment_sent",
   "treatment_received",
+  "qc_passed",
   "palletized",
 ];
 
@@ -225,7 +236,9 @@ export const MILESTONE_FIELD = {
   material_received: "materialReceivedAt",
   treatment_sent: "treatmentSentAt",
   treatment_received: "treatmentReceivedAt",
+  qc_passed: "qcPassedAt",
   palletized: "palletizedAt",
+  delivered: "deliveredAt",
 } as const satisfies Record<Milestone, keyof Order>;
 
 /** Order-like shape shared by the client store and the DB row (server reuse). */
@@ -238,14 +251,17 @@ type MilestoneState = {
   materialReceivedAt?: string | null;
   treatmentSentAt?: string | null;
   treatmentReceivedAt?: string | null;
+  qcPassedAt?: string | null;
   palletizedAt?: string | null;
+  deliveredAt?: string | null;
 };
 
 /**
  * Whether a milestone may be recorded now. Encodes the physical chain: both
  * POs after plan approval; goods receipt after the material PO; shipment to
  * the treatment plant only once fabricated (status ≥ production) and ordered;
- * return after shipment; palletizing after the return.
+ * return after shipment; the final inspection after the return; palletizing
+ * after the passed inspection; delivery once the order has shipped.
  */
 export function milestoneReady(o: MilestoneState, m: Milestone): boolean {
   if (o.kind !== "order" || o.status === "cancelled" || !o.plansApprovedAt) return false;
@@ -260,16 +276,37 @@ export function milestoneReady(o: MilestoneState, m: Milestone): boolean {
       return Boolean(o.treatmentOrderedAt) && ORDER_FLOW.indexOf(o.status as OrderStatus) >= ORDER_FLOW.indexOf("production");
     case "treatment_received":
       return Boolean(o.treatmentSentAt);
-    case "palletized":
+    case "qc_passed":
       return Boolean(o.treatmentReceivedAt);
+    case "palletized":
+      return Boolean(o.qcPassedAt);
+    case "delivered":
+      return ORDER_FLOW.indexOf(o.status as OrderStatus) >= ORDER_FLOW.indexOf("shipped");
   }
 }
 
+/**
+ * An order is late when its promised delivery date has passed while it is
+ * still on the shop floor (before shipping). Pure — shared by the ERP badges
+ * and the dashboard KPI.
+ */
+export function isLate(
+  o: Pick<Order, "kind" | "status" | "deliveryDate">,
+  today: string = new Date().toISOString().slice(0, 10),
+): boolean {
+  if (o.kind !== "order" || !o.deliveryDate) return false;
+  if (!["new", "confirmed", "production"].includes(o.status)) return false;
+  return o.deliveryDate < today;
+}
+
 /** Static-mode fallback: record a milestone (same chain rules as the API). */
-export function markMilestone(ref: string, m: Milestone): void {
+export function markMilestone(ref: string, m: Milestone, deliveredTo?: string): void {
   const o = loadOrders().find((x) => x.ref === ref);
   if (!o || !milestoneReady(o, m)) return;
-  updateOrder(ref, { [MILESTONE_FIELD[m]]: new Date().toISOString().slice(0, 10) });
+  updateOrder(ref, {
+    [MILESTONE_FIELD[m]]: new Date().toISOString().slice(0, 10),
+    ...(m === "delivered" && deliveredTo ? { deliveredTo } : {}),
+  });
   logEvent(ref, m, o.customer.email);
 }
 
