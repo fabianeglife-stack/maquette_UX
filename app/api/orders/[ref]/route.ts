@@ -5,7 +5,7 @@ import { hasArea } from "@/lib/server/authz";
 import { toClientOrder } from "@/lib/server/serialize";
 import { safeParse } from "@/lib/server/json";
 import { paymentPlan } from "@/lib/engine/pricing";
-import { MILESTONE_FIELD, MILESTONES, milestoneReady, QUOTE_VALID_DAYS, type Milestone } from "@/lib/store";
+import { MILESTONE_FIELD, milestoneReady, QUOTE_VALID_DAYS, type Milestone } from "@/lib/store";
 
 const ORDER_STATUSES = ["new", "confirmed", "production", "shipped", "invoiced", "paid"];
 const ORDER_RANK = ["new", "confirmed", "production", "shipped", "invoiced", "paid"];
@@ -96,29 +96,54 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ ref: s
   // approval and shipment: supplier POs (material BM-, treatment BT-), goods
   // receipt of the material, shipment to / return from the treatment plant,
   // and palletizing. Chain rules live in milestoneReady (lib/store.ts).
-  if (typeof body.milestone === "string" && (MILESTONES as string[]).includes(body.milestone)) {
+  if (typeof body.milestone === "string" && body.milestone in MILESTONE_FIELD) {
     const m = body.milestone as Milestone;
     const isPo = m === "material_ordered" || m === "treatment_ordered";
-    // POs belong to the purchasing station (sales as fallback); the physical
-    // movements — goods receipt, treatment round-trip, palletizing — to logistics.
+    // POs belong to the purchasing station (sales as fallback); the final
+    // inspection to the shop floor (production); the physical movements —
+    // goods receipt, treatment round-trip, palletizing, delivery — to logistics.
     const allowed = isPo
       ? hasArea(user, "purchasing") || hasArea(user, "orders")
-      : hasArea(user, "logistics");
+      : m === "qc_passed"
+        ? hasArea(user, "production")
+        : hasArea(user, "logistics");
     if (!allowed) return NextResponse.json({ error: "forbidden" }, { status: 403 });
     if (!milestoneReady(order, m)) return NextResponse.json({ error: "milestone_order" }, { status: 409 });
-    // A PO event carries the supplier's email (the transactional-email hook);
-    // the logistics milestones are internal and email nobody.
+    // A PO event carries the supplier's email; the delivery event notifies the
+    // customer; the other movements are internal and email nobody.
     let emailTo: string | undefined;
     if (isPo) {
       const row = await db.siteContent.findUnique({ where: { id: "suppliers" } });
       const sup = (row ? safeParse(row.json) : null) as { material?: { email?: string }; treatment?: { email?: string } } | null;
       emailTo = (m === "material_ordered" ? sup?.material?.email : sup?.treatment?.email) || undefined;
+    } else if (m === "delivered") {
+      emailTo = order.email;
     }
     const updated = await db.order.update({
       where: { ref },
       data: {
         [MILESTONE_FIELD[m]]: todayISO(),
+        // Proof of delivery: the recipient's name at handover.
+        ...(m === "delivered" && typeof body.deliveredTo === "string" && body.deliveredTo.trim()
+          ? { deliveredTo: body.deliveredTo.trim().slice(0, 120) }
+          : {}),
         events: { create: { type: m, emailTo } },
+      },
+      include: { events: { orderBy: { at: "asc" } } },
+    });
+    return NextResponse.json({ order: toClientOrder(updated) });
+  }
+
+  // Shipment details (carrier + tracking number), editable by any handling
+  // station from packing onwards; shown to the customer in the portal.
+  if (typeof body.carrier === "string" || typeof body.trackingNo === "string") {
+    const canShip = (["orders", "logistics"] as const).some((a) => hasArea(user, a));
+    if (!canShip) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    const updated = await db.order.update({
+      where: { ref },
+      data: {
+        ...(typeof body.carrier === "string" ? { carrier: body.carrier.trim().slice(0, 60) || null } : {}),
+        ...(typeof body.trackingNo === "string" ? { trackingNo: body.trackingNo.trim().slice(0, 60) || null } : {}),
       },
       include: { events: { orderBy: { at: "asc" } } },
     });

@@ -18,6 +18,7 @@ import {
   confirmationNoFor,
   encodeConfig,
   getSession,
+  isLate,
   isQuoteExpired,
   loadEvents,
   loadOrders,
@@ -36,6 +37,50 @@ import { api, hasBackend, type ApiOrder } from "@/lib/api";
 import { notify } from "@/lib/toast";
 import StatusSteps from "@/components/StatusSteps";
 import { PlanSketch } from "@/components/configurator/visual";
+
+/** Customer-facing milestone timeline (answers "where is my order?"). */
+function OrderTimeline({ order, t }: { order: Order; t: Dict["portal"] }) {
+  const events: { type: string; at: string }[] = hasBackend ? ((order as ApiOrder).events ?? []) : loadEvents(order.ref);
+  const at = (type: string) => events.find((e) => e.type === type)?.at?.slice(0, 10);
+  const rank = ORDER_FLOW.indexOf(order.status);
+  const reached = (s: string) => rank >= ORDER_FLOW.indexOf(s as (typeof ORDER_FLOW)[number]);
+  const tl = t.timeline;
+  const steps: { label: string; done: boolean; date?: string }[] = [
+    { label: tl.paid, done: true, date: order.createdAt },
+    { label: tl.plansApproved, done: Boolean(order.plansApprovedAt), date: order.plansApprovedAt },
+    { label: tl.confirmed, done: reached("confirmed"), date: at("confirmed") ?? order.deliveryDate },
+    { label: tl.production, done: reached("production"), date: at("production") },
+    { label: tl.treatment, done: Boolean(order.treatmentSentAt), date: order.treatmentReceivedAt ?? order.treatmentSentAt },
+    { label: tl.qc, done: Boolean(order.qcPassedAt), date: order.qcPassedAt },
+    { label: tl.ready, done: Boolean(order.palletizedAt), date: order.palletizedAt },
+    { label: tl.shipped, done: reached("shipped"), date: at("shipped") },
+    { label: tl.delivered, done: Boolean(order.deliveredAt), date: order.deliveredAt },
+  ];
+  // The first not-done step is the current one (subtle emphasis).
+  const currentIdx = steps.findIndex((s) => !s.done);
+  return (
+    <div className="flex flex-col gap-1 border-t border-hairline pt-3">
+      <span className="pb-1 text-[11px] font-medium uppercase tracking-[0.14em] text-steel">{tl.title}</span>
+      <ol className="flex flex-col">
+        {steps.map((s, i) => (
+          <li key={i} className="flex gap-3">
+            <div className="flex flex-col items-center">
+              <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${s.done ? "bg-ink" : i === currentIdx ? "bg-steel" : "bg-hairline"}`} />
+              {i < steps.length - 1 && <span className={`w-px flex-1 ${s.done ? "bg-ink/40" : "bg-hairline"}`} />}
+            </div>
+            <div className="pb-2.5">
+              <p className={`text-[13px] ${s.done ? "font-light text-graphite" : i === currentIdx ? "font-light text-ink" : "font-light text-stone"}`}>
+                {s.done ? "✓ " : ""}
+                {s.label}
+              </p>
+              {s.done && s.date && <p className="text-[11px] text-stone">{s.date}</p>}
+            </div>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
 
 function OrderCard({
   order,
@@ -79,6 +124,9 @@ function OrderCard({
         {order.system === "glass" ? cfgDict.systemGlass : cfgDict.systemBars} · {order.lengthM.toLocaleString("de-CH")} m
       </p>
       <StatusSteps status={order.status} flow={flow} labels={t.status} />
+      {isLate(order) && (
+        <p className="border-l-2 border-[#dc2626] bg-[#dc2626]/8 px-3 py-2 text-[12px] font-light text-graphite">{t.late}</p>
+      )}
       <div className="flex items-baseline justify-between border-t border-hairline pt-3">
         <span className="text-xs font-light text-stone">{t.total}</span>
         <span className="text-base font-light text-ink">{chf(order.gross)}</span>
@@ -237,6 +285,33 @@ function OrderCard({
             ↓ {t.confirmationPdf}
           </button>
         </div>
+      )}
+      {/* Milestone timeline + shipment: visible once the order is confirmed. */}
+      {order.kind === "order" && order.status !== "new" && (
+        <>
+          <OrderTimeline order={order} t={t} />
+          {(order.carrier || order.trackingNo || order.deliveredAt) && (
+            <div className="flex flex-col gap-1 border-l-2 border-steel bg-mist/70 p-3">
+              <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-steel">{t.shipment.title}</span>
+              {order.carrier && (
+                <p className="text-[13px] font-light text-graphite">
+                  {t.shipment.carrier}: <span className="text-ink">{order.carrier}</span>
+                </p>
+              )}
+              {order.trackingNo && (
+                <p className="text-[13px] font-light text-graphite">
+                  {t.shipment.tracking}: <span className="text-ink">{order.trackingNo}</span>
+                </p>
+              )}
+              {order.deliveredAt && (
+                <p className="text-[13px] font-light text-[#16a34a]">
+                  ✓ {fmt(t.shipment.deliveredOn, { date: order.deliveredAt })}
+                  {order.deliveredTo && <span className="block text-xs text-stone">{fmt(t.shipment.receivedBy, { name: order.deliveredTo })}</span>}
+                </p>
+              )}
+            </div>
+          )}
+        </>
       )}
       {/* Invoices: deposit after confirmation, balance after delivery (or a
           single full invoice for a small order). Only issued ones show. */}

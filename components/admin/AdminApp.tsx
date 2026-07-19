@@ -24,7 +24,7 @@ type Tab = "dashboard" | "orders" | "invoices" | "purchasing" | "documents" | "p
 export type Console = "erp" | "studio";
 
 /** Stations owned by each console (settings/staff is shared, admin-only). */
-const ERP_TABS: Tab[] = ["dashboard", "orders", "customers", "invoices", "purchasing", "documents", "production", "logistics"];
+const ERP_TABS: Tab[] = ["dashboard", "orders", "customers", "purchasing", "production", "logistics", "invoices", "documents"];
 const STUDIO_TABS: Tab[] = ["products", "pricing", "content"];
 
 /** Reserved to admins regardless of area grants (the shared settings group). */
@@ -156,13 +156,15 @@ export default function AdminApp({
     );
   }
 
+  // Ordered like the physical process (sales → purchasing → shop floor), with
+  // the cross-cutting stations (finance, documents) after the flow.
   const erpGroups: { label: string; items: { v: Tab; icon: string }[] }[] = [
     { label: t.erp.control, items: [{ v: "dashboard", icon: "dashboard" }] },
     { label: t.erp.sales, items: [{ v: "orders", icon: "orders" }, { v: "customers", icon: "customers" }] },
-    { label: t.erp.finance, items: [{ v: "invoices", icon: "invoices" }] },
     { label: t.erp.purchasing, items: [{ v: "purchasing", icon: "purchasing" }] },
-    { label: t.erp.docs, items: [{ v: "documents", icon: "docs" }] },
     { label: t.erp.operations, items: [{ v: "production", icon: "production" }, { v: "logistics", icon: "logistics" }] },
+    { label: t.erp.finance, items: [{ v: "invoices", icon: "invoices" }] },
+    { label: t.erp.docs, items: [{ v: "documents", icon: "docs" }] },
   ];
   const studioGroups: { label: string; items: { v: Tab; icon: string }[] }[] = [
     { label: t.erp.studio, items: [{ v: "products", icon: "products" }, { v: "pricing", icon: "pricing" }, { v: "content", icon: "content" }] },
@@ -251,6 +253,7 @@ export default function AdminApp({
             statuses={["new", "confirmed", "production"]}
             accent="#ea580c"
             hint={t.ops.productionHint}
+            stationSteps={["qc_passed"]}
           />
         )}
         {tab === "logistics" && (
@@ -265,7 +268,7 @@ export default function AdminApp({
             statuses={["confirmed", "production", "shipped"]}
             accent="#0d9488"
             hint={t.ops.logisticsHint}
-            logistics
+            stationSteps={["material_received", "treatment_sent", "treatment_received", "palletized", "delivered"]}
           />
         )}
         {tab === "purchasing" && <PurchasingTab t={t} statusLabels={statusLabels} cfgDict={cfgDict} />}

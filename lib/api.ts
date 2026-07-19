@@ -106,6 +106,9 @@ export const api = {
       approvePlans?: boolean;
       requestPlanChanges?: boolean;
       milestone?: Milestone;
+      deliveredTo?: string;
+      carrier?: string;
+      trackingNo?: string;
       markPaid?: "deposit" | "balance";
       paidAt?: string;
       remind?: "deposit" | "balance";

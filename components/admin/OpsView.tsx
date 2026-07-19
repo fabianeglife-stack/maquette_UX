@@ -8,13 +8,10 @@
 
 import { useState } from "react";
 import { chf } from "@/lib/engine/pricing";
-import { milestoneReady, ORDER_FLOW, type Milestone, type OrderStatus } from "@/lib/store";
+import { isLate, milestoneReady, ORDER_FLOW, type Milestone, type OrderStatus } from "@/lib/store";
 import type { Dict } from "@/lib/i18n";
 import OrderDrawer from "./OrderDrawer";
-import { StatusChip, TabSkeleton, useOrders, type AdminDict } from "./shared";
-
-/** The physical movements owned by the logistics station, in chain order. */
-const LOGISTICS_STEPS: Milestone[] = ["material_received", "treatment_sent", "treatment_received", "palletized"];
+import { LateBadge, StatusChip, TabSkeleton, useOrders, type AdminDict } from "./shared";
 
 export default function OpsView({
   t,
@@ -27,7 +24,7 @@ export default function OpsView({
   statuses,
   accent,
   hint,
-  logistics,
+  stationSteps,
 }: {
   t: AdminDict;
   statusLabels: Dict["portal"]["status"];
@@ -39,10 +36,10 @@ export default function OpsView({
   statuses: OrderStatus[];
   accent: string;
   hint: string;
-  /** Logistics station: surface the next physical milestone as an inline action. */
-  logistics?: boolean;
+  /** Station-owned milestones surfaced as inline actions (next ready one). */
+  stationSteps?: Milestone[];
 }) {
-  const { orders, ready, advance, sendQuote, markAccepted, sendPlans, markMilestone, setDeliveryDate, cancel } = useOrders();
+  const { orders, ready, advance, sendQuote, markAccepted, sendPlans, markMilestone, setShipping, setDeliveryDate, cancel } = useOrders();
   const [openRef, setOpenRef] = useState<string | null>(null);
 
   if (!ready) return <TabSkeleton />;
@@ -83,11 +80,12 @@ export default function OpsView({
                   : next === "shipped" && Boolean(o.config) && !(o.treatmentReceivedAt && o.palletizedAt)
                     ? t.purchase.logisticsRequired
                     : undefined;
-            // Logistics station: the next physical movement ready to record.
-            const nextLog = logistics ? LOGISTICS_STEPS.find((m) => milestoneReady(o, m)) : undefined;
+            // The station's next milestone ready to record (inline action).
+            const nextLog = stationSteps?.find((m) => milestoneReady(o, m));
             return (
               <div key={o.ref} className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-lg border border-[#e4e6ea] bg-white px-4 py-3 shadow-sm transition-shadow hover:shadow-md">
                 <StatusChip status={o.status} label={statusLabels[o.status]} />
+                {isLate(o) && <LateBadge label={t.orders.late} />}
                 <button type="button" onClick={() => setOpenRef(o.ref)} className="text-[13px] font-semibold text-[#1b1e24] underline-offset-4 hover:underline">
                   {o.ref}
                 </button>
@@ -98,13 +96,15 @@ export default function OpsView({
                 {nextLog && (
                   <button
                     type="button"
-                    onClick={() => markMilestone(o, nextLog)}
+                    // QC needs the three-point sign-off in the drawer; the other
+                    // movements are a one-click record from the station row.
+                    onClick={() => (nextLog === "qc_passed" ? setOpenRef(o.ref) : markMilestone(o, nextLog))}
                     className="rounded-md border px-3 py-1.5 text-[11px] font-semibold transition-colors hover:text-white"
                     style={{ borderColor: accent, color: accent }}
                     onMouseEnter={(e) => (e.currentTarget.style.background = accent)}
                     onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                   >
-                    {t.purchase.steps[nextLog]} ✓
+                    {t.purchase.steps[nextLog]}{nextLog === "qc_passed" ? " ›" : " ✓"}
                   </button>
                 )}
                 {next && (
@@ -148,6 +148,7 @@ export default function OpsView({
           markAccepted={markAccepted}
           sendPlans={sendPlans}
           markMilestone={markMilestone}
+          setShipping={setShipping}
           setDeliveryDate={setDeliveryDate}
           cancel={cancel}
         />
