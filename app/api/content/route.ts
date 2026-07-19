@@ -6,7 +6,7 @@ import { hasArea } from "@/lib/server/authz";
 /** CMS content rows, one JSON blob per page (typeplans: principle PDFs per
  *  type × fixing; suppliers: the material/treatment supplier records the
  *  purchase orders are addressed to). */
-const CONTENT_IDS = ["references", "about", "home", "typeplans", "suppliers"] as const;
+const CONTENT_IDS = ["references", "about", "home", "typeplans", "suppliers", "steptemplates"] as const;
 type ContentId = (typeof CONTENT_IDS)[number];
 
 const EMPTY: Record<ContentId, unknown> = {
@@ -15,6 +15,7 @@ const EMPTY: Record<ContentId, unknown> = {
   home: {},
   typeplans: {},
   suppliers: {},
+  steptemplates: {},
 };
 
 function contentId(raw: string | null): ContentId | null {

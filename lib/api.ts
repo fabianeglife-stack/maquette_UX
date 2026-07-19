@@ -123,6 +123,8 @@ export const api = {
     call<{ document: DocumentMeta }>("POST", `/api/orders/${ref}/documents/`, payload).then((r) => r.document),
   /** URL of the stored bytes; opening it renders the PDF inline in a new tab. */
   documentUrl: (id: string) => `/api/documents/${id}/`,
+  /** URL of the per-piece tube-laser STEP bundle (generated + persisted on hit). */
+  stepUrl: (ref: string) => `/api/orders/${ref}/step/`,
 
   listCustomers: () => call<{ customers: CustomerRow[] }>("GET", "/api/customers/").then((r) => r.customers),
   setTier: (email: string, tier: Tier) => call<{ ok: true }>("PATCH", "/api/customers/", { email, tier }),

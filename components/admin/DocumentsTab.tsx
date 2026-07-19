@@ -229,6 +229,42 @@ export default function DocumentsTab({
     }
   }
 
+  // The tube-laser STEP bundle is generated server-side (OCCT), persisted as a
+  // ZIP document and downloaded. When already stored, "Open" serves the copy;
+  // "Regenerate" forces a fresh build from the current config + templates.
+  async function openStep(force: boolean) {
+    if (!order) return;
+    const meta = savedMap["laser-step"];
+    if (meta && hasBackend && !force) {
+      window.open(api.documentUrl(meta.id), "_blank", "noopener");
+      return;
+    }
+    setBusySlug("laser-step");
+    try {
+      const res = await fetch(api.stepUrl(order.ref), { credentials: "same-origin" });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        notify("loadFailed", body?.error === "no_templates" ? t.stepTpl.needTemplates : t.stepTpl.genFailed);
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `axioform-${order.ref}-step.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      const docs = await api.listDocuments(order.ref).catch(() => null);
+      if (docs) setSavedMap(Object.fromEntries(docs.map((d) => [d.slug, d])));
+    } catch {
+      notify("loadFailed", t.stepTpl.genFailed);
+    } finally {
+      setBusySlug(null);
+    }
+  }
+
   // Common props for a binder line: wires open + regenerate and the stored note.
   const rowProps = (slug: string, area: string, kind: string, no: string | undefined, build: Build | undefined) => {
     const meta = savedMap[slug];
@@ -397,6 +433,24 @@ export default function DocumentsTab({
                       : undefined,
                   )}
                 />
+                {(() => {
+                  const meta = savedMap["laser-step"];
+                  const available = hasBackend && Boolean(order.plansApprovedAt) && Boolean(order.config) && Boolean(tp?.recipe);
+                  return (
+                    <DocRow
+                      label={t.stepTpl.zipButton}
+                      note={t.stepTpl.zipHint}
+                      reason={order.config ? t.docsHub.needPlansApproved : t.docs.needConfig}
+                      openLabel={t.docsHub.open}
+                      generatingLabel={t.stepTpl.generating}
+                      regenLabel={t.docsHub.regenerate}
+                      busy={busySlug === "laser-step"}
+                      savedNote={meta ? fmt(t.docsHub.savedOn, { date: meta.createdAt.slice(0, 10) }) : undefined}
+                      onOpen={available ? () => openStep(false) : undefined}
+                      onRegen={available && meta ? () => openStep(true) : undefined}
+                    />
+                  );
+                })()}
               </Category>
             )}
 

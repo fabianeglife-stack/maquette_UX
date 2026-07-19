@@ -13,6 +13,8 @@ import { deriveRailing } from "@/lib/engine/geometry";
 import { materialOrderFor, treatmentOrderFor } from "@/lib/engine/procurement";
 import type { TypeProfile } from "@/lib/engine/types";
 import { fetchAllTypes, fetchPageContent, resolveType } from "@/lib/data";
+import { api } from "@/lib/api";
+import { notify } from "@/lib/toast";
 import {
   DEFAULT_SUPPLIERS,
   materialNoFor,
@@ -42,6 +44,7 @@ export default function PurchasingTab({
   const { orders, ready, markMilestone } = useOrders();
   const [types, setTypes] = useState<TypeProfile[]>([]);
   const [suppliers, setSuppliers] = useState<Suppliers>(DEFAULT_SUPPLIERS);
+  const [stepBusy, setStepBusy] = useState<string | null>(null);
   useEffect(() => {
     fetchAllTypes().then(setTypes);
     fetchPageContent<Suppliers>("suppliers", DEFAULT_SUPPLIERS).then(setSuppliers);
@@ -59,6 +62,33 @@ export default function PurchasingTab({
   const awaitingReceipt = queue.filter((o) => o.materialOrderedAt && o.treatmentOrderedAt && !o.materialReceivedAt).length;
 
   if (!ready) return <TabSkeleton />;
+
+  // Per-piece tube-laser STEP bundle: generated + persisted server-side, then
+  // downloaded here. 409 no_templates means no Inventor template for the type.
+  const downloadStep = async (o: Order) => {
+    setStepBusy(o.ref);
+    try {
+      const res = await fetch(api.stepUrl(o.ref), { credentials: "same-origin" });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        notify("loadFailed", body?.error === "no_templates" ? t.stepTpl.needTemplates : t.stepTpl.genFailed);
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `axioform-${o.ref}-step.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      notify("loadFailed", t.stepTpl.genFailed);
+    } finally {
+      setStepBusy(null);
+    }
+  };
 
   const downloadPo = (o: Order, m: Milestone) => {
     if (!o.config) return;
@@ -104,6 +134,15 @@ export default function PurchasingTab({
                 {o.materialOrderedAt && o.treatmentOrderedAt && !o.materialReceivedAt && (
                   <span className="text-[11px] text-[#8a8f98]">{t.purchasing.awaitingReceipt}</span>
                 )}
+                <button
+                  type="button"
+                  disabled={!o.config || stepBusy === o.ref}
+                  onClick={() => downloadStep(o)}
+                  title={t.stepTpl.zipHint}
+                  className="ml-auto rounded-md border border-[#d6d9de] px-2.5 py-1 text-[10.5px] font-medium text-[#5b6069] transition-colors hover:border-[#8a8f98] hover:text-[#1b1e24] disabled:opacity-40"
+                >
+                  {stepBusy === o.ref ? t.stepTpl.generating : `↓ ${t.stepTpl.zipButton}`}
+                </button>
               </div>
               <div className="flex flex-col gap-1.5 sm:flex-row sm:gap-6">
                 {PO_STEPS.map(({ m, field }) => {
