@@ -7,7 +7,7 @@
 import { describe, expect, it } from "vitest";
 import { deriveRailing } from "../lib/engine/geometry";
 import { builtinTypes, defaultConfig } from "../lib/engine/types";
-import { kgPerM, materialOrderFor, nestPieces, treatmentOrderFor } from "../lib/engine/procurement";
+import { drillStationsFor, kgPerM, materialOrderFor, nestPieces, treatmentOrderFor } from "../lib/engine/procurement";
 
 const barsType = builtinTypes[0];
 
@@ -98,5 +98,35 @@ describe("treatmentOrderFor", () => {
     const t = treatmentOrderFor({ ...cfg, finish: "galvanized" }, derived);
     expect(t.process).toBe("galvanizing");
     expect(t.ral).toBeUndefined();
+  });
+});
+
+describe("drillStationsFor", () => {
+  const cfg = defaultConfig();
+  const derived = deriveRailing(cfg, barsType);
+
+  it("emits one hole station per bar on both rails, centred on the run", () => {
+    const d = drillStationsFor(cfg, derived, barsType);
+    expect(d.handrailPart).toBeDefined();
+    expect(d.bottomRail).toBeDefined();
+    // One piece per segment; stations per piece = that segment's bar count.
+    const totalHandrail = d.handrailPart!.reduce((s, a) => s + a.length, 0);
+    expect(totalHandrail).toBe(derived.barCount);
+    expect(d.bottomRail!.reduce((s, a) => s + a.length, 0)).toBe(derived.barCount);
+    // Stations are symmetric about the piece centre (0) and within the run.
+    for (let i = 0; i < derived.segments.length; i++) {
+      const st = d.handrailPart![i];
+      const run = derived.segments[i].input.length;
+      for (const z of st) expect(Math.abs(z)).toBeLessThan(run / 2);
+      const sum = st.reduce((s, z) => s + z, 0);
+      expect(Math.abs(sum)).toBeLessThan(1); // centred
+    }
+  });
+
+  it("is empty for infills without through-mounted bars (glass)", () => {
+    const glassType = builtinTypes.find((t) => t.template === "glass")!;
+    const gcfg = { ...defaultConfig(), system: "glass" as const, typeId: glassType.id };
+    const gDerived = deriveRailing(gcfg, glassType);
+    expect(drillStationsFor(gcfg, gDerived, glassType)).toEqual({});
   });
 });

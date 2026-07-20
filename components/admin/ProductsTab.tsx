@@ -213,21 +213,25 @@ function stepRolesFor(tp: TypeProfile): TubeRole[] {
 /** One tube role's STEP template: upload/replace, remove, and the straight-end margin. */
 function StepCell({
   t,
+  role,
   label,
   tpl,
   onFile,
-  onMargin,
+  onDrill,
   onRemove,
 }: {
   t: AdminDict;
+  role: TubeRole;
   label: string;
   tpl?: StepTemplate;
   onFile: (step: string) => void;
-  onMargin: (m?: number) => void;
+  onDrill: (patch: { drilled?: boolean; holeDiaMm?: number }) => void;
   onRemove: () => void;
 }) {
   const [err, setErr] = useState<"too_big" | "not_step" | null>(null);
   const has = Boolean(tpl?.step);
+  // Only the rails carry a per-bar drilling pattern.
+  const canDrill = role === "handrailPart" || role === "bottomRail";
   return (
     <div className="flex flex-col gap-1.5 rounded-md border border-hairline/70 p-3">
       <span className="text-[10px] font-medium uppercase tracking-[0.1em] text-graphite">{label}</span>
@@ -262,21 +266,36 @@ function StepCell({
         )}
         <span className={`text-[10px] ${has ? "text-steel" : "text-stone"}`}>{has ? t.stepTpl.loaded : t.stepTpl.none}</span>
       </div>
-      <label className="flex items-center gap-2 text-[10px] text-graphite">
-        <span className="whitespace-nowrap">{t.stepTpl.margin}</span>
-        <input
-          type="number"
-          min={0}
-          step={5}
-          defaultValue={tpl?.marginMm ?? ""}
-          onBlur={(e) => {
-            const v = e.target.value.trim();
-            onMargin(v === "" ? undefined : Math.max(0, Number(v) || 0));
-          }}
-          className="w-20 border border-hairline px-2 py-1 text-[11px]"
-        />
-      </label>
-      <span className="text-[10px] font-light text-stone">{t.stepTpl.marginHint}</span>
+      {canDrill && (
+        <>
+          <label className="flex items-center gap-2 text-[10px] text-graphite">
+            <input
+              type="checkbox"
+              checked={Boolean(tpl?.drilled)}
+              onChange={(e) => onDrill({ drilled: e.target.checked })}
+              className="h-3 w-3"
+            />
+            <span>{t.stepTpl.drilled}</span>
+          </label>
+          {tpl?.drilled && (
+            <label className="flex items-center gap-2 text-[10px] text-graphite">
+              <span className="whitespace-nowrap">{t.stepTpl.holeDia}</span>
+              <input
+                type="number"
+                min={1}
+                step={1}
+                defaultValue={tpl?.holeDiaMm ?? ""}
+                onBlur={(e) => {
+                  const v = e.target.value.trim();
+                  onDrill({ holeDiaMm: v === "" ? undefined : Math.max(1, Number(v) || 0) });
+                }}
+                className="w-20 border border-hairline px-2 py-1 text-[11px]"
+              />
+            </label>
+          )}
+          <span className="text-[10px] font-light text-stone">{t.stepTpl.drilledHint}</span>
+        </>
+      )}
       {err && (
         <span role="alert" className="text-[10px] text-alert">
           {err === "not_step" ? t.stepTpl.notStep : t.stepTpl.tooBig}
@@ -335,10 +354,11 @@ function StepTemplatesSection({ t, types }: { t: AdminDict; types: TypeProfile[]
               <StepCell
                 key={role}
                 t={t}
+                role={role}
                 label={t.stepTpl.roles[role]}
                 tpl={tpls[x.id]?.[role]}
                 onFile={(step) => setTpl(x.id, role, { step })}
-                onMargin={(marginMm) => setTpl(x.id, role, { marginMm })}
+                onDrill={(patch) => setTpl(x.id, role, patch)}
                 onRemove={() => setTpl(x.id, role, null)}
               />
             ))}
