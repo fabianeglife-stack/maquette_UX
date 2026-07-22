@@ -15,6 +15,8 @@ import type { TypeProfile } from "@/lib/engine/types";
 import { fetchAllTypes, fetchPageContent, resolveType } from "@/lib/data";
 import { api } from "@/lib/api";
 import { notify } from "@/lib/toast";
+import { buildXlsx } from "@/lib/export/xlsx";
+import { buildInventorWorkbook } from "@/lib/export/inventorParams";
 import {
   DEFAULT_SUPPLIERS,
   materialNoFor,
@@ -90,6 +92,24 @@ export default function PurchasingTab({
     }
   };
 
+  // Inventor parameter table (.xlsx) — built client-side from the config, like
+  // the Finance CSV. Drives the user's Inventor master model via a linked sheet.
+  const downloadXlsx = (o: Order) => {
+    if (!o.config) return;
+    const tp = resolveType(types, o.config.typeId, o.config.system);
+    if (!tp) return;
+    const derived = deriveRailing(o.config, tp);
+    const bytes = buildXlsx(buildInventorWorkbook(o.ref, o.config, derived, tp));
+    const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `axioform-${o.ref}-inventor.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
   const downloadPo = (o: Order, m: Milestone) => {
     if (!o.config) return;
     const tp = resolveType(types, o.config.typeId, o.config.system);
@@ -134,15 +154,26 @@ export default function PurchasingTab({
                 {o.materialOrderedAt && o.treatmentOrderedAt && !o.materialReceivedAt && (
                   <span className="text-[11px] text-[#8a8f98]">{t.purchasing.awaitingReceipt}</span>
                 )}
-                <button
-                  type="button"
-                  disabled={!o.config || stepBusy === o.ref}
-                  onClick={() => downloadStep(o)}
-                  title={t.stepTpl.zipHint}
-                  className="ml-auto rounded-md border border-[#d6d9de] px-2.5 py-1 text-[10.5px] font-medium text-[#5b6069] transition-colors hover:border-[#8a8f98] hover:text-[#1b1e24] disabled:opacity-40"
-                >
-                  {stepBusy === o.ref ? t.stepTpl.generating : `↓ ${t.stepTpl.zipButton}`}
-                </button>
+                <span className="ml-auto flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={!o.config}
+                    onClick={() => downloadXlsx(o)}
+                    title={t.stepTpl.xlsxHint}
+                    className="rounded-md border border-[#d6d9de] px-2.5 py-1 text-[10.5px] font-medium text-[#5b6069] transition-colors hover:border-[#8a8f98] hover:text-[#1b1e24] disabled:opacity-40"
+                  >
+                    ↓ {t.stepTpl.xlsxButton}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!o.config || stepBusy === o.ref}
+                    onClick={() => downloadStep(o)}
+                    title={t.stepTpl.zipHint}
+                    className="rounded-md border border-[#d6d9de] px-2.5 py-1 text-[10.5px] font-medium text-[#5b6069] transition-colors hover:border-[#8a8f98] hover:text-[#1b1e24] disabled:opacity-40"
+                  >
+                    {stepBusy === o.ref ? t.stepTpl.generating : `↓ ${t.stepTpl.zipButton}`}
+                  </button>
+                </span>
               </div>
               <div className="flex flex-col gap-1.5 sm:flex-row sm:gap-6">
                 {PO_STEPS.map(({ m, field }) => {

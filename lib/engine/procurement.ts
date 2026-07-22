@@ -202,6 +202,36 @@ export function materialOrderFor(cfg: RailingConfig, derived: DerivedRailing, tp
   };
 }
 
+/** Hole stations (mm along the tube axis, from the piece centre) for the drilled
+ *  rails: one hole per infill bar at its position along the run, mirrored on the
+ *  handrail and the bottom rail (each bar is seated/welded into a hole in both).
+ *  Empty for infills without through-mounted bars (horizontal rails, cables,
+ *  glass/sheet). Piece order mirrors `materialOrderFor` — one handrail/bottom-rail
+ *  piece per segment. */
+export interface DrillStations {
+  handrailPart?: number[][];
+  bottomRail?: number[][];
+}
+
+export function drillStationsFor(cfg: RailingConfig, derived: DerivedRailing, tp?: TypeProfile): DrillStations {
+  const recipe = tp?.recipe;
+  if (!recipe) return {};
+  const kind = recipe.infill.kind;
+  if (kind !== "vertical_bars" && kind !== "vertical_flats") return {};
+  const perSegment = derived.segments.map((s) => {
+    const run = slopedLen(s.input.length, s.slopeDeg);
+    return s.bars.map((b) => {
+      // Distance of the bar along the (possibly sloped) run axis, centred.
+      const t = (b.top.x - s.start.x) * s.dir.x + (b.top.y - s.start.y) * s.dir.y + (b.top.z - s.start.z) * s.dir.z;
+      return r2(t - run / 2);
+    });
+  });
+  const out: DrillStations = {};
+  if (recipe.handrail.profile !== "none") out.handrailPart = perSegment;
+  if (recipe.bottomRail.profile !== "none") out.bottomRail = perSegment.map((a) => [...a]);
+  return out;
+}
+
 /** The surface-treatment order: the welded field elements after fabrication. */
 export function treatmentOrderFor(cfg: RailingConfig, derived: DerivedRailing): TreatmentOrder {
   // Treated as welded assemblies, one element per field/segment.
