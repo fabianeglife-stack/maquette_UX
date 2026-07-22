@@ -36,6 +36,8 @@ import {
 import { fetchAllTypes, fetchPageContent, resolveType } from "@/lib/data";
 import { hasBackend, api, type ApiOrder, type DocumentMeta } from "@/lib/api";
 import { docToDataUri, type BuiltDoc } from "@/lib/pdf";
+import { buildXlsx } from "@/lib/export/xlsx";
+import { buildInventorWorkbook } from "@/lib/export/inventorParams";
 import { notify } from "@/lib/toast";
 import { buildQuoteDoc } from "@/components/portal/quote";
 import { confirmationSummary, buildConfirmationDoc } from "@/components/portal/confirmation";
@@ -263,6 +265,20 @@ export default function DocumentsTab({
     } finally {
       setBusySlug(null);
     }
+  }
+
+  // Inventor parameter table (.xlsx), built client-side from the config.
+  function downloadInventorXlsx() {
+    if (!order?.config || !tp || !derived) return;
+    const bytes = buildXlsx(buildInventorWorkbook(order.ref, order.config, derived, tp));
+    const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `axioform-${order.ref}-inventor.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   }
 
   // Common props for a binder line: wires open + regenerate and the stored note.
@@ -500,6 +516,15 @@ export default function DocumentsTab({
                       return { doc, filename: `axioform-${order.ref}.pdf` };
                     }
                   : undefined)}
+              />
+              <DocRow
+                label={t.stepTpl.xlsxButton}
+                note={t.stepTpl.xlsxHint}
+                reason={t.docs.needConfig}
+                openLabel={t.docsHub.open}
+                generatingLabel={t.docsHub.generating}
+                regenLabel={t.docsHub.regenerate}
+                onOpen={order.config && tp && derived ? downloadInventorXlsx : undefined}
               />
               {plan ? (
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-hairline/70 py-2">
