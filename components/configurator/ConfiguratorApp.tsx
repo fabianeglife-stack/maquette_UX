@@ -85,19 +85,38 @@ function Num({
   step?: number;
   unit?: string;
 }) {
+  // Local draft so digits can be typed/cleared freely; the field only clamps to
+  // [min,max] on blur. While typing, the live preview follows any valid number
+  // (no clamp), so the value isn't snapped mid-entry.
+  const [draft, setDraft] = useState(String(value));
+  const [editing, setEditing] = useState(false);
+  useEffect(() => {
+    if (!editing) setDraft(String(value));
+  }, [value, editing]);
+
   return (
     <label className="flex flex-col gap-1.5">
       <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone">{label}</span>
       <span className="flex items-center border border-hairline bg-paper focus-within:border-graphite">
         <input
           type="number"
-          value={value}
+          inputMode="numeric"
+          value={draft}
           min={min}
           max={max}
           step={step}
+          onFocus={() => setEditing(true)}
           onChange={(e) => {
+            setDraft(e.target.value);
             const n = Number(e.target.value);
-            if (Number.isFinite(n)) onChange(Math.min(max, Math.max(min, n)));
+            if (e.target.value !== "" && Number.isFinite(n)) onChange(n);
+          }}
+          onBlur={(e) => {
+            setEditing(false);
+            const n = Number(e.target.value);
+            const clamped = Number.isFinite(n) && e.target.value !== "" ? Math.min(max, Math.max(min, n)) : value;
+            setDraft(String(clamped));
+            if (clamped !== value) onChange(clamped);
           }}
           className="w-full bg-transparent px-3 py-2 text-sm font-light text-ink outline-none"
         />

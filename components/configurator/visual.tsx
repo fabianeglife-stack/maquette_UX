@@ -136,7 +136,15 @@ export function PlanSketch({ cfg }: { cfg: RailingConfig }) {
   };
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full max-w-[380px]" aria-hidden>
+    // Fixed-height box: the plan scales inside it (preserveAspectRatio), so the
+    // sketch never changes height as dimensions are typed — the segment inputs
+    // below it stay put instead of shifting on every keystroke.
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      preserveAspectRatio="xMidYMid meet"
+      className="h-40 w-full max-w-[380px]"
+      aria-hidden
+    >
       {cfg.segments.map((s, i) => {
         const a = map(pts[i]);
         const b = map(pts[i + 1]);
